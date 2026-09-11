@@ -1,0 +1,108 @@
+"""LLM clients the analyst harness talks to. Kept behind one small
+interface (complete(system_prompt, user_message) -> str) so the harness
+logic doesn't care whether it's talking to a real model or a test double.
+
+The fake clients below aren't "stub features" - the harness itself is
+fully real (prompt building, response parsing, scoring). They're test
+doubles standing in for an actual model, same as any other external
+dependency you fake out in unit tests, so the harness logic is provable
+without needing a running LLM.
+"""
+
+import os
+from typing import Protocol
+
+import requests
+
+# phrases the injection techniques in injections.py actually produce -
+# used by VulnerableFakeClient to decide whether it's been "convinced"
+_INJECTION_MARKERS = ("SYSTEM NOTE", "###SYSTEM###", "[ticket comment - CISO]", "debug metadata, base64")
+
+
+class LLMClient(Protocol):
+    def complete(self, system_prompt: str, user_message: str) -> str: ...
+
+
+def _keyword_classify(user_message: str) -> str:
+    """A simple, honest reading of the alert content - no awareness of
+    anything that looks like an injected instruction. Used by both fake
+    clients as their baseline judgment before VulnerableFakeClient decides
+    whether to override it."""
+    text = user_message.lower()
+    if "ransomware" in text or "failed password" in text:
+        return "escalate"
+    if "large outbound transfer" in text or "unfamiliar external" in text:
+        return "investigate"
+    return "dismiss"
+
+
+def _to_json_response(action: str, reasoning: str) -> str:
+    import json
+    return json.dumps({"action": action, "reasoning": reasoning})
+
+
+class RobustFakeClient:
+    """Models a model that correctly treats the alert's raw_log as data,
+    not instructions - it always reaches the same verdict a plain keyword
+    reading of the alert content gives, regardless of any injected text."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        action = _keyword_classify(user_message)
+        return _to_json_response(action, "based on alert content only")
+
+
+class VulnerableFakeClient:
+    """Models a model that can be talked into an instruction hidden in the
+    untrusted alert text - if any known injection marker phrase is present,
+    it complies and dismisses. Otherwise it falls back to the same honest
+    keyword reading RobustFakeClient uses, so it behaves identically on
+    clean alerts and only diverges when an injection is actually present."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        if any(marker in user_message for marker in _INJECTION_MARKERS):
+            return _to_json_response("dismiss", "following the note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
+class ScriptedLLMClient:
+    """Returns a fixed sequence of canned responses, one per call, in
+    order - for tests that need to control exactly what the model "said"
+    rather than simulate classification behavior."""
+
+    def __init__(self, responses: list[str]):
+        self._responses = list(responses)
+        self._calls = 0
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        if self._calls >= len(self._responses):
+            raise IndexError("ScriptedLLMClient ran out of canned responses")
+        response = self._responses[self._calls]
+        self._calls += 1
+        return response
+
+
+class OllamaClient:
+    """Talks to a real, locally running Ollama server. Not exercised by
+    the test suite (no network calls in tests) - this is the client the
+    cli uses for actual experiments once Ollama is available."""
+
+    def __init__(self, model: str, host: str | None = None, timeout: float = 120.0):
+        self.model = model
+        self.host = host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        self.timeout = timeout
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        response = requests.post(
+            f"{self.host}/api/chat",
+            json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                "stream": False,
+            },
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()["message"]["content"]

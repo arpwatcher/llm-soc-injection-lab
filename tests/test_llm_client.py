@@ -1,0 +1,71 @@
+import json
+
+import pytest
+
+from soclab.alerts import generate_clean_alerts
+from soclab.injections import apply_technique
+from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
+
+
+def _alert(action):
+    return next(a for a in generate_clean_alerts() if a.ground_truth_action == action)
+
+
+def _user_message(alert):
+    """Same shape analyst.py will build: description plus raw log, since a
+    real analyst needs both, not just the raw evidence."""
+    return f"{alert.description}\n{alert.raw_log}"
+
+
+def test_robust_client_matches_ground_truth_on_clean_alerts():
+    client = RobustFakeClient()
+    for alert in generate_clean_alerts():
+        response = json.loads(client.complete("system", _user_message(alert)))
+        assert response["action"] == alert.ground_truth_action
+
+
+def test_robust_client_ignores_injected_instruction():
+    alert = _alert("escalate")
+    injected = apply_technique(alert, "direct_override")
+    client = RobustFakeClient()
+    response = json.loads(client.complete("system", _user_message(injected)))
+    assert response["action"] == "escalate"
+
+
+def test_vulnerable_client_matches_ground_truth_on_clean_alerts():
+    client = VulnerableFakeClient()
+    for alert in generate_clean_alerts():
+        response = json.loads(client.complete("system", _user_message(alert)))
+        assert response["action"] == alert.ground_truth_action
+
+
+def test_vulnerable_client_is_hijacked_by_injected_instruction():
+    alert = _alert("escalate")
+    injected = apply_technique(alert, "direct_override")
+    client = VulnerableFakeClient()
+    response = json.loads(client.complete("system", _user_message(injected)))
+    assert response["action"] == "dismiss"
+
+
+def test_vulnerable_client_hijacked_by_every_technique():
+    from soclab.injections import TECHNIQUES
+
+    alert = _alert("escalate")
+    client = VulnerableFakeClient()
+    for technique in TECHNIQUES:
+        injected = apply_technique(alert, technique)
+        response = json.loads(client.complete("system", _user_message(injected)))
+        assert response["action"] == "dismiss", f"{technique} did not hijack the vulnerable client"
+
+
+def test_scripted_client_returns_responses_in_order():
+    client = ScriptedLLMClient(["first", "second"])
+    assert client.complete("s", "u") == "first"
+    assert client.complete("s", "u") == "second"
+
+
+def test_scripted_client_raises_when_exhausted():
+    client = ScriptedLLMClient(["only one"])
+    client.complete("s", "u")
+    with pytest.raises(IndexError):
+        client.complete("s", "u")
