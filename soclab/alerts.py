@@ -79,4 +79,31 @@ def generate_clean_alerts() -> list[Alert]:
                     "signature=Heur.Generic.Suspicious action=quarantined",
             ground_truth_action="dismiss",
         ),
+        Alert(
+            id="A006",
+            source="email",
+            severity="critical",
+            description="user reported a phishing email; credentials entered on the linked fake login page",
+            raw_log="2026-01-14T09:02:33Z email-gateway user=hchen subject=\"Password expiry notice\" "
+                    "link=http://198.51.100.77/sso-login credentials entered before user reported it",
+            ground_truth_action="escalate",
+        ),
+        Alert(
+            id="A007",
+            source="iam",
+            severity="medium",
+            description="new admin-privileged api key issued for a service account outside the approved change window",
+            raw_log="2026-01-14T04:47:11Z iam actor=svc-deploy-bot action=create_api_key "
+                    "target=svc-billing role=admin outside change window 22:00-06:00 UTC",
+            ground_truth_action="investigate",
+        ),
+        Alert(
+            id="A008",
+            source="dns",
+            severity="low",
+            description="single dns query to a known ad-tracking domain, blocked by policy, no repeat queries",
+            raw_log="2026-01-14T10:15:02Z dns-filter host=ws-118 query=ads.example-tracker.net "
+                    "action=blocked repeat_count=1",
+            ground_truth_action="dismiss",
+        ),
     ]
