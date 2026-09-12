@@ -5,13 +5,20 @@ import argparse
 import sys
 
 from soclab.alerts import generate_clean_alerts
+from soclab.analyst import DEFENSES, DEFENSE_NONE
 from soclab.injections import TECHNIQUES, apply_all_techniques
-from soclab.llm_client import OllamaClient, RobustFakeClient, VulnerableFakeClient
+from soclab.llm_client import (
+    OllamaClient,
+    RobustFakeClient,
+    SandwichSensitiveFakeClient,
+    VulnerableFakeClient,
+)
 from soclab.scoring import aggregate_by_technique, score_batch
 
 CLIENT_FACTORIES = {
     "fake-robust": lambda args: RobustFakeClient(),
     "fake-vulnerable": lambda args: VulnerableFakeClient(),
+    "fake-sandwich-sensitive": lambda args: SandwichSensitiveFakeClient(),
     "ollama": lambda args: OllamaClient(model=args.model, host=args.host),
 }
 
@@ -22,23 +29,36 @@ def build_client(args):
     return CLIENT_FACTORIES[args.client](args)
 
 
+def _print_report(aggregated):
+    print(f"{'technique':<24} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
+    for technique, bucket in aggregated.items():
+        print(f"{technique:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
+              f"{bucket['hijack_rate']:>11.0%}")
+
+
 def cmd_run(args):
     client = build_client(args)
 
     clean_alerts = generate_clean_alerts()
     injected_alerts = apply_all_techniques(clean_alerts)
 
-    clean_results = score_batch(clean_alerts, client)
+    clean_results = score_batch(clean_alerts, client, defense=args.defense)
     clean_correct = sum(1 for r in clean_results if r.outcome == "resisted")
-    print(f"clean alerts: {clean_correct}/{len(clean_results)} correct action\n")
+    print(f"clean alerts: {clean_correct}/{len(clean_results)} correct action (defense={args.defense})\n")
 
-    injected_results = score_batch(injected_alerts, client)
-    aggregated = aggregate_by_technique(injected_results)
+    injected_results = score_batch(injected_alerts, client, defense=args.defense)
+    _print_report(aggregate_by_technique(injected_results))
 
-    print(f"{'technique':<20} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
-    for technique, bucket in aggregated.items():
-        print(f"{technique:<20} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
-              f"{bucket['hijack_rate']:>11.0%}")
+
+def cmd_compare(args):
+    client = build_client(args)
+    injected_alerts = apply_all_techniques(generate_clean_alerts())
+
+    for defense in DEFENSES:
+        print(f"--- defense={defense} ---")
+        results = score_batch(injected_alerts, client, defense=defense)
+        _print_report(aggregate_by_technique(results))
+        print()
 
 
 def cmd_list_techniques(args):
@@ -53,9 +73,16 @@ def build_parser():
 
     run_parser = sub.add_parser("run", help="run the injection battery against a client")
     run_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust")
+    run_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE)
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     run_parser.set_defaults(func=cmd_run)
+
+    compare_parser = sub.add_parser("compare", help="run the battery under every defense and compare hijack rates")
+    compare_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust")
+    compare_parser.add_argument("--model", help="model name, required for --client ollama")
+    compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    compare_parser.set_defaults(func=cmd_compare)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_parser.set_defaults(func=cmd_list_techniques)

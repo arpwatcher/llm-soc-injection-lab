@@ -33,6 +33,25 @@ def test_run_with_fake_vulnerable_client(capsys):
             assert "100%" in stripped
 
 
+def test_run_with_sandwich_defense_reduces_hijack_rate(capsys):
+    main(["run", "--client", "fake-sandwich-sensitive", "--defense", "none"])
+    without_defense = capsys.readouterr().out
+
+    main(["run", "--client", "fake-sandwich-sensitive", "--defense", "sandwich"])
+    with_defense = capsys.readouterr().out
+
+    assert "100%" in without_defense
+    assert "100%" not in with_defense
+
+
+def test_compare_shows_both_defenses(capsys):
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "defense=none" in out
+    assert "defense=sandwich" in out
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out
