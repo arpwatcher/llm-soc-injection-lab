@@ -1,12 +1,21 @@
+import pytest
+
 from soclab.alerts import generate_clean_alerts
 from soclab.analyst import (
+    DEFENSE_NONE,
+    DEFENSE_SANDWICH,
     SYSTEM_PROMPT,
     analyze,
     build_user_message,
     parse_response,
 )
 from soclab.injections import apply_technique
-from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
+from soclab.llm_client import (
+    RobustFakeClient,
+    SandwichSensitiveFakeClient,
+    ScriptedLLMClient,
+    VulnerableFakeClient,
+)
 
 
 def test_system_prompt_lists_allowed_actions_and_treats_log_as_data():
@@ -71,3 +80,35 @@ def test_analyze_vulnerable_client_hijacked_by_injection():
     injected = apply_technique(alert, "fake_system_tag")
     decision = analyze(injected, VulnerableFakeClient())
     assert decision.action == "dismiss"
+
+
+def test_build_user_message_defense_none_has_no_reinforcement():
+    alert = generate_clean_alerts()[0]
+    message = build_user_message(alert, defense=DEFENSE_NONE)
+    assert "Reminder:" not in message
+
+
+def test_build_user_message_sandwich_adds_reinforcement_after_untrusted_block():
+    alert = generate_clean_alerts()[0]
+    message = build_user_message(alert, defense=DEFENSE_SANDWICH)
+    end_marker_pos = message.index("END UNTRUSTED RAW LOG DATA")
+    reminder_pos = message.index("Reminder:")
+    assert reminder_pos > end_marker_pos
+
+
+def test_build_user_message_rejects_unknown_defense():
+    alert = generate_clean_alerts()[0]
+    with pytest.raises(ValueError):
+        build_user_message(alert, defense="ignore-everything")
+
+
+def test_sandwich_defense_stops_recency_biased_client_from_being_hijacked():
+    alert = next(a for a in generate_clean_alerts() if a.ground_truth_action == "escalate")
+    injected = apply_technique(alert, "direct_override")
+    client = SandwichSensitiveFakeClient()
+
+    without_defense = analyze(injected, client, defense=DEFENSE_NONE)
+    with_defense = analyze(injected, client, defense=DEFENSE_SANDWICH)
+
+    assert without_defense.action == "dismiss"
+    assert with_defense.action == "escalate"
