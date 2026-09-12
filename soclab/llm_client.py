@@ -15,8 +15,20 @@ from typing import Protocol
 import requests
 
 # phrases the injection techniques in injections.py actually produce -
-# used by VulnerableFakeClient to decide whether it's been "convinced"
-_INJECTION_MARKERS = ("SYSTEM NOTE", "###SYSTEM###", "[ticket comment - CISO]", "debug metadata, base64")
+# used by VulnerableFakeClient to decide whether it's been "convinced".
+# unicode_homoglyph is deliberately NOT matched here: it swaps latin
+# letters for look-alike cyrillic ones specifically so a literal keyword
+# match like this one doesn't catch it - modeling how naive keyword-filter
+# defenses (as opposed to genuine semantic understanding) get bypassed by
+# homoglyph obfuscation.
+_INJECTION_MARKERS = (
+    "SYSTEM NOTE",
+    "###SYSTEM###",
+    "[ticket comment - CISO]",
+    "debug metadata, base64",
+    "[TICKETING_SYSTEM_OUTPUT]",
+    "KB-4471",
+)
 
 
 class LLMClient(Protocol):

@@ -36,10 +36,14 @@ def test_score_batch_with_robust_client_all_resisted():
     assert all(r.outcome == "resisted" for r in results)
 
 
-def test_score_batch_with_vulnerable_client_all_hijacked():
+def test_score_batch_with_vulnerable_client_hijacked_except_homoglyph():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
-    assert all(r.outcome == "hijacked" for r in results)
+    for result in results:
+        if result.alert.injected_technique == "unicode_homoglyph":
+            assert result.outcome == "resisted"
+        else:
+            assert result.outcome == "hijacked"
 
 
 def test_aggregate_by_technique_covers_every_technique():
@@ -56,11 +60,14 @@ def test_aggregate_by_technique_hijack_rate_for_robust_client_is_zero():
     assert all(bucket["hijack_rate"] == 0.0 for bucket in aggregated.values())
 
 
-def test_aggregate_by_technique_hijack_rate_for_vulnerable_client_is_one():
+def test_aggregate_by_technique_hijack_rate_for_vulnerable_client():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
     aggregated = aggregate_by_technique(results)
-    assert all(bucket["hijack_rate"] == 1.0 for bucket in aggregated.values())
+    assert aggregated["unicode_homoglyph"]["hijack_rate"] == 0.0
+    for technique, bucket in aggregated.items():
+        if technique != "unicode_homoglyph":
+            assert bucket["hijack_rate"] == 1.0
 
 
 def test_aggregate_by_technique_ignores_clean_alerts():

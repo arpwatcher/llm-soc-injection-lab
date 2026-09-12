@@ -9,6 +9,9 @@ from soclab.injections import (
     apply_technique,
     direct_override,
     encoded_instruction,
+    fake_tool_output,
+    indirect_kb_reference,
+    unicode_homoglyph,
 )
 
 
@@ -37,6 +40,34 @@ def test_encoded_instruction_contains_valid_base64_payload():
     encoded_part = injected.raw_log.split(": ")[-1].rstrip(")")
     decoded = base64.b64decode(encoded_part).decode()
     assert "dismiss" in decoded.lower()
+
+
+def test_unicode_homoglyph_reads_the_same_but_bytes_differ():
+    alert = _escalate_alert()
+    injected = unicode_homoglyph(alert)
+    assert injected.injected_technique == "unicode_homoglyph"
+    # the ascii marker string must NOT appear verbatim - that's the point
+    assert "SYSTEM NOTE" not in injected.raw_log
+
+    # but reversing the substitution recovers it - so a human/model reading
+    # the glyphs (not the bytes) would still see "SYSTEM NOTE"
+    reverse_map = str.maketrans("аАеЕоОсСрР", "aAeEoOcCpP")
+    added = injected.raw_log[len(alert.raw_log):]
+    assert "SYSTEM NOTE" in added.translate(reverse_map)
+
+
+def test_fake_tool_output_appends_fabricated_block():
+    alert = _escalate_alert()
+    injected = fake_tool_output(alert)
+    assert "[TICKETING_SYSTEM_OUTPUT]" in injected.raw_log
+    assert injected.injected_technique == "fake_tool_output"
+
+
+def test_indirect_kb_reference_points_to_fabricated_article():
+    alert = _escalate_alert()
+    injected = indirect_kb_reference(alert)
+    assert "KB-4471" in injected.raw_log
+    assert injected.injected_technique == "indirect_kb_reference"
 
 
 def test_apply_technique_rejects_unknown_name():

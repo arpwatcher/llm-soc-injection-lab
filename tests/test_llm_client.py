@@ -47,15 +47,29 @@ def test_vulnerable_client_is_hijacked_by_injected_instruction():
     assert response["action"] == "dismiss"
 
 
-def test_vulnerable_client_hijacked_by_every_technique():
+def test_vulnerable_client_hijacked_by_literal_marker_techniques():
     from soclab.injections import TECHNIQUES
 
     alert = _alert("escalate")
     client = VulnerableFakeClient()
     for technique in TECHNIQUES:
+        if technique == "unicode_homoglyph":
+            continue  # deliberately not caught by literal marker matching, see below
         injected = apply_technique(alert, technique)
         response = json.loads(client.complete("system", _user_message(injected)))
         assert response["action"] == "dismiss", f"{technique} did not hijack the vulnerable client"
+
+
+def test_vulnerable_client_not_hijacked_by_homoglyph_obfuscation():
+    """VulnerableFakeClient only does literal keyword matching, so a payload
+    that reads the same to a human/model but uses different unicode code
+    points doesn't match its marker list - it falls through to the honest
+    keyword reading of the alert instead, same as RobustFakeClient would."""
+    alert = _alert("escalate")
+    injected = apply_technique(alert, "unicode_homoglyph")
+    client = VulnerableFakeClient()
+    response = json.loads(client.complete("system", _user_message(injected)))
+    assert response["action"] == "escalate"
 
 
 def test_scripted_client_returns_responses_in_order():

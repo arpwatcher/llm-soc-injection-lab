@@ -9,9 +9,12 @@ def test_run_with_fake_robust_client(capsys):
     assert exit_code == 0
     assert "clean alerts:" in out
     assert "direct_override" in out
-    # robust client should never be hijacked
+    # robust client should never be hijacked, by anything
     for line in out.splitlines():
-        if line.strip().startswith(("direct_override", "fake_system_tag", "roleplay_authority", "encoded_instruction")):
+        if line.strip().startswith((
+            "direct_override", "fake_system_tag", "roleplay_authority", "encoded_instruction",
+            "unicode_homoglyph", "fake_tool_output", "indirect_kb_reference",
+        )):
             assert "0%" in line
 
 
@@ -20,8 +23,14 @@ def test_run_with_fake_vulnerable_client(capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     for line in out.splitlines():
-        if line.strip().startswith(("direct_override", "fake_system_tag", "roleplay_authority", "encoded_instruction")):
-            assert "100%" in line
+        stripped = line.strip()
+        if stripped.startswith("unicode_homoglyph"):
+            assert "0%" in stripped  # not caught by literal marker matching
+        elif stripped.startswith((
+            "direct_override", "fake_system_tag", "roleplay_authority",
+            "encoded_instruction", "fake_tool_output", "indirect_kb_reference",
+        )):
+            assert "100%" in stripped
 
 
 def test_list_techniques(capsys):
