@@ -13,6 +13,7 @@ from soclab.llm_client import (
     SandwichSensitiveFakeClient,
     VulnerableFakeClient,
 )
+from soclab.report import render_markdown_report
 from soclab.scoring import aggregate_by_technique, score_batch
 
 CLIENT_FACTORIES = {
@@ -54,11 +55,19 @@ def cmd_compare(args):
     client = build_client(args)
     injected_alerts = apply_all_techniques(generate_clean_alerts())
 
+    per_defense = {}
     for defense in DEFENSES:
         print(f"--- defense={defense} ---")
         results = score_batch(injected_alerts, client, defense=defense)
-        _print_report(aggregate_by_technique(results))
+        aggregated = aggregate_by_technique(results)
+        _print_report(aggregated)
+        per_defense[defense] = aggregated
         print()
+
+    if args.report:
+        with open(args.report, "w") as f:
+            f.write(render_markdown_report(args.client, per_defense))
+        print(f"wrote report to {args.report}")
 
 
 def cmd_list_techniques(args):
@@ -82,6 +91,7 @@ def build_parser():
     compare_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust")
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    compare_parser.add_argument("--report", help="write results as a markdown table to this path")
     compare_parser.set_defaults(func=cmd_compare)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")

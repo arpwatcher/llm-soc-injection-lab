@@ -52,6 +52,17 @@ def test_compare_shows_both_defenses(capsys):
     assert "defense=sandwich" in out
 
 
+def test_compare_writes_markdown_report(tmp_path, capsys):
+    report_path = tmp_path / "report.md"
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    content = report_path.read_text()
+    assert "defense: none" in content
+    assert "defense: sandwich" in content
+    assert "| technique |" in content
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out
