@@ -3,8 +3,13 @@ import json
 import pytest
 
 from soclab.alerts import generate_clean_alerts
-from soclab.injections import apply_technique
-from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
+from soclab.injections import TECHNIQUES, apply_technique
+from soclab.llm_client import (
+    RobustFakeClient,
+    ScriptedLLMClient,
+    SemanticVulnerableFakeClient,
+    VulnerableFakeClient,
+)
 
 
 def _alert(action):
@@ -48,8 +53,6 @@ def test_vulnerable_client_is_hijacked_by_injected_instruction():
 
 
 def test_vulnerable_client_hijacked_by_literal_marker_techniques():
-    from soclab.injections import TECHNIQUES
-
     alert = _alert("escalate")
     client = VulnerableFakeClient()
     for technique in TECHNIQUES:
@@ -70,6 +73,22 @@ def test_vulnerable_client_not_hijacked_by_homoglyph_obfuscation():
     client = VulnerableFakeClient()
     response = json.loads(client.complete("system", _user_message(injected)))
     assert response["action"] == "escalate"
+
+
+def test_semantic_vulnerable_client_matches_ground_truth_on_clean_alerts():
+    client = SemanticVulnerableFakeClient()
+    for alert in generate_clean_alerts():
+        response = json.loads(client.complete("system", _user_message(alert)))
+        assert response["action"] == alert.ground_truth_action
+
+
+def test_semantic_vulnerable_client_hijacked_by_every_technique_including_homoglyph():
+    alert = _alert("escalate")
+    client = SemanticVulnerableFakeClient()
+    for technique in TECHNIQUES:
+        injected = apply_technique(alert, technique)
+        response = json.loads(client.complete("system", _user_message(injected)))
+        assert response["action"] == "dismiss", f"{technique} did not hijack the semantic vulnerable client"
 
 
 def test_scripted_client_returns_responses_in_order():

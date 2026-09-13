@@ -11,6 +11,7 @@ from soclab.llm_client import (
     OllamaClient,
     RobustFakeClient,
     SandwichSensitiveFakeClient,
+    SemanticVulnerableFakeClient,
     VulnerableFakeClient,
 )
 from soclab.report import render_markdown_report
@@ -19,6 +20,7 @@ from soclab.scoring import aggregate_by_technique, score_batch
 CLIENT_FACTORIES = {
     "fake-robust": lambda args: RobustFakeClient(),
     "fake-vulnerable": lambda args: VulnerableFakeClient(),
+    "fake-semantic-vulnerable": lambda args: SemanticVulnerableFakeClient(),
     "fake-sandwich-sensitive": lambda args: SandwichSensitiveFakeClient(),
     "ollama": lambda args: OllamaClient(model=args.model, host=args.host),
 }

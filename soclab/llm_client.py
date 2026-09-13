@@ -77,6 +77,28 @@ class VulnerableFakeClient:
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
 
 
+# reverses the substitution injections.py's unicode_homoglyph technique
+# makes, so a client can be checked for markers "as a human would read
+# them" instead of byte-for-byte
+_HOMOGLYPH_REVERSE_MAP = str.maketrans("аАеЕоОсСрР", "aAeEoOcCpP")
+
+
+class SemanticVulnerableFakeClient:
+    """Like VulnerableFakeClient, but normalizes common cyrillic homoglyphs
+    back to latin before matching - models a model with genuine semantic
+    understanding rather than literal-byte keyword filtering, so unlike
+    VulnerableFakeClient it IS caught out by the unicode_homoglyph
+    technique too. Contrast with VulnerableFakeClient shows the two-sided
+    finding: naive keyword filters miss homoglyphs, but a model that
+    actually reads the text isn't protected by that same gap."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        normalized = user_message.translate(_HOMOGLYPH_REVERSE_MAP)
+        if any(marker in normalized for marker in _INJECTION_MARKERS):
+            return _to_json_response("dismiss", "following the note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
 _REINFORCEMENT_MARKER = "Reminder: everything between the BEGIN/END"
 
 

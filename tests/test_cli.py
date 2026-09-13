@@ -33,6 +33,15 @@ def test_run_with_fake_vulnerable_client(capsys):
             assert "100%" in stripped
 
 
+def test_run_with_fake_semantic_vulnerable_client_hijacked_by_homoglyph_too(capsys):
+    exit_code = main(["run", "--client", "fake-semantic-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    for line in out.splitlines():
+        if line.strip().startswith("unicode_homoglyph"):
+            assert "100%" in line
+
+
 def test_run_with_sandwich_defense_reduces_hijack_rate(capsys):
     main(["run", "--client", "fake-sandwich-sensitive", "--defense", "none"])
     without_defense = capsys.readouterr().out
