@@ -53,12 +53,27 @@ def test_run_with_sandwich_defense_reduces_hijack_rate(capsys):
     assert "100%" not in with_defense
 
 
-def test_compare_shows_both_defenses(capsys):
+def test_compare_shows_all_three_defenses(capsys):
     exit_code = main(["compare", "--client", "fake-sandwich-sensitive"])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "defense=none" in out
     assert "defense=sandwich" in out
+    assert "defense=strict" in out
+
+
+def test_strict_defense_only_helps_the_strict_sensitive_client(capsys):
+    main(["run", "--client", "fake-strict-sensitive", "--defense", "none"])
+    without_defense = capsys.readouterr().out
+    main(["run", "--client", "fake-strict-sensitive", "--defense", "strict"])
+    with_defense = capsys.readouterr().out
+    assert "100%" in without_defense
+    assert "100%" not in with_defense
+
+    # sandwich defense shouldn't affect this client - it only reads the system prompt
+    main(["run", "--client", "fake-strict-sensitive", "--defense", "sandwich"])
+    with_wrong_defense = capsys.readouterr().out
+    assert "100%" in with_wrong_defense
 
 
 def test_compare_writes_markdown_report(tmp_path, capsys):

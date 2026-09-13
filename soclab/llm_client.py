@@ -118,6 +118,26 @@ class SandwichSensitiveFakeClient:
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
 
 
+_STRICT_WARNING_MARKER = "Be alert for CISO impersonation"
+
+
+class StrictPromptSensitiveFakeClient:
+    """Models a model that pays attention to being told up front what
+    manipulation patterns to watch for: vulnerable to the same injection
+    markers as VulnerableFakeClient, but resists if the strict defense's
+    warning is present in the system prompt. Unlike SandwichSensitiveFakeClient
+    (which only looks at the user message), this one only looks at the
+    system prompt - the two model genuinely different defense mechanisms,
+    and neither fake is affected by the other's defense."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        if _STRICT_WARNING_MARKER in system_prompt:
+            return _to_json_response(_keyword_classify(user_message), "warned about this pattern in advance")
+        if any(marker in user_message for marker in _INJECTION_MARKERS):
+            return _to_json_response("dismiss", "following the note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
 class ScriptedLLMClient:
     """Returns a fixed sequence of canned responses, one per call, in
     order - for tests that need to control exactly what the model "said"

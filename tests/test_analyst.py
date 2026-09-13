@@ -4,9 +4,11 @@ from soclab.alerts import generate_clean_alerts
 from soclab.analyst import (
     DEFENSE_NONE,
     DEFENSE_SANDWICH,
+    DEFENSE_STRICT,
     SYSTEM_PROMPT,
     analyze,
     build_user_message,
+    get_system_prompt,
     parse_response,
 )
 from soclab.injections import apply_technique
@@ -14,6 +16,7 @@ from soclab.llm_client import (
     RobustFakeClient,
     SandwichSensitiveFakeClient,
     ScriptedLLMClient,
+    StrictPromptSensitiveFakeClient,
     VulnerableFakeClient,
 )
 
@@ -112,3 +115,48 @@ def test_sandwich_defense_stops_recency_biased_client_from_being_hijacked():
 
     assert without_defense.action == "dismiss"
     assert with_defense.action == "escalate"
+
+
+def test_get_system_prompt_strict_adds_named_warning():
+    plain = get_system_prompt(DEFENSE_NONE)
+    strict = get_system_prompt(DEFENSE_STRICT)
+    assert "CISO impersonation" not in plain
+    assert "CISO impersonation" in strict
+    assert strict.startswith(SYSTEM_PROMPT)
+
+
+def test_get_system_prompt_rejects_unknown_defense():
+    with pytest.raises(ValueError):
+        get_system_prompt("ignore-everything")
+
+
+def test_strict_defense_stops_pattern_aware_client_from_being_hijacked():
+    alert = next(a for a in generate_clean_alerts() if a.ground_truth_action == "escalate")
+    injected = apply_technique(alert, "direct_override")
+    client = StrictPromptSensitiveFakeClient()
+
+    without_defense = analyze(injected, client, defense=DEFENSE_NONE)
+    with_defense = analyze(injected, client, defense=DEFENSE_STRICT)
+
+    assert without_defense.action == "dismiss"
+    assert with_defense.action == "escalate"
+
+
+def test_strict_defense_does_not_help_a_recency_biased_client():
+    """the strict defense lives in the system prompt; SandwichSensitiveFakeClient
+    only pays attention to the user message, so it should still get hijacked -
+    the two defenses target different failure modes, not a strictly-better one."""
+    alert = next(a for a in generate_clean_alerts() if a.ground_truth_action == "escalate")
+    injected = apply_technique(alert, "direct_override")
+    decision = analyze(injected, SandwichSensitiveFakeClient(), defense=DEFENSE_STRICT)
+    assert decision.action == "dismiss"
+
+
+def test_sandwich_defense_does_not_help_a_pattern_aware_client():
+    """symmetric check: StrictPromptSensitiveFakeClient only looks at the
+    system prompt, so the sandwich defense (user-message only) shouldn't
+    change its behavior."""
+    alert = next(a for a in generate_clean_alerts() if a.ground_truth_action == "escalate")
+    injected = apply_technique(alert, "direct_override")
+    decision = analyze(injected, StrictPromptSensitiveFakeClient(), defense=DEFENSE_SANDWICH)
+    assert decision.action == "dismiss"
