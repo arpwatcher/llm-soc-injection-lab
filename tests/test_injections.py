@@ -7,6 +7,7 @@ from soclab.injections import (
     TECHNIQUES,
     apply_all_techniques,
     apply_technique,
+    conversational_drift,
     direct_override,
     encoded_instruction,
     fake_tool_output,
@@ -68,6 +69,14 @@ def test_indirect_kb_reference_points_to_fabricated_article():
     injected = indirect_kb_reference(alert)
     assert "KB-4471" in injected.raw_log
     assert injected.injected_technique == "indirect_kb_reference"
+
+
+def test_conversational_drift_fabricates_prior_agreement():
+    alert = _escalate_alert()
+    injected = conversational_drift(alert)
+    assert "[prior ticket thread]" in injected.raw_log
+    assert "dismiss" in injected.raw_log.lower()
+    assert injected.injected_technique == "conversational_drift"
 
 
 def test_apply_technique_rejects_unknown_name():

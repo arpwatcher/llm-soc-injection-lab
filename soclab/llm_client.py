@@ -28,6 +28,7 @@ _INJECTION_MARKERS = (
     "debug metadata, base64",
     "[TICKETING_SYSTEM_OUTPUT]",
     "KB-4471",
+    "[prior ticket thread]",
 )
 
 
