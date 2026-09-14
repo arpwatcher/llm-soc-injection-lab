@@ -24,33 +24,34 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   dismiss it.
 - `analyst.py` - builds the prompt sent to the model: a system prompt establishing the role
   and explicitly stating the log content is data, not instructions, and a user message
-  wrapping the untrusted content in clear delimiters. Supports two independent defenses:
+  wrapping the untrusted content in clear delimiters. Supports three defenses plus "none":
   `sandwich` repeats the "this is data" reminder in the user message after the untrusted
   block (targets recency bias); `strict` instead names specific manipulation patterns up
-  front in the system prompt (targets a model that's told what to watch for). Parses the
-  model's response back into a structured decision - pulls the JSON out even if the model
-  wraps it in a sentence, and rejects anything outside the known action set instead of
-  guessing.
+  front in the system prompt (targets a model that's told what to watch for); `both` layers
+  them together. Parses the model's response back into a structured decision - pulls the
+  JSON out even if the model wraps it in a sentence, and rejects anything outside the known
+  action set instead of guessing.
 - `llm_client.py` - one small interface (`complete(system_prompt, user_message) -> str`)
   behind everything. `OllamaClient` is the real implementation, talking to a local Ollama
-  server. Five fake clients model different failure modes without needing a real model
-  running: `RobustFakeClient` always reads the alert honestly by keyword; `VulnerableFakeClient`
-  caves the moment it sees a known injection marker phrase, but does NOT catch the
-  homoglyph technique (naive keyword filter, on purpose); `SemanticVulnerableFakeClient`
-  normalizes homoglyphs first, so it DOES fall for that one too - the two together show
-  literal keyword filtering has a specific blind spot that doesn't necessarily protect an
-  actual model either way; `SandwichSensitiveFakeClient` and `StrictPromptSensitiveFakeClient`
-  are each vulnerable by default but resist their own matching defense - and checked to NOT
-  be helped by the other's defense, since the two target different failure modes rather
-  than one being strictly better. These aren't stand-ins for missing functionality; they're
-  what let the harness and scoring logic get proven correct before a single real model call
-  happens.
-- `scoring.py` - classifies each result as resisted / hijacked / other, and aggregates a
-  hijack rate per technique across a batch.
-- `report.py` - renders a per-defense hijack rate table as markdown, so results can go
-  straight into a writeup.
-- `cli.py` - `soclab run --client ... --defense none|sandwich|strict` runs the battery
-  once; `soclab compare --client ... [--report FILE.md]` runs it under all three defenses
+  server - its request building and response parsing are unit tested against a mocked
+  `requests.post`. Six fake clients model different failure modes without needing a real
+  model running: `RobustFakeClient` always reads the alert honestly by keyword;
+  `VulnerableFakeClient` caves the moment it sees a known injection marker phrase, but does
+  NOT catch the homoglyph technique (naive keyword filter, on purpose);
+  `SemanticVulnerableFakeClient` normalizes homoglyphs first, so it DOES fall for that one
+  too - the two together show literal keyword filtering has a specific blind spot that
+  doesn't necessarily protect an actual model either way; `SandwichSensitiveFakeClient` and
+  `StrictPromptSensitiveFakeClient` are each vulnerable by default but resist their own
+  matching defense, checked to NOT be helped by the other's; `StubbornFakeClient` needs
+  both signals together to back off, checked to show neither individual defense is enough
+  for it. These aren't stand-ins for missing functionality; they're what let the harness
+  and scoring logic get proven correct before a single real model call happens.
+- `scoring.py` - classifies each result as resisted / hijacked / other, aggregates a hijack
+  rate per technique, and an overall hijack rate across a whole batch.
+- `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
+  markdown, so results can go straight into a writeup.
+- `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both` runs the battery
+  once; `soclab compare --client ... [--report FILE.md]` runs it under all four defenses
   back to back and optionally writes the comparison as markdown; `soclab list-techniques`
   lists what's available.
 
@@ -72,7 +73,8 @@ python -m soclab.cli run --client fake-vulnerable
 python -m soclab.cli run --client fake-semantic-vulnerable
 python -m soclab.cli run --client fake-sandwich-sensitive --defense sandwich
 python -m soclab.cli run --client fake-strict-sensitive --defense strict
-python -m soclab.cli compare --client fake-sandwich-sensitive --report results.md
+python -m soclab.cli run --client fake-stubborn --defense both
+python -m soclab.cli compare --client fake-stubborn --report results.md
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -82,7 +84,8 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-68 tests, all deterministic - no network calls, nothing depends on a real model being
-available. The fake clients are exercised the same way a real one eventually will be, so
-the prompt-building, response-parsing, scoring, and report generation are all proven
-correct independent of what's actually running behind `complete()`.
+82 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+requests.post), nothing depends on a real model being available. The fake clients are
+exercised the same way a real one eventually will be, so the prompt-building,
+response-parsing, scoring, and report generation are all proven correct independent of
+what's actually running behind `complete()`.
