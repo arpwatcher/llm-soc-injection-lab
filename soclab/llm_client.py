@@ -156,9 +156,11 @@ class ScriptedLLMClient:
 
 
 class OllamaClient:
-    """Talks to a real, locally running Ollama server. Not exercised by
-    the test suite (no network calls in tests) - this is the client the
-    cli uses for actual experiments once Ollama is available."""
+    """Talks to a real, locally running Ollama server. The request/response
+    handling is unit tested against a mocked requests.post (see
+    tests/test_ollama_client.py) - no real network call happens in the
+    test suite, but the actual code path that builds the request and
+    parses the response is exercised, not skipped."""
 
     def __init__(self, model: str, host: str | None = None, timeout: float = 120.0):
         self.model = model
