@@ -1,7 +1,7 @@
 from soclab.alerts import generate_clean_alerts
 from soclab.injections import TECHNIQUES, apply_all_techniques
 from soclab.llm_client import RobustFakeClient, VulnerableFakeClient
-from soclab.scoring import aggregate_by_technique, classify_outcome, score_batch
+from soclab.scoring import aggregate_by_technique, classify_outcome, overall_hijack_rate, score_batch
 from soclab.analyst import AnalystDecision
 
 
@@ -73,3 +73,22 @@ def test_aggregate_by_technique_hijack_rate_for_vulnerable_client():
 def test_aggregate_by_technique_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), RobustFakeClient())
     assert aggregate_by_technique(results) == {}
+
+
+def test_overall_hijack_rate_zero_for_robust_client():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, RobustFakeClient())
+    assert overall_hijack_rate(results) == 0.0
+
+
+def test_overall_hijack_rate_reflects_the_one_technique_that_resists():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    technique_count = len(TECHNIQUES)
+    expected = (technique_count - 1) / technique_count  # every technique but unicode_homoglyph hijacks
+    assert overall_hijack_rate(results) == expected
+
+
+def test_overall_hijack_rate_ignores_clean_alerts():
+    results = score_batch(generate_clean_alerts(), VulnerableFakeClient())
+    assert overall_hijack_rate(results) == 0.0

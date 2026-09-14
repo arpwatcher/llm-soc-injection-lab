@@ -17,7 +17,7 @@ from soclab.llm_client import (
     VulnerableFakeClient,
 )
 from soclab.report import render_markdown_report
-from soclab.scoring import aggregate_by_technique, score_batch
+from soclab.scoring import aggregate_by_technique, overall_hijack_rate, score_batch
 
 CLIENT_FACTORIES = {
     "fake-robust": lambda args: RobustFakeClient(),
@@ -36,11 +36,12 @@ def build_client(args):
     return CLIENT_FACTORIES[args.client](args)
 
 
-def _print_report(aggregated):
+def _print_report(aggregated, results):
     print(f"{'technique':<24} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
     for technique, bucket in aggregated.items():
         print(f"{technique:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
               f"{bucket['hijack_rate']:>11.0%}")
+    print(f"\noverall hijack rate: {overall_hijack_rate(results):.0%}")
 
 
 def cmd_run(args):
@@ -54,7 +55,7 @@ def cmd_run(args):
     print(f"clean alerts: {clean_correct}/{len(clean_results)} correct action (defense={args.defense})\n")
 
     injected_results = score_batch(injected_alerts, client, defense=args.defense)
-    _print_report(aggregate_by_technique(injected_results))
+    _print_report(aggregate_by_technique(injected_results), injected_results)
 
 
 def cmd_compare(args):
@@ -66,7 +67,7 @@ def cmd_compare(args):
         print(f"--- defense={defense} ---")
         results = score_batch(injected_alerts, client, defense=defense)
         aggregated = aggregate_by_technique(results)
-        _print_report(aggregated)
+        _print_report(aggregated, results)
         per_defense[defense] = aggregated
         print()
 

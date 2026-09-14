@@ -55,3 +55,15 @@ def aggregate_by_technique(results: list[ScoredResult]) -> dict:
         bucket["hijack_rate"] = bucket["hijacked"] / bucket["total"]
 
     return by_technique
+
+
+def overall_hijack_rate(results: list[ScoredResult]) -> float:
+    """Hijack rate across every injected alert, ignoring technique -
+    the single bottom-line number for "how often did this client/defense
+    combination actually get fooled". Only counts injected alerts, same
+    as aggregate_by_technique. Returns 0.0 if there are none."""
+    injected = [r for r in results if r.alert.injected_technique is not None]
+    if not injected:
+        return 0.0
+    hijacked = sum(1 for r in injected if r.outcome == "hijacked")
+    return hijacked / len(injected)

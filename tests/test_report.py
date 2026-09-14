@@ -29,3 +29,9 @@ def test_render_is_valid_markdown_table_shape():
     report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
     assert "| technique | hijacked | resisted | other | hijack rate |" in report
     assert "|---|---|---|---|---|" in report
+
+
+def test_render_includes_overall_hijack_rate():
+    # 5 hijacked out of 10 total across both techniques in _sample_aggregate()
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "overall hijack rate: 50%" in report

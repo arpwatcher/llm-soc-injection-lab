@@ -17,6 +17,12 @@ def render_markdown_report(client_name: str, per_defense: dict) -> str:
                 f"| {technique} | {bucket['hijacked']} | {bucket['resisted']} | "
                 f"{bucket['other']} | {bucket['hijack_rate']:.0%} |"
             )
+
+        total_hijacked = sum(bucket["hijacked"] for bucket in aggregated.values())
+        total_count = sum(bucket["total"] for bucket in aggregated.values())
+        overall = total_hijacked / total_count if total_count else 0.0
+        lines.append("")
+        lines.append(f"overall hijack rate: {overall:.0%}")
         lines.append("")
 
     return "\n".join(lines)
