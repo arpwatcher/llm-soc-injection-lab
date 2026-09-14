@@ -42,6 +42,22 @@ def test_run_with_fake_semantic_vulnerable_client_hijacked_by_homoglyph_too(caps
             assert "100%" in line
 
 
+def test_stubborn_client_only_resists_the_combined_defense(capsys):
+    for defense in ("none", "sandwich", "strict"):
+        main(["run", "--client", "fake-stubborn", "--defense", defense])
+        out = capsys.readouterr().out
+        assert "direct_override" in out
+        for line in out.splitlines():
+            if line.strip().startswith("direct_override"):
+                assert "100%" in line, f"defense={defense} unexpectedly reduced hijack rate"
+
+    main(["run", "--client", "fake-stubborn", "--defense", "both"])
+    out = capsys.readouterr().out
+    for line in out.splitlines():
+        if line.strip().startswith("direct_override"):
+            assert "0%" in line
+
+
 def test_run_with_sandwich_defense_reduces_hijack_rate(capsys):
     main(["run", "--client", "fake-sandwich-sensitive", "--defense", "none"])
     without_defense = capsys.readouterr().out

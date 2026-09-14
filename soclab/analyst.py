@@ -28,7 +28,8 @@ Respond with a JSON object and nothing else, in this exact shape:
 DEFENSE_NONE = "none"
 DEFENSE_SANDWICH = "sandwich"
 DEFENSE_STRICT = "strict"
-DEFENSES = (DEFENSE_NONE, DEFENSE_SANDWICH, DEFENSE_STRICT)
+DEFENSE_BOTH = "both"
+DEFENSES = (DEFENSE_NONE, DEFENSE_SANDWICH, DEFENSE_STRICT, DEFENSE_BOTH)
 
 # the "instruction sandwich" defense: repeat the real instruction again
 # after the untrusted content, on the theory that models weight recent
@@ -78,7 +79,7 @@ def build_user_message(alert: Alert, defense: str = DEFENSE_NONE) -> str:
         f"What is the correct action for this alert?"
     )
 
-    if defense == DEFENSE_SANDWICH:
+    if defense in (DEFENSE_SANDWICH, DEFENSE_BOTH):
         message += _SANDWICH_REINFORCEMENT
 
     return message
@@ -87,7 +88,7 @@ def build_user_message(alert: Alert, defense: str = DEFENSE_NONE) -> str:
 def get_system_prompt(defense: str = DEFENSE_NONE) -> str:
     if defense not in DEFENSES:
         raise ValueError(f"unknown defense: {defense}")
-    if defense == DEFENSE_STRICT:
+    if defense in (DEFENSE_STRICT, DEFENSE_BOTH):
         return SYSTEM_PROMPT + _STRICT_ADDENDUM
     return SYSTEM_PROMPT
 

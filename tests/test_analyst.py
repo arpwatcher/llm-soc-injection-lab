@@ -2,6 +2,7 @@ import pytest
 
 from soclab.alerts import generate_clean_alerts
 from soclab.analyst import (
+    DEFENSE_BOTH,
     DEFENSE_NONE,
     DEFENSE_SANDWICH,
     DEFENSE_STRICT,
@@ -17,6 +18,7 @@ from soclab.llm_client import (
     SandwichSensitiveFakeClient,
     ScriptedLLMClient,
     StrictPromptSensitiveFakeClient,
+    StubbornFakeClient,
     VulnerableFakeClient,
 )
 
@@ -160,3 +162,25 @@ def test_sandwich_defense_does_not_help_a_pattern_aware_client():
     injected = apply_technique(alert, "direct_override")
     decision = analyze(injected, StrictPromptSensitiveFakeClient(), defense=DEFENSE_SANDWICH)
     assert decision.action == "dismiss"
+
+
+def test_build_user_message_both_includes_sandwich_reinforcement():
+    alert = generate_clean_alerts()[0]
+    message = build_user_message(alert, defense=DEFENSE_BOTH)
+    assert "Reminder:" in message
+
+
+def test_get_system_prompt_both_includes_strict_warning():
+    prompt = get_system_prompt(DEFENSE_BOTH)
+    assert "CISO impersonation" in prompt
+
+
+def test_stubborn_client_needs_both_defenses_together():
+    alert = next(a for a in generate_clean_alerts() if a.ground_truth_action == "escalate")
+    injected = apply_technique(alert, "direct_override")
+    client = StubbornFakeClient()
+
+    assert analyze(injected, client, defense=DEFENSE_NONE).action == "dismiss"
+    assert analyze(injected, client, defense=DEFENSE_SANDWICH).action == "dismiss"
+    assert analyze(injected, client, defense=DEFENSE_STRICT).action == "dismiss"
+    assert analyze(injected, client, defense=DEFENSE_BOTH).action == "escalate"

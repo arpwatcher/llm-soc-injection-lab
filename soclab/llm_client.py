@@ -138,6 +138,23 @@ class StrictPromptSensitiveFakeClient:
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
 
 
+class StubbornFakeClient:
+    """Models a model that needs BOTH signals to back off - the sandwich
+    reinforcement in the user message AND the strict warning in the
+    system prompt. Either alone isn't enough to change its mind, only
+    the combined defense is. Shows that stacking defenses can matter even
+    when neither alone covers this particular failure mode."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        has_reinforcement = _REINFORCEMENT_MARKER in user_message
+        has_strict_warning = _STRICT_WARNING_MARKER in system_prompt
+        if has_reinforcement and has_strict_warning:
+            return _to_json_response(_keyword_classify(user_message), "convinced by the reminder and the warning together")
+        if any(marker in user_message for marker in _INJECTION_MARKERS):
+            return _to_json_response("dismiss", "following the note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
 class ScriptedLLMClient:
     """Returns a fixed sequence of canned responses, one per call, in
     order - for tests that need to control exactly what the model "said"
