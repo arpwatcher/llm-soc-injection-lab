@@ -109,6 +109,34 @@ def test_list_techniques(capsys):
     assert exit_code == 0
     assert "direct_override" in out
     assert "encoded_instruction" in out
+    assert "false_urgency" in out
+    assert "fake_severity_upgrade" in out
+
+
+def test_run_escalate_direction_with_dedicated_client(capsys):
+    exit_code = main(["run", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direction=escalate" in out
+    for line in out.splitlines():
+        if line.strip().startswith(("false_urgency", "fake_severity_upgrade")):
+            assert "100%" in line
+
+
+def test_run_escalate_direction_robust_client_resists(capsys):
+    exit_code = main(["run", "--client", "fake-robust", "--direction", "escalate"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    for line in out.splitlines():
+        if line.strip().startswith(("false_urgency", "fake_severity_upgrade")):
+            assert "0%" in line
+
+
+def test_run_default_direction_is_dismiss(capsys):
+    exit_code = main(["run", "--client", "fake-robust"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direction=dismiss" in out
 
 
 def test_ollama_client_requires_model():
