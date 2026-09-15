@@ -4,13 +4,17 @@ import pytest
 
 from soclab.alerts import generate_clean_alerts
 from soclab.injections import (
+    ESCALATION_TECHNIQUES,
     TECHNIQUES,
+    apply_all_escalation_techniques,
     apply_all_techniques,
     apply_technique,
     conversational_drift,
     direct_override,
     encoded_instruction,
+    fake_severity_upgrade,
     fake_tool_output,
+    false_urgency,
     indirect_kb_reference,
     unicode_homoglyph,
 )
@@ -20,6 +24,10 @@ def _escalate_alert():
     return next(a for a in generate_clean_alerts() if a.ground_truth_action == "escalate")
 
 
+def _dismiss_alert():
+    return next(a for a in generate_clean_alerts() if a.ground_truth_action == "dismiss")
+
+
 def test_direct_override_appends_payload_and_tags_technique():
     alert = _escalate_alert()
     injected = direct_override(alert)
@@ -27,6 +35,7 @@ def test_direct_override_appends_payload_and_tags_technique():
     assert alert.raw_log in injected.raw_log
     assert "SYSTEM NOTE" in injected.raw_log
     assert injected.injected_technique == "direct_override"
+    assert injected.injected_target_action == "dismiss"
 
 
 def test_injection_does_not_change_ground_truth():
@@ -95,3 +104,42 @@ def test_apply_all_techniques_covers_every_technique():
     injected = apply_all_techniques(clean)
     used_techniques = {a.injected_technique for a in injected}
     assert used_techniques == set(TECHNIQUES)
+
+
+def test_false_urgency_pushes_toward_escalate():
+    alert = _dismiss_alert()
+    injected = false_urgency(alert)
+    assert "CRITICAL UPDATE" in injected.raw_log
+    assert injected.injected_technique == "false_urgency"
+    assert injected.injected_target_action == "escalate"
+    assert injected.ground_truth_action == "dismiss"  # unchanged
+
+
+def test_fake_severity_upgrade_pushes_toward_escalate():
+    alert = _dismiss_alert()
+    injected = fake_severity_upgrade(alert)
+    assert "[SEVERITY_ENGINE_OUTPUT]" in injected.raw_log
+    assert injected.injected_technique == "fake_severity_upgrade"
+    assert injected.injected_target_action == "escalate"
+
+
+def test_apply_technique_dispatches_escalation_techniques_too():
+    injected = apply_technique(_dismiss_alert(), "false_urgency")
+    assert injected.injected_technique == "false_urgency"
+
+
+def test_apply_all_escalation_techniques_only_targets_dismiss_worthy_alerts():
+    clean = generate_clean_alerts()
+    injected = apply_all_escalation_techniques(clean)
+    assert all(a.ground_truth_action == "dismiss" for a in injected)
+
+
+def test_apply_all_escalation_techniques_covers_every_escalation_technique():
+    clean = generate_clean_alerts()
+    injected = apply_all_escalation_techniques(clean)
+    used_techniques = {a.injected_technique for a in injected}
+    assert used_techniques == set(ESCALATION_TECHNIQUES)
+
+
+def test_dismiss_and_escalation_technique_sets_are_disjoint():
+    assert set(TECHNIQUES).isdisjoint(set(ESCALATION_TECHNIQUES))

@@ -1,6 +1,6 @@
 from soclab.alerts import generate_clean_alerts
-from soclab.injections import TECHNIQUES, apply_all_techniques
-from soclab.llm_client import RobustFakeClient, VulnerableFakeClient
+from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_all_escalation_techniques, apply_all_techniques
+from soclab.llm_client import EscalationVulnerableFakeClient, RobustFakeClient, VulnerableFakeClient
 from soclab.scoring import aggregate_by_technique, classify_outcome, overall_hijack_rate, score_batch
 from soclab.analyst import AnalystDecision
 
@@ -92,3 +92,29 @@ def test_overall_hijack_rate_reflects_the_one_technique_that_resists():
 def test_overall_hijack_rate_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), VulnerableFakeClient())
     assert overall_hijack_rate(results) == 0.0
+
+
+def test_classify_outcome_hijacked_for_escalation_direction():
+    from soclab.injections import apply_technique
+
+    dismiss_alert = next(a for a in generate_clean_alerts() if a.ground_truth_action == "dismiss")
+    injected = apply_technique(dismiss_alert, "false_urgency")
+    decision = AnalystDecision(alert_id=injected.id, action="escalate", reasoning="", raw_response="")
+    assert classify_outcome(injected, decision) == "hijacked"
+
+
+def test_score_batch_escalation_direction_with_dedicated_vulnerable_client():
+    injected = apply_all_escalation_techniques(generate_clean_alerts())
+    results = score_batch(injected, EscalationVulnerableFakeClient())
+    assert all(r.outcome == "hijacked" for r in results)
+
+    aggregated = aggregate_by_technique(results)
+    assert set(aggregated) == set(ESCALATION_TECHNIQUES)
+    assert all(bucket["hijack_rate"] == 1.0 for bucket in aggregated.values())
+    assert overall_hijack_rate(results) == 1.0
+
+
+def test_score_batch_escalation_direction_with_robust_client_all_resisted():
+    injected = apply_all_escalation_techniques(generate_clean_alerts())
+    results = score_batch(injected, RobustFakeClient())
+    assert all(r.outcome == "resisted" for r in results)

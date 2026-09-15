@@ -3,8 +3,9 @@ import json
 import pytest
 
 from soclab.alerts import generate_clean_alerts
-from soclab.injections import TECHNIQUES, apply_technique
+from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_technique
 from soclab.llm_client import (
+    EscalationVulnerableFakeClient,
     RobustFakeClient,
     ScriptedLLMClient,
     SemanticVulnerableFakeClient,
@@ -89,6 +90,45 @@ def test_semantic_vulnerable_client_hijacked_by_every_technique_including_homogl
         injected = apply_technique(alert, technique)
         response = json.loads(client.complete("system", _user_message(injected)))
         assert response["action"] == "dismiss", f"{technique} did not hijack the semantic vulnerable client"
+
+
+def test_escalation_vulnerable_client_matches_ground_truth_on_clean_alerts():
+    client = EscalationVulnerableFakeClient()
+    for alert in generate_clean_alerts():
+        response = json.loads(client.complete("system", _user_message(alert)))
+        assert response["action"] == alert.ground_truth_action
+
+
+def test_escalation_vulnerable_client_hijacked_by_every_escalation_technique():
+    alert = _alert("dismiss")
+    client = EscalationVulnerableFakeClient()
+    for technique in ESCALATION_TECHNIQUES:
+        injected = apply_technique(alert, technique)
+        response = json.loads(client.complete("system", _user_message(injected)))
+        assert response["action"] == "escalate", f"{technique} did not hijack the escalation vulnerable client"
+
+
+def test_escalation_vulnerable_client_not_hijacked_by_dismiss_direction_techniques():
+    """it only recognizes the escalation markers - the dismiss-direction
+    techniques shouldn't move it at all."""
+    alert = _alert("escalate")
+    client = EscalationVulnerableFakeClient()
+    for technique in TECHNIQUES:
+        injected = apply_technique(alert, technique)
+        response = json.loads(client.complete("system", _user_message(injected)))
+        assert response["action"] == "escalate", f"{technique} unexpectedly moved the escalation vulnerable client"
+
+
+def test_vulnerable_client_not_hijacked_by_escalation_direction_techniques():
+    """symmetric check: VulnerableFakeClient only recognizes the
+    dismiss-direction markers, so escalation-direction techniques
+    shouldn't move it either."""
+    alert = _alert("dismiss")
+    client = VulnerableFakeClient()
+    for technique in ESCALATION_TECHNIQUES:
+        injected = apply_technique(alert, technique)
+        response = json.loads(client.complete("system", _user_message(injected)))
+        assert response["action"] == "dismiss", f"{technique} unexpectedly moved the vulnerable client"
 
 
 def test_scripted_client_returns_responses_in_order():

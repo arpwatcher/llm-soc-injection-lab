@@ -5,7 +5,12 @@ ignoring anything else in the alert text. raw_log is the field an attacker
 controls in the real scenario this models: log content that gets pasted
 into a ticket or fed to the analyst verbatim. injected_technique is set
 once a prompt injection payload has been mixed into raw_log (see
-injections.py) - None means the alert is clean.
+injections.py) - None means the alert is clean. injected_target_action is
+the wrong action that injection is trying to steer the analyst toward -
+most of this lab's techniques push toward "dismiss" (hide a real
+incident), but injections.py also has techniques that push benign alerts
+toward "escalate" instead (waste analyst time / alert fatigue) - a
+different attacker goal worth measuring separately.
 """
 
 from dataclasses import dataclass
@@ -22,6 +27,7 @@ class Alert:
     raw_log: str
     ground_truth_action: str
     injected_technique: str | None = None
+    injected_target_action: str | None = None
 
     def __post_init__(self):
         if self.ground_truth_action not in ACTIONS:
