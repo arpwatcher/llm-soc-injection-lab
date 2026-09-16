@@ -32,14 +32,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   wrapping the untrusted content in clear delimiters. Supports three defenses plus "none":
   `sandwich` repeats the "this is data" reminder in the user message after the untrusted
   block (targets recency bias); `strict` instead names specific manipulation patterns up
-  front in the system prompt (targets a model that's told what to watch for); `both` layers
+  front in the system prompt - patterns from BOTH attacker directions, not just the
+  dismiss-direction ones (targets a model that's told what to watch for); `both` layers
   them together. Parses the model's response back into a structured decision - pulls the
   JSON out even if the model wraps it in a sentence, and rejects anything outside the known
   action set instead of guessing.
 - `llm_client.py` - one small interface (`complete(system_prompt, user_message) -> str`)
   behind everything. `OllamaClient` is the real implementation, talking to a local Ollama
   server - its request building and response parsing are unit tested against a mocked
-  `requests.post`. Seven fake clients model different failure modes without needing a real
+  `requests.post`. Nine fake clients model different failure modes without needing a real
   model running: `RobustFakeClient` always reads the alert honestly by keyword;
   `VulnerableFakeClient` caves the moment it sees a known injection marker phrase, but does
   NOT catch the homoglyph technique (naive keyword filter, on purpose);
@@ -51,18 +52,23 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   both signals together to back off, checked to show neither individual defense is enough
   for it; `EscalationVulnerableFakeClient` mirrors `VulnerableFakeClient` for the opposite
   attacker goal - caves to the escalation markers, ignores the dismiss-direction ones
-  entirely, checked to be a genuinely separate vulnerability profile in both directions.
-  These aren't stand-ins for missing functionality; they're what let the harness and
-  scoring logic get proven correct before a single real model call happens.
+  entirely; `EscalationSandwichSensitiveFakeClient` and
+  `EscalationStrictPromptSensitiveFakeClient` prove both defenses actually help against the
+  escalation direction too, not just the dismiss direction they were originally built to
+  demonstrate. These aren't stand-ins for missing functionality; they're what let the
+  harness and scoring logic get proven correct before a single real model call happens.
 - `scoring.py` - classifies each result as resisted / hijacked / other (against whichever
   direction that specific alert's injection was aiming for), aggregates a hijack rate per
   technique, and an overall hijack rate across a whole batch.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
-  markdown, so results can go straight into a writeup.
+  markdown, so results can go straight into a writeup. `render_combined_report` does the
+  same across both attacker directions and all four defenses in one document.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
   dismiss|escalate` runs one battery; `soclab compare --client ... [--direction ...]
   [--report FILE.md]` runs it under all four defenses back to back and optionally writes
-  the comparison as markdown; `soclab list-techniques` lists both technique sets.
+  the comparison as markdown; `soclab full-report --client ... --report FILE.md` is the
+  capstone run - both directions, all four defenses, one client, one combined document;
+  `soclab list-techniques` lists both technique sets.
 
 Current status: the harness is fully built and tested against the fake clients. Still
 hasn't run against a real model - this development environment's network policy blocks
@@ -87,6 +93,7 @@ python -m soclab.cli run --client fake-strict-sensitive --defense strict
 python -m soclab.cli run --client fake-stubborn --defense both
 python -m soclab.cli run --client fake-escalation-vulnerable --direction escalate
 python -m soclab.cli compare --client fake-stubborn --report results.md
+python -m soclab.cli full-report --client fake-stubborn --report full-results.md
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -96,7 +103,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-98 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+110 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
