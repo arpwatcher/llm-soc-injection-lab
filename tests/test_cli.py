@@ -119,6 +119,23 @@ def test_compare_prints_direction(capsys):
     assert "direction=escalate" in out
 
 
+def test_full_report_writes_combined_markdown(tmp_path, capsys):
+    report_path = tmp_path / "full.md"
+    exit_code = main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    content = report_path.read_text()
+    assert "direction: dismiss" in content
+    assert "direction: escalate" in content
+    assert "defense: none" in content
+    assert "defense: both" in content
+
+
+def test_full_report_requires_report_path():
+    with pytest.raises(SystemExit):
+        main(["full-report", "--client", "fake-stubborn"])
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out

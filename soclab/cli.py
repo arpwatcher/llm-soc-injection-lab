@@ -24,7 +24,7 @@ from soclab.llm_client import (
     StubbornFakeClient,
     VulnerableFakeClient,
 )
-from soclab.report import render_markdown_report
+from soclab.report import render_combined_report, render_markdown_report
 from soclab.scoring import aggregate_by_technique, overall_hijack_rate, score_batch
 
 CLIENT_FACTORIES = {
@@ -99,6 +99,31 @@ def cmd_compare(args):
         print(f"wrote report to {args.report}")
 
 
+def cmd_full_report(args):
+    """The capstone run: every direction, every defense, one client - the
+    complete picture in a single invocation, written as one combined
+    markdown file. This is what an actual thesis experiment run looks
+    like once a real model is reachable."""
+    client = build_client(args)
+
+    by_direction = {}
+    for direction in DIRECTIONS:
+        injected_alerts = _injected_alerts_for(direction)
+        per_defense = {}
+        for defense in DEFENSES:
+            print(f"--- direction={direction} defense={defense} ---")
+            results = score_batch(injected_alerts, client, defense=defense)
+            aggregated = aggregate_by_technique(results)
+            _print_report(aggregated, results)
+            per_defense[defense] = aggregated
+            print()
+        by_direction[direction] = per_defense
+
+    with open(args.report, "w") as f:
+        f.write(render_combined_report(args.client, by_direction))
+    print(f"wrote combined report to {args.report}")
+
+
 def cmd_list_techniques(args):
     print(f"{len(TECHNIQUES)} dismiss-direction techniques (hide a real incident):")
     for name, func in TECHNIQUES.items():
@@ -128,6 +153,15 @@ def build_parser():
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--report", help="write results as a markdown table to this path")
     compare_parser.set_defaults(func=cmd_compare)
+
+    full_report_parser = sub.add_parser(
+        "full-report", help="run every direction and every defense for a client, write one combined report"
+    )
+    full_report_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust")
+    full_report_parser.add_argument("--model", help="model name, required for --client ollama")
+    full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    full_report_parser.add_argument("--report", required=True, help="path to write the combined markdown report to")
+    full_report_parser.set_defaults(func=cmd_full_report)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_parser.set_defaults(func=cmd_list_techniques)

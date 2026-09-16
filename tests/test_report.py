@@ -1,4 +1,4 @@
-from soclab.report import render_markdown_report
+from soclab.report import render_combined_report, render_markdown_report
 
 
 def _sample_aggregate():
@@ -45,3 +45,24 @@ def test_render_defaults_to_dismiss_direction():
 def test_render_notes_escalate_direction_when_given():
     report = render_markdown_report("fake-escalation-vulnerable", {"none": _sample_aggregate()}, direction="escalate")
     assert "direction: escalate" in report
+
+
+def test_combined_report_includes_both_directions():
+    by_direction = {
+        "dismiss": {"none": _sample_aggregate(), "sandwich": _sample_aggregate()},
+        "escalate": {"none": _sample_aggregate(), "sandwich": _sample_aggregate()},
+    }
+    report = render_combined_report("fake-vulnerable", by_direction)
+    assert "direction: dismiss" in report
+    assert "direction: escalate" in report
+    assert "defense: none" in report
+    assert "defense: sandwich" in report
+
+
+def test_combined_report_includes_client_name_and_tables():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    report = render_combined_report("fake-stubborn", by_direction)
+    assert "fake-stubborn" in report
+    assert "| technique | hijacked | resisted | other | hijack rate |" in report
+    assert "100%" in report
+    assert "0%" in report
