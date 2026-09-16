@@ -127,6 +127,15 @@ def test_get_system_prompt_strict_adds_named_warning():
     assert strict.startswith(SYSTEM_PROMPT)
 
 
+def test_get_system_prompt_strict_covers_both_attacker_directions():
+    """the strict defense should name patterns from both technique sets -
+    a defense that only warned about the dismiss-direction ones would
+    leave escalation-direction attacks completely unaddressed."""
+    strict = get_system_prompt(DEFENSE_STRICT)
+    assert "urgency" in strict.lower()
+    assert "severity-reclassification" in strict.lower()
+
+
 def test_get_system_prompt_rejects_unknown_defense():
     with pytest.raises(ValueError):
         get_system_prompt("ignore-everything")
