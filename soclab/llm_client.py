@@ -176,6 +176,37 @@ class StubbornFakeClient:
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
 
 
+class EscalationSandwichSensitiveFakeClient:
+    """The escalation-direction mirror of SandwichSensitiveFakeClient:
+    vulnerable to the escalation markers by default, but backs off if the
+    sandwich reinforcement is present. Nothing in the harness proved the
+    sandwich defense actually helps against the "talk the analyst up"
+    attacker goal until this existed - EscalationVulnerableFakeClient
+    doesn't look at defenses at all."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        if _REINFORCEMENT_MARKER in user_message:
+            return _to_json_response(_keyword_classify(user_message), "reminded to disregard embedded instructions")
+        if any(marker in user_message for marker in _ESCALATION_MARKERS):
+            return _to_json_response("escalate", "following the urgent note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
+class EscalationStrictPromptSensitiveFakeClient:
+    """The escalation-direction mirror of StrictPromptSensitiveFakeClient:
+    vulnerable to the escalation markers by default, but resists once the
+    strict defense's warning (which, since the earlier one-sided-defense
+    fix, now names the escalation patterns too) is present in the system
+    prompt."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        if _STRICT_WARNING_MARKER in system_prompt:
+            return _to_json_response(_keyword_classify(user_message), "warned about this pattern in advance")
+        if any(marker in user_message for marker in _ESCALATION_MARKERS):
+            return _to_json_response("escalate", "following the urgent note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
 class ScriptedLLMClient:
     """Returns a fixed sequence of canned responses, one per call, in
     order - for tests that need to control exactly what the model "said"

@@ -123,6 +123,20 @@ def test_run_escalate_direction_with_dedicated_client(capsys):
             assert "100%" in line
 
 
+def test_run_escalate_direction_defenses_actually_help(capsys):
+    for client, defense in (
+        ("fake-escalation-sandwich-sensitive", "sandwich"),
+        ("fake-escalation-strict-sensitive", "strict"),
+    ):
+        main(["run", "--client", client, "--direction", "escalate", "--defense", "none"])
+        without_defense = capsys.readouterr().out
+        main(["run", "--client", client, "--direction", "escalate", "--defense", defense])
+        with_defense = capsys.readouterr().out
+
+        assert "100%" in without_defense
+        assert "100%" not in with_defense
+
+
 def test_run_escalate_direction_robust_client_resists(capsys):
     exit_code = main(["run", "--client", "fake-robust", "--direction", "escalate"])
     out = capsys.readouterr().out

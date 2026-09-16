@@ -14,6 +14,8 @@ from soclab.analyst import (
 )
 from soclab.injections import apply_technique
 from soclab.llm_client import (
+    EscalationSandwichSensitiveFakeClient,
+    EscalationStrictPromptSensitiveFakeClient,
     RobustFakeClient,
     SandwichSensitiveFakeClient,
     ScriptedLLMClient,
@@ -193,3 +195,36 @@ def test_stubborn_client_needs_both_defenses_together():
     assert analyze(injected, client, defense=DEFENSE_SANDWICH).action == "dismiss"
     assert analyze(injected, client, defense=DEFENSE_STRICT).action == "dismiss"
     assert analyze(injected, client, defense=DEFENSE_BOTH).action == "escalate"
+
+
+def _dismiss_alert():
+    return next(a for a in generate_clean_alerts() if a.ground_truth_action == "dismiss")
+
+
+def test_sandwich_defense_stops_escalation_direction_hijack_too():
+    from soclab.injections import apply_technique as apply_tech
+
+    injected = apply_tech(_dismiss_alert(), "false_urgency")
+    client = EscalationSandwichSensitiveFakeClient()
+
+    without_defense = analyze(injected, client, defense=DEFENSE_NONE)
+    with_defense = analyze(injected, client, defense=DEFENSE_SANDWICH)
+
+    assert without_defense.action == "escalate"
+    assert with_defense.action == "dismiss"  # the correct action for this alert
+
+
+def test_strict_defense_stops_escalation_direction_hijack_too():
+    """this is the whole point of fixing the strict addendum to name the
+    escalation patterns - before that fix, this client would never have
+    backed off no matter what defense was passed."""
+    from soclab.injections import apply_technique as apply_tech
+
+    injected = apply_tech(_dismiss_alert(), "fake_severity_upgrade")
+    client = EscalationStrictPromptSensitiveFakeClient()
+
+    without_defense = analyze(injected, client, defense=DEFENSE_NONE)
+    with_defense = analyze(injected, client, defense=DEFENSE_STRICT)
+
+    assert without_defense.action == "escalate"
+    assert with_defense.action == "dismiss"

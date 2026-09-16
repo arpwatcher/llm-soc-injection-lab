@@ -13,6 +13,8 @@ from soclab.injections import (
     apply_all_techniques,
 )
 from soclab.llm_client import (
+    EscalationSandwichSensitiveFakeClient,
+    EscalationStrictPromptSensitiveFakeClient,
     EscalationVulnerableFakeClient,
     OllamaClient,
     RobustFakeClient,
@@ -33,6 +35,8 @@ CLIENT_FACTORIES = {
     "fake-strict-sensitive": lambda args: StrictPromptSensitiveFakeClient(),
     "fake-stubborn": lambda args: StubbornFakeClient(),
     "fake-escalation-vulnerable": lambda args: EscalationVulnerableFakeClient(),
+    "fake-escalation-sandwich-sensitive": lambda args: EscalationSandwichSensitiveFakeClient(),
+    "fake-escalation-strict-sensitive": lambda args: EscalationStrictPromptSensitiveFakeClient(),
     "ollama": lambda args: OllamaClient(model=args.model, host=args.host),
 }
 
