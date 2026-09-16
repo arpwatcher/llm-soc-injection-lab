@@ -101,6 +101,22 @@ def test_compare_writes_markdown_report(tmp_path, capsys):
     assert "defense: none" in content
     assert "defense: sandwich" in content
     assert "| technique |" in content
+    assert "direction: dismiss" in content
+
+
+def test_compare_report_notes_escalate_direction(tmp_path, capsys):
+    report_path = tmp_path / "report.md"
+    main(["compare", "--client", "fake-escalation-sandwich-sensitive", "--direction", "escalate",
+          "--report", str(report_path)])
+    capsys.readouterr()
+    assert "direction: escalate" in report_path.read_text()
+
+
+def test_compare_prints_direction(capsys):
+    exit_code = main(["compare", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direction=escalate" in out
 
 
 def test_list_techniques(capsys):

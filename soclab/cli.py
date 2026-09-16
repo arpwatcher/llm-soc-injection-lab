@@ -83,6 +83,7 @@ def cmd_compare(args):
     client = build_client(args)
     injected_alerts = _injected_alerts_for(args.direction)
 
+    print(f"direction={args.direction}\n")
     per_defense = {}
     for defense in DEFENSES:
         print(f"--- defense={defense} ---")
@@ -94,7 +95,7 @@ def cmd_compare(args):
 
     if args.report:
         with open(args.report, "w") as f:
-            f.write(render_markdown_report(args.client, per_defense))
+            f.write(render_markdown_report(args.client, per_defense, direction=args.direction))
         print(f"wrote report to {args.report}")
 
 

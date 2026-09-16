@@ -35,3 +35,13 @@ def test_render_includes_overall_hijack_rate():
     # 5 hijacked out of 10 total across both techniques in _sample_aggregate()
     report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
     assert "overall hijack rate: 50%" in report
+
+
+def test_render_defaults_to_dismiss_direction():
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "direction: dismiss" in report
+
+
+def test_render_notes_escalate_direction_when_given():
+    report = render_markdown_report("fake-escalation-vulnerable", {"none": _sample_aggregate()}, direction="escalate")
+    assert "direction: escalate" in report
