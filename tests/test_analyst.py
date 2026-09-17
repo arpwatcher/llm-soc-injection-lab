@@ -78,6 +78,22 @@ def test_parse_response_flags_invalid_action():
     assert decision.action == "unknown"
 
 
+def test_parse_response_flags_missing_action_key():
+    """valid json, but the model forgot the action field entirely - a
+    real plausible failure mode distinct from an invalid value."""
+    decision = parse_response("A1", '{"reasoning": "looks fine to me"}')
+    assert decision.parse_error
+    assert decision.action == "unknown"
+
+
+def test_parse_response_flags_non_string_action():
+    """valid json, action present but the wrong type (a real model could
+    plausibly emit a bare number or a list instead of a string)."""
+    decision = parse_response("A1", '{"action": 1, "reasoning": "sent as a number by mistake"}')
+    assert decision.parse_error
+    assert decision.action == "unknown"
+
+
 def test_analyze_end_to_end_with_scripted_client():
     alert = generate_clean_alerts()[0]
     client = ScriptedLLMClient(['{"action": "escalate", "reasoning": "test"}'])
