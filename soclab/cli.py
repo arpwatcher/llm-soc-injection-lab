@@ -174,7 +174,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         args.func(args)
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
+        # OSError covers a bad --report path (missing directory, no
+        # permission, etc.) - without it, that crashes with a raw
+        # traceback instead of the same clean "error: ..." every other
+        # failure in this cli gets.
         print(f"error: {exc}", file=sys.stderr)
         return 1
     return 0

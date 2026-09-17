@@ -135,6 +135,21 @@ def test_compare_prints_direction(capsys):
     assert "direction=escalate" in out
 
 
+def test_compare_bad_report_path_fails_cleanly(capsys):
+    exit_code = main(["compare", "--client", "fake-robust", "--report", "/no/such/directory/report.md"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "error:" in err
+    assert "No such file or directory" in err
+
+
+def test_full_report_bad_report_path_fails_cleanly(capsys):
+    exit_code = main(["full-report", "--client", "fake-robust", "--report", "/no/such/directory/report.md"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "error:" in err
+
+
 def test_full_report_writes_combined_markdown(tmp_path, capsys):
     report_path = tmp_path / "full.md"
     exit_code = main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
