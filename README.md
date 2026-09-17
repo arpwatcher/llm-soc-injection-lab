@@ -103,8 +103,19 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-110 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+117 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
 what's actually running behind `complete()`.
+
+Ran a `coverage.py` audit (99% line coverage going in) and closed the two real gaps it
+found rather than chasing the number: `parse_response`'s JSONDecodeError branch had never
+actually been hit (the existing "malformed json" test used a response with no braces at
+all, which takes a different path), and the `python -m soclab.cli` entry point itself had
+never been exercised as a real subprocess - every other cli test calls `main()` in-process.
+Also fixed a real bug found along the way: a bad `--report` path (missing directory, no
+permission) crashed with a raw traceback instead of the clean "error: ..." message every
+other failure gets - `main()` now catches `OSError` too, which also means a connection
+failure against `--client ollama` (wrong host, not running) fails cleanly instead of
+crashing, since `requests.exceptions.ConnectionError` subclasses `OSError`.
