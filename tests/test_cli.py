@@ -230,3 +230,15 @@ def test_build_client_ollama_without_model_raises():
 
     with pytest.raises(ValueError):
         build_client(Args())
+
+
+def test_ollama_client_unreachable_host_fails_cleanly(capsys):
+    """a connection failure (ollama not running, wrong host/port) should
+    surface as the same clean "error: ..." message as everything else -
+    requests.exceptions.ConnectionError subclasses OSError, which main()
+    now catches. localhost:1 refuses immediately, no real network needed."""
+    exit_code = main(["run", "--client", "ollama", "--model", "test-model", "--host", "http://localhost:1"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "error:" in err
+    assert "Connection refused" in err or "Failed to establish a new connection" in err
