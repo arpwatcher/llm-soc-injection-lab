@@ -1,6 +1,22 @@
+import subprocess
+import sys
+
 import pytest
 
 from soclab.cli import build_client, main
+
+
+def test_module_invocation_as_real_subprocess():
+    """every other test calls main() in-process - none of them actually
+    exercise `python -m soclab.cli`, the way a real user runs this, which
+    means the `if __name__ == "__main__":` guard itself was never proven
+    to work. this runs it for real, out of process."""
+    result = subprocess.run(
+        [sys.executable, "-m", "soclab.cli", "list-techniques"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0
+    assert "direct_override" in result.stdout
 
 
 def test_run_with_fake_robust_client(capsys):

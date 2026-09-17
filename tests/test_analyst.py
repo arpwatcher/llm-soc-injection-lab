@@ -61,6 +61,17 @@ def test_parse_response_flags_malformed_json():
     assert decision.action == "unknown"
 
 
+def test_parse_response_flags_brace_shaped_but_invalid_json():
+    """the regex finds something that looks like a {...} object, but it
+    isn't valid json (unquoted value here) - a different failure mode
+    than no braces at all, and one the test suite didn't actually cover
+    until now (coverage showed the except json.JSONDecodeError branch was
+    never hit)."""
+    decision = parse_response("A1", '{"action": escalate, "reasoning": "unquoted value"}')
+    assert decision.parse_error
+    assert decision.action == "unknown"
+
+
 def test_parse_response_flags_invalid_action():
     decision = parse_response("A1", '{"action": "ignore_it", "reasoning": "whatever"}')
     assert decision.parse_error
