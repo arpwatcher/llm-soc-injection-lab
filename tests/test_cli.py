@@ -19,6 +19,20 @@ def test_module_invocation_as_real_subprocess():
     assert "direct_override" in result.stdout
 
 
+def test_run_help_documents_client_and_defense_choices():
+    """--client and --defense used to have no help text at all while
+    --direction/--model/--host/--report did - an unlabeled list of nine
+    fake-* names plus "ollama" isn't self-explanatory to someone running
+    this for the first time."""
+    result = subprocess.run(
+        [sys.executable, "-m", "soclab.cli", "run", "--help"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0
+    assert "which client to test" in result.stdout
+    assert "prompt defense to apply" in result.stdout
+
+
 def test_run_with_fake_robust_client(capsys):
     exit_code = main(["run", "--client", "fake-robust"])
     out = capsys.readouterr().out

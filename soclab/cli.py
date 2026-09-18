@@ -133,13 +133,24 @@ def cmd_list_techniques(args):
         print(f"  {name} - {func.__doc__ or '(no description)'}")
 
 
+_CLIENT_HELP = (
+    "which client to test: a fake-* deterministic test double (see README for what "
+    "each one models) for harness validation without a real model, or 'ollama' for a "
+    "real local model (requires --model)"
+)
+_DEFENSE_HELP = (
+    "prompt defense to apply: none, sandwich (reinforce after the untrusted content), "
+    "strict (name attack patterns up front in the system prompt), or both together"
+)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="soclab", description="LLM SOC analyst prompt injection lab")
     sub = parser.add_subparsers(dest="command", required=True)
 
     run_parser = sub.add_parser("run", help="run the injection battery against a client")
-    run_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust")
-    run_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE)
+    run_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP)
+    run_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
     run_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                              help="which attacker goal to test: hide a real incident, or waste analyst time")
     run_parser.add_argument("--model", help="model name, required for --client ollama")
@@ -147,7 +158,7 @@ def build_parser():
     run_parser.set_defaults(func=cmd_run)
 
     compare_parser = sub.add_parser("compare", help="run the battery under every defense and compare hijack rates")
-    compare_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust")
+    compare_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP)
     compare_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss")
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
@@ -157,7 +168,9 @@ def build_parser():
     full_report_parser = sub.add_parser(
         "full-report", help="run every direction and every defense for a client, write one combined report"
     )
-    full_report_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust")
+    full_report_parser.add_argument(
+        "--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP
+    )
     full_report_parser.add_argument("--model", help="model name, required for --client ollama")
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     full_report_parser.add_argument("--report", required=True, help="path to write the combined markdown report to")
