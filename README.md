@@ -62,7 +62,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   technique, and an overall hijack rate across a whole batch.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
   markdown, so results can go straight into a writeup. `render_combined_report` does the
-  same across both attacker directions and all four defenses in one document.
+  same across both attacker directions and all four defenses in one document, leading with
+  a summary table (hijack rate per defense, counts summed across both directions) so the
+  overall pattern doesn't require reading every sub-table by hand.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
   dismiss|escalate` runs one battery; `soclab compare --client ... [--direction ...]
   [--report FILE.md]` runs it under all four defenses back to back and optionally writes
@@ -82,7 +84,7 @@ actual thesis experiments run.
 ## Usage
 
 ```
-pip install -r requirements.txt
+pip install -r requirements.txt  # pinned versions, for reproducible experiment runs
 
 python -m soclab.cli list-techniques
 python -m soclab.cli run --client fake-robust
@@ -103,11 +105,14 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-117 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+125 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
-what's actually running behind `complete()`.
+what's actually running behind `complete()`. Every hijack-focused test used to happen to
+use an escalate-worthy alert as its example - injection also targets investigate-worthy
+alerts (`apply_all_techniques` skips only dismiss-worthy ones), so that path is checked
+explicitly too now, not just assumed to work by symmetry.
 
 Ran a `coverage.py` audit (99% line coverage going in) and closed the two real gaps it
 found rather than chasing the number: `parse_response`'s JSONDecodeError branch had never
