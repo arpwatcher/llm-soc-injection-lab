@@ -99,6 +99,16 @@ def test_apply_all_techniques_skips_already_dismiss_worthy_alerts():
     assert all(a.ground_truth_action != "dismiss" for a in injected)
 
 
+def test_apply_all_techniques_includes_investigate_worthy_alerts_too():
+    """apply_all_techniques targets everything except dismiss-worthy
+    alerts, i.e. both escalate AND investigate ground truth - checked
+    explicitly since every hijack-focused test elsewhere in this suite
+    happens to use an escalate-worthy alert."""
+    clean = generate_clean_alerts()
+    injected = apply_all_techniques(clean)
+    assert any(a.ground_truth_action == "investigate" for a in injected)
+
+
 def test_apply_all_techniques_covers_every_technique():
     clean = generate_clean_alerts()
     injected = apply_all_techniques(clean)

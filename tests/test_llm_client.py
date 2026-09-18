@@ -53,6 +53,17 @@ def test_vulnerable_client_is_hijacked_by_injected_instruction():
     assert response["action"] == "dismiss"
 
 
+def test_vulnerable_client_hijacked_on_investigate_worthy_alert_too():
+    """every hijack test elsewhere uses an escalate-worthy alert - this
+    checks the other non-dismiss ground truth apply_all_techniques also
+    targets actually works the same way, not just escalate-worthy ones."""
+    alert = _alert("investigate")
+    injected = apply_technique(alert, "direct_override")
+    client = VulnerableFakeClient()
+    response = json.loads(client.complete("system", _user_message(injected)))
+    assert response["action"] == "dismiss"
+
+
 def test_vulnerable_client_hijacked_by_literal_marker_techniques():
     alert = _alert("escalate")
     client = VulnerableFakeClient()
