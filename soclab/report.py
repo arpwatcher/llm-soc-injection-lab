@@ -2,6 +2,12 @@
 dropped straight into a writeup instead of copied out of terminal output."""
 
 
+def _overall_rate(aggregated: dict) -> float:
+    total_hijacked = sum(bucket["hijacked"] for bucket in aggregated.values())
+    total_count = sum(bucket["total"] for bucket in aggregated.values())
+    return total_hijacked / total_count if total_count else 0.0
+
+
 def _render_defense_sections(per_defense: dict, heading_level: str = "##") -> list[str]:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense, e.g. {"none": {...}, "sandwich": {...}}. Shared by both
@@ -19,11 +25,8 @@ def _render_defense_sections(per_defense: dict, heading_level: str = "##") -> li
                 f"{bucket['other']} | {bucket['hijack_rate']:.0%} |"
             )
 
-        total_hijacked = sum(bucket["hijacked"] for bucket in aggregated.values())
-        total_count = sum(bucket["total"] for bucket in aggregated.values())
-        overall = total_hijacked / total_count if total_count else 0.0
         lines.append("")
-        lines.append(f"overall hijack rate: {overall:.0%}")
+        lines.append(f"overall hijack rate: {_overall_rate(aggregated):.0%}")
         lines.append("")
     return lines
 
@@ -39,12 +42,39 @@ def render_markdown_report(client_name: str, per_defense: dict, direction: str =
     return "\n".join(lines)
 
 
+def _combined_rate_by_defense(by_direction: dict) -> dict:
+    """defense name -> hijack rate combined across every direction in
+    by_direction (summed counts, not an average of averages) - lets a
+    reader see at a glance whether a defense actually helped overall,
+    instead of averaging the per-direction sub-tables by hand."""
+    totals: dict = {}
+    for per_defense in by_direction.values():
+        for defense, aggregated in per_defense.items():
+            entry = totals.setdefault(defense, {"hijacked": 0, "total": 0})
+            entry["hijacked"] += sum(bucket["hijacked"] for bucket in aggregated.values())
+            entry["total"] += sum(bucket["total"] for bucket in aggregated.values())
+
+    return {
+        defense: (entry["hijacked"] / entry["total"] if entry["total"] else 0.0)
+        for defense, entry in totals.items()
+    }
+
+
 def render_combined_report(client_name: str, by_direction: dict) -> str:
     """The capstone report: both attacker directions, every defense, one
     document. by_direction maps direction name -> per_defense dict (the
     same shape render_markdown_report takes), e.g.
     {"dismiss": {"none": {...}, ...}, "escalate": {"none": {...}, ...}}."""
     lines = [f"# injection results - client: {client_name} (all directions, all defenses)", ""]
+
+    lines.append("## summary: overall hijack rate by defense (both directions combined)")
+    lines.append("")
+    lines.append("| defense | hijack rate |")
+    lines.append("|---|---|")
+    for defense, rate in _combined_rate_by_defense(by_direction).items():
+        lines.append(f"| {defense} | {rate:.0%} |")
+    lines.append("")
+
     for direction, per_defense in by_direction.items():
         lines.append(f"# direction: {direction}")
         lines.append("")

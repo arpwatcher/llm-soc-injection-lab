@@ -162,6 +162,19 @@ def test_full_report_writes_combined_markdown(tmp_path, capsys):
     assert "defense: both" in content
 
 
+def test_full_report_summary_shows_stubborn_client_only_helped_by_both(tmp_path, capsys):
+    """fake-stubborn only backs off when both defenses are active together
+    - the summary section should show that as the one defense with a
+    reduced overall hijack rate."""
+    report_path = tmp_path / "full.md"
+    main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    capsys.readouterr()
+    content = report_path.read_text()
+    summary_section = content.split("# direction:")[0]
+    assert "| both | 0% |" in summary_section
+    assert "| none | 0% |" not in summary_section
+
+
 def test_full_report_requires_report_path():
     with pytest.raises(SystemExit):
         main(["full-report", "--client", "fake-stubborn"])
