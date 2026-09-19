@@ -1,4 +1,4 @@
-from soclab.report import _combined_rate_by_defense, render_combined_report, render_markdown_report
+from soclab.report import _combined_rate_by_defense, _rate_by_defense, render_combined_report, render_markdown_report
 
 
 def _sample_aggregate():
@@ -45,6 +45,28 @@ def test_render_defaults_to_dismiss_direction():
 def test_render_notes_escalate_direction_when_given():
     report = render_markdown_report("fake-escalation-vulnerable", {"none": _sample_aggregate()}, direction="escalate")
     assert "direction: escalate" in report
+
+
+def test_render_includes_summary_table_when_multiple_defenses():
+    report = render_markdown_report(
+        "fake-vulnerable", {"none": _sample_aggregate(), "sandwich": _sample_aggregate()}
+    )
+    assert "summary: overall hijack rate by defense" in report
+    assert "| defense | hijack rate |" in report
+    assert "| none | 50% |" in report
+    assert "| sandwich | 50% |" in report
+
+
+def test_render_omits_summary_table_for_a_single_defense():
+    """with only one defense a summary table would just repeat the
+    "overall hijack rate" line already shown below it - skip it."""
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "summary:" not in report
+
+
+def test_rate_by_defense_computes_overall_rate_per_defense():
+    rates = _rate_by_defense({"none": _sample_aggregate(), "sandwich": _sample_aggregate()})
+    assert rates == {"none": 0.5, "sandwich": 0.5}
 
 
 def test_combined_report_includes_both_directions():

@@ -8,6 +8,23 @@ def _overall_rate(aggregated: dict) -> float:
     return total_hijacked / total_count if total_count else 0.0
 
 
+def _rate_by_defense(per_defense: dict) -> dict:
+    """defense name -> overall hijack rate for that defense, from a single
+    per_defense dict (one direction's worth of results)."""
+    return {defense: _overall_rate(aggregated) for defense, aggregated in per_defense.items()}
+
+
+def _render_summary_table(rates: dict, heading: str) -> list[str]:
+    """Shared by both report functions: a small defense -> hijack rate
+    table, so the overall pattern is visible without reading every
+    per-technique sub-table by hand."""
+    lines = [heading, "", "| defense | hijack rate |", "|---|---|"]
+    for defense, rate in rates.items():
+        lines.append(f"| {defense} | {rate:.0%} |")
+    lines.append("")
+    return lines
+
+
 def _render_defense_sections(per_defense: dict, heading_level: str = "##") -> list[str]:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense, e.g. {"none": {...}, "sandwich": {...}}. Shared by both
@@ -38,6 +55,8 @@ def render_markdown_report(client_name: str, per_defense: dict, direction: str =
     since technique names alone don't say which one they belong to at a
     glance."""
     lines = [f"# injection results - client: {client_name}, direction: {direction}", ""]
+    if len(per_defense) > 1:
+        lines.extend(_render_summary_table(_rate_by_defense(per_defense), "## summary: overall hijack rate by defense"))
     lines.extend(_render_defense_sections(per_defense))
     return "\n".join(lines)
 
@@ -67,13 +86,10 @@ def render_combined_report(client_name: str, by_direction: dict) -> str:
     {"dismiss": {"none": {...}, ...}, "escalate": {"none": {...}, ...}}."""
     lines = [f"# injection results - client: {client_name} (all directions, all defenses)", ""]
 
-    lines.append("## summary: overall hijack rate by defense (both directions combined)")
-    lines.append("")
-    lines.append("| defense | hijack rate |")
-    lines.append("|---|---|")
-    for defense, rate in _combined_rate_by_defense(by_direction).items():
-        lines.append(f"| {defense} | {rate:.0%} |")
-    lines.append("")
+    lines.extend(_render_summary_table(
+        _combined_rate_by_defense(by_direction),
+        "## summary: overall hijack rate by defense (both directions combined)",
+    ))
 
     for direction, per_defense in by_direction.items():
         lines.append(f"# direction: {direction}")

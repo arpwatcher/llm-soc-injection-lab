@@ -132,6 +132,7 @@ def test_compare_writes_markdown_report(tmp_path, capsys):
     assert "defense: sandwich" in content
     assert "| technique |" in content
     assert "direction: dismiss" in content
+    assert "summary: overall hijack rate by defense" in content
 
 
 def test_compare_report_notes_escalate_direction(tmp_path, capsys):
