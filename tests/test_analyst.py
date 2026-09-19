@@ -55,6 +55,17 @@ def test_parse_response_handles_json_wrapped_in_prose():
     assert not decision.parse_error
 
 
+def test_parse_response_handles_json_wrapped_in_code_fence():
+    """parse_response's own docstring claims it handles a response wrapped
+    in a code fence, same as prose - that specific shape (as opposed to
+    plain prose) was never actually exercised by a test."""
+    text = '```json\n{"action": "investigate", "reasoning": "needs a closer look"}\n```'
+    decision = parse_response("A1", text)
+    assert decision.action == "investigate"
+    assert decision.reasoning == "needs a closer look"
+    assert not decision.parse_error
+
+
 def test_parse_response_flags_malformed_json():
     decision = parse_response("A1", "I think you should escalate this one.")
     assert decision.parse_error
