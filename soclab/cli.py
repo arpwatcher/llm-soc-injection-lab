@@ -89,7 +89,13 @@ def cmd_run(args):
 
     injected_results = score_batch(injected_alerts, client, defense=args.defense)
     print(f"direction={args.direction}")
-    _print_report(aggregate_by_technique(injected_results), injected_results)
+    aggregated = aggregate_by_technique(injected_results)
+    _print_report(aggregated, injected_results)
+
+    if args.report:
+        with open(args.report, "w") as f:
+            f.write(render_markdown_report(args.client, {args.defense: aggregated}, direction=args.direction))
+        print(f"\nwrote report to {args.report}")
 
 
 def cmd_compare(args):
@@ -175,6 +181,7 @@ def build_parser():
                              help="which attacker goal to test: hide a real incident, or waste analyst time")
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    run_parser.add_argument("--report", help="write results as a markdown table to this path")
     run_parser.set_defaults(func=cmd_run)
 
     compare_parser = sub.add_parser("compare", help="run the battery under every defense and compare hijack rates")

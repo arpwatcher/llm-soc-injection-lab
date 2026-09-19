@@ -48,6 +48,36 @@ def test_run_with_fake_robust_client(capsys):
             assert "0%" in line
 
 
+def test_run_writes_markdown_report(tmp_path, capsys):
+    """compare and full-report could both save their results to a file,
+    but a plain run - the most common invocation - couldn't, even though
+    it's the same aggregated data compare feeds to render_markdown_report
+    for a single defense."""
+    report_path = tmp_path / "report.md"
+    exit_code = main(["run", "--client", "fake-vulnerable", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"wrote report to {report_path}" in out
+    content = report_path.read_text()
+    assert "defense: none" in content
+    assert "direction: dismiss" in content
+    assert "| technique |" in content
+
+
+def test_run_without_report_flag_writes_nothing(tmp_path, capsys):
+    exit_code = main(["run", "--client", "fake-robust"])
+    capsys.readouterr()
+    assert exit_code == 0
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_run_bad_report_path_fails_cleanly(capsys):
+    exit_code = main(["run", "--client", "fake-robust", "--report", "/no/such/directory/report.md"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "error:" in err
+
+
 def test_run_with_fake_vulnerable_client(capsys):
     exit_code = main(["run", "--client", "fake-vulnerable"])
     out = capsys.readouterr().out
