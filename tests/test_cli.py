@@ -108,6 +108,17 @@ def test_compare_shows_all_three_defenses(capsys):
     assert "defense=strict" in out
 
 
+def test_compare_prints_summary_to_terminal_even_without_report_flag(capsys):
+    """the summary table used to only ever land in the written markdown
+    file - with no --report given at all, a compare run showed no
+    overall picture on the terminal, just the raw per-defense tables."""
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "summary: overall hijack rate by defense" in out
+    assert "sandwich" in out.split("summary: overall hijack rate by defense")[1]
+
+
 def test_strict_defense_only_helps_the_strict_sensitive_client(capsys):
     main(["run", "--client", "fake-strict-sensitive", "--defense", "none"])
     without_defense = capsys.readouterr().out
@@ -188,6 +199,18 @@ def test_full_report_summary_shows_stubborn_client_only_helped_by_both(tmp_path,
     summary_section = content.split("# direction:")[0]
     assert "| both | 0% |" in summary_section
     assert "| none | 0% |" not in summary_section
+
+
+def test_full_report_prints_summary_to_terminal(tmp_path, capsys):
+    """same summary table the combined markdown report gets should also
+    show up on the terminal, not just in the file written to --report."""
+    report_path = tmp_path / "full.md"
+    main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert "summary: overall hijack rate by defense (both directions combined)" in out
+    summary_section = out.split("summary: overall hijack rate by defense (both directions combined)")[1]
+    assert "both" in summary_section
+    assert "0%" in summary_section
 
 
 def test_full_report_requires_report_path():

@@ -1,4 +1,4 @@
-from soclab.report import _combined_rate_by_defense, _rate_by_defense, render_combined_report, render_markdown_report
+from soclab.report import combined_rate_by_defense, rate_by_defense, render_combined_report, render_markdown_report
 
 
 def _sample_aggregate():
@@ -65,7 +65,7 @@ def test_render_omits_summary_table_for_a_single_defense():
 
 
 def test_rate_by_defense_computes_overall_rate_per_defense():
-    rates = _rate_by_defense({"none": _sample_aggregate(), "sandwich": _sample_aggregate()})
+    rates = rate_by_defense({"none": _sample_aggregate(), "sandwich": _sample_aggregate()})
     assert rates == {"none": 0.5, "sandwich": 0.5}
 
 
@@ -100,7 +100,7 @@ def test_combined_report_includes_summary_section():
 def test_combined_rate_by_defense_sums_counts_across_directions():
     # 5/10 in dismiss + 5/10 in escalate = 10/20 = 50%, same as a single direction here
     by_direction = {"dismiss": {"none": _sample_aggregate()}, "escalate": {"none": _sample_aggregate()}}
-    rates = _combined_rate_by_defense(by_direction)
+    rates = combined_rate_by_defense(by_direction)
     assert rates == {"none": 0.5}
 
 
@@ -108,5 +108,5 @@ def test_combined_rate_by_defense_reflects_a_defense_that_only_helps_in_one_dire
     fully_hijacked = {"direct_override": {"total": 5, "hijacked": 5, "resisted": 0, "other": 0, "hijack_rate": 1.0}}
     fully_resisted = {"direct_override": {"total": 5, "hijacked": 0, "resisted": 5, "other": 0, "hijack_rate": 0.0}}
     by_direction = {"dismiss": {"sandwich": fully_hijacked}, "escalate": {"sandwich": fully_resisted}}
-    rates = _combined_rate_by_defense(by_direction)
+    rates = combined_rate_by_defense(by_direction)
     assert rates == {"sandwich": 0.5}

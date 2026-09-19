@@ -24,7 +24,12 @@ from soclab.llm_client import (
     StubbornFakeClient,
     VulnerableFakeClient,
 )
-from soclab.report import render_combined_report, render_markdown_report
+from soclab.report import (
+    combined_rate_by_defense,
+    rate_by_defense,
+    render_combined_report,
+    render_markdown_report,
+)
 from soclab.scoring import aggregate_by_technique, overall_hijack_rate, score_batch
 
 CLIENT_FACTORIES = {
@@ -55,6 +60,14 @@ def _print_report(aggregated, results):
         print(f"{technique:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
               f"{bucket['hijack_rate']:>11.0%}")
     print(f"\noverall hijack rate: {overall_hijack_rate(results):.0%}")
+
+
+def _print_summary(rates: dict, heading: str):
+    print(heading)
+    print(f"{'defense':<10} {'hijack_rate':>12}")
+    for defense, rate in rates.items():
+        print(f"{defense:<10} {rate:>11.0%}")
+    print()
 
 
 def _injected_alerts_for(direction: str) -> list:
@@ -93,6 +106,8 @@ def cmd_compare(args):
         per_defense[defense] = aggregated
         print()
 
+    _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
+
     if args.report:
         with open(args.report, "w") as f:
             f.write(render_markdown_report(args.client, per_defense, direction=args.direction))
@@ -118,6 +133,11 @@ def cmd_full_report(args):
             per_defense[defense] = aggregated
             print()
         by_direction[direction] = per_defense
+
+    _print_summary(
+        combined_rate_by_defense(by_direction),
+        "summary: overall hijack rate by defense (both directions combined)",
+    )
 
     with open(args.report, "w") as f:
         f.write(render_combined_report(args.client, by_direction))

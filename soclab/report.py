@@ -8,7 +8,7 @@ def _overall_rate(aggregated: dict) -> float:
     return total_hijacked / total_count if total_count else 0.0
 
 
-def _rate_by_defense(per_defense: dict) -> dict:
+def rate_by_defense(per_defense: dict) -> dict:
     """defense name -> overall hijack rate for that defense, from a single
     per_defense dict (one direction's worth of results)."""
     return {defense: _overall_rate(aggregated) for defense, aggregated in per_defense.items()}
@@ -56,12 +56,12 @@ def render_markdown_report(client_name: str, per_defense: dict, direction: str =
     glance."""
     lines = [f"# injection results - client: {client_name}, direction: {direction}", ""]
     if len(per_defense) > 1:
-        lines.extend(_render_summary_table(_rate_by_defense(per_defense), "## summary: overall hijack rate by defense"))
+        lines.extend(_render_summary_table(rate_by_defense(per_defense), "## summary: overall hijack rate by defense"))
     lines.extend(_render_defense_sections(per_defense))
     return "\n".join(lines)
 
 
-def _combined_rate_by_defense(by_direction: dict) -> dict:
+def combined_rate_by_defense(by_direction: dict) -> dict:
     """defense name -> hijack rate combined across every direction in
     by_direction (summed counts, not an average of averages) - lets a
     reader see at a glance whether a defense actually helped overall,
@@ -87,7 +87,7 @@ def render_combined_report(client_name: str, by_direction: dict) -> str:
     lines = [f"# injection results - client: {client_name} (all directions, all defenses)", ""]
 
     lines.extend(_render_summary_table(
-        _combined_rate_by_defense(by_direction),
+        combined_rate_by_defense(by_direction),
         "## summary: overall hijack rate by defense (both directions combined)",
     ))
 
