@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 
@@ -72,6 +73,19 @@ def test_run_writes_markdown_report(tmp_path, capsys):
     assert "defense: none" in content
     assert "direction: dismiss" in content
     assert "| technique |" in content
+
+
+def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
+    """the report format is inferred from the --report path's extension -
+    no separate --format flag needed."""
+    report_path = tmp_path / "report.json"
+    exit_code = main(["run", "--client", "fake-vulnerable", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    parsed = json.loads(report_path.read_text())
+    assert parsed["client"] == "fake-vulnerable"
+    assert parsed["direction"] == "dismiss"
+    assert "direct_override" in parsed["per_defense"]["none"]
 
 
 def test_run_without_report_flag_writes_nothing(tmp_path, capsys):
@@ -186,6 +200,16 @@ def test_compare_writes_markdown_report(tmp_path, capsys):
     assert "summary: overall hijack rate by defense" in content
 
 
+def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
+    report_path = tmp_path / "report.json"
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    parsed = json.loads(report_path.read_text())
+    assert set(parsed["per_defense"]) == {"none", "sandwich", "strict", "both"}
+    assert parsed["summary_by_defense"]["sandwich"] < parsed["summary_by_defense"]["none"]
+
+
 def test_compare_report_notes_escalate_direction(tmp_path, capsys):
     report_path = tmp_path / "report.md"
     main(["compare", "--client", "fake-escalation-sandwich-sensitive", "--direction", "escalate",
@@ -226,6 +250,16 @@ def test_full_report_writes_combined_markdown(tmp_path, capsys):
     assert "direction: escalate" in content
     assert "defense: none" in content
     assert "defense: both" in content
+
+
+def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
+    report_path = tmp_path / "full.json"
+    exit_code = main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    parsed = json.loads(report_path.read_text())
+    assert set(parsed["by_direction"]) == {"dismiss", "escalate"}
+    assert parsed["summary_by_defense"]["both"] == 0.0
 
 
 def test_full_report_summary_shows_stubborn_client_only_helped_by_both(tmp_path, capsys):

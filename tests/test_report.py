@@ -1,4 +1,13 @@
-from soclab.report import combined_rate_by_defense, rate_by_defense, render_combined_report, render_markdown_report
+import json
+
+from soclab.report import (
+    combined_rate_by_defense,
+    rate_by_defense,
+    render_combined_json_report,
+    render_combined_report,
+    render_json_report,
+    render_markdown_report,
+)
 
 
 def _sample_aggregate():
@@ -110,3 +119,29 @@ def test_combined_rate_by_defense_reflects_a_defense_that_only_helps_in_one_dire
     by_direction = {"dismiss": {"sandwich": fully_hijacked}, "escalate": {"sandwich": fully_resisted}}
     rates = combined_rate_by_defense(by_direction)
     assert rates == {"sandwich": 0.5}
+
+
+def test_render_json_report_is_valid_json_with_expected_shape():
+    report = render_json_report(
+        "fake-vulnerable", {"none": _sample_aggregate(), "sandwich": _sample_aggregate()}, direction="escalate"
+    )
+    parsed = json.loads(report)
+    assert parsed["client"] == "fake-vulnerable"
+    assert parsed["direction"] == "escalate"
+    assert parsed["summary_by_defense"] == {"none": 0.5, "sandwich": 0.5}
+    assert parsed["per_defense"]["none"]["direct_override"]["hijack_rate"] == 1.0
+
+
+def test_render_json_report_defaults_to_dismiss_direction():
+    report = render_json_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert json.loads(report)["direction"] == "dismiss"
+
+
+def test_render_combined_json_report_is_valid_json_with_expected_shape():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}, "escalate": {"none": _sample_aggregate()}}
+    report = render_combined_json_report("fake-stubborn", by_direction)
+    parsed = json.loads(report)
+    assert parsed["client"] == "fake-stubborn"
+    assert parsed["summary_by_defense"] == {"none": 0.5}
+    assert set(parsed["by_direction"]) == {"dismiss", "escalate"}
+    assert parsed["by_direction"]["dismiss"]["none"]["direct_override"]["hijacked"] == 5

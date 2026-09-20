@@ -1,5 +1,9 @@
 """Renders scoring results as a markdown table, so a run's numbers can be
-dropped straight into a writeup instead of copied out of terminal output."""
+dropped straight into a writeup instead of copied out of terminal output.
+Also renders the same data as JSON, for feeding into a plotting script
+instead of a document."""
+
+import json
 
 
 def _overall_rate(aggregated: dict) -> float:
@@ -61,6 +65,19 @@ def render_markdown_report(client_name: str, per_defense: dict, direction: str =
     return "\n".join(lines)
 
 
+def render_json_report(client_name: str, per_defense: dict, direction: str = "dismiss") -> str:
+    """Same data as render_markdown_report, as JSON instead of a document -
+    meant for a plotting script rather than a person, so the numbers don't
+    need to be scraped back out of a markdown table."""
+    payload = {
+        "client": client_name,
+        "direction": direction,
+        "summary_by_defense": rate_by_defense(per_defense),
+        "per_defense": per_defense,
+    }
+    return json.dumps(payload, indent=2)
+
+
 def combined_rate_by_defense(by_direction: dict) -> dict:
     """defense name -> hijack rate combined across every direction in
     by_direction (summed counts, not an average of averages) - lets a
@@ -96,3 +113,13 @@ def render_combined_report(client_name: str, by_direction: dict) -> str:
         lines.append("")
         lines.extend(_render_defense_sections(per_defense, heading_level="##"))
     return "\n".join(lines)
+
+
+def render_combined_json_report(client_name: str, by_direction: dict) -> str:
+    """Same data as render_combined_report, as JSON instead of a document."""
+    payload = {
+        "client": client_name,
+        "summary_by_defense": combined_rate_by_defense(by_direction),
+        "by_direction": by_direction,
+    }
+    return json.dumps(payload, indent=2)

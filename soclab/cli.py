@@ -27,7 +27,9 @@ from soclab.llm_client import (
 from soclab.report import (
     combined_rate_by_defense,
     rate_by_defense,
+    render_combined_json_report,
     render_combined_report,
+    render_json_report,
     render_markdown_report,
 )
 from soclab.scoring import aggregate_by_technique, overall_hijack_rate, score_batch, severity_weighted_hijack_rate
@@ -94,8 +96,12 @@ def cmd_run(args):
     _print_report(aggregated, injected_results)
 
     if args.report:
+        if args.report.endswith(".json"):
+            content = render_json_report(args.client, {args.defense: aggregated}, direction=args.direction)
+        else:
+            content = render_markdown_report(args.client, {args.defense: aggregated}, direction=args.direction)
         with open(args.report, "w") as f:
-            f.write(render_markdown_report(args.client, {args.defense: aggregated}, direction=args.direction))
+            f.write(content)
         print(f"\nwrote report to {args.report}")
 
 
@@ -116,8 +122,12 @@ def cmd_compare(args):
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
 
     if args.report:
+        if args.report.endswith(".json"):
+            content = render_json_report(args.client, per_defense, direction=args.direction)
+        else:
+            content = render_markdown_report(args.client, per_defense, direction=args.direction)
         with open(args.report, "w") as f:
-            f.write(render_markdown_report(args.client, per_defense, direction=args.direction))
+            f.write(content)
         print(f"wrote report to {args.report}")
 
 
@@ -146,8 +156,12 @@ def cmd_full_report(args):
         "summary: overall hijack rate by defense (both directions combined)",
     )
 
+    if args.report.endswith(".json"):
+        content = render_combined_json_report(args.client, by_direction)
+    else:
+        content = render_combined_report(args.client, by_direction)
     with open(args.report, "w") as f:
-        f.write(render_combined_report(args.client, by_direction))
+        f.write(content)
     print(f"wrote combined report to {args.report}")
 
 
@@ -182,7 +196,7 @@ def build_parser():
                              help="which attacker goal to test: hide a real incident, or waste analyst time")
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
-    run_parser.add_argument("--report", help="write results as a markdown table to this path")
+    run_parser.add_argument("--report", help="write results to this path - markdown, or json if the path ends in .json")
     run_parser.set_defaults(func=cmd_run)
 
     compare_parser = sub.add_parser("compare", help="run the battery under every defense and compare hijack rates")
@@ -190,7 +204,7 @@ def build_parser():
     compare_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss")
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
-    compare_parser.add_argument("--report", help="write results as a markdown table to this path")
+    compare_parser.add_argument("--report", help="write results to this path - markdown, or json if the path ends in .json")
     compare_parser.set_defaults(func=cmd_compare)
 
     full_report_parser = sub.add_parser(
@@ -201,7 +215,10 @@ def build_parser():
     )
     full_report_parser.add_argument("--model", help="model name, required for --client ollama")
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
-    full_report_parser.add_argument("--report", required=True, help="path to write the combined markdown report to")
+    full_report_parser.add_argument(
+        "--report", required=True,
+        help="path to write the combined report to - markdown, or json if the path ends in .json",
+    )
     full_report_parser.set_defaults(func=cmd_full_report)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")

@@ -69,15 +69,19 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   markdown, so results can go straight into a writeup. Both `render_markdown_report` (once
   more than one defense is present) and `render_combined_report` lead with a summary table
   (hijack rate per defense, `render_combined_report`'s summed across both directions) so
-  the overall pattern doesn't require reading every sub-table by hand.
+  the overall pattern doesn't require reading every sub-table by hand. `render_json_report`
+  and `render_combined_json_report` emit the same data as JSON instead, for a plotting
+  script rather than a person to read.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
-  dismiss|escalate [--report FILE.md]` runs one battery and can optionally save it as
-  markdown too; `soclab compare --client ... [--direction ...] [--report FILE.md]` runs it
-  under all four defenses back to back, prints the same defense-summary table straight to
-  the terminal, and optionally writes the comparison as markdown; `soclab full-report
-  --client ... --report FILE.md` is the capstone run - both directions, all four defenses,
-  one client, one combined document, with its combined summary table also printed to the
+  dismiss|escalate [--report FILE]` runs one battery and can optionally save it too;
+  `soclab compare --client ... [--direction ...] [--report FILE]` runs it under all four
+  defenses back to back, prints the same defense-summary table straight to the terminal,
+  and optionally writes the comparison; `soclab full-report --client ... --report FILE` is
+  the capstone run - both directions, all four defenses, one client, one combined document,
+  with its combined summary table also printed to the
   terminal before the file is written; `soclab list-techniques` lists both technique sets.
+  Every `--report` path writes markdown by default, or JSON if the path ends in `.json` -
+  the format is inferred from the extension, no separate flag needed.
 
 Current status: the harness is fully built and tested against the fake clients. Still
 hasn't run against a real model - this development environment's network policy blocks
@@ -103,6 +107,7 @@ python -m soclab.cli run --client fake-stubborn --defense both
 python -m soclab.cli run --client fake-escalation-vulnerable --direction escalate
 python -m soclab.cli compare --client fake-stubborn --report results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.md
+python -m soclab.cli full-report --client fake-stubborn --report full-results.json  # same data, for plotting
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -112,7 +117,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-139 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+145 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
