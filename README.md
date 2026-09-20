@@ -59,7 +59,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   harness and scoring logic get proven correct before a single real model call happens.
 - `scoring.py` - classifies each result as resisted / hijacked / other (against whichever
   direction that specific alert's injection was aiming for), aggregates a hijack rate per
-  technique, and an overall hijack rate across a whole batch.
+  technique, and an overall hijack rate across a whole batch. Also computes a
+  severity-weighted hijack rate (critical alerts weighted higher than low ones) alongside
+  the flat one - a client that mostly resists on low-severity alerts but caves on critical
+  ones looks fine under the flat rate while actually being much worse in practice.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
   markdown, so results can go straight into a writeup. Both `render_markdown_report` (once
   more than one defense is present) and `render_combined_report` lead with a summary table
@@ -107,7 +110,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-134 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+138 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

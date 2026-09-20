@@ -48,6 +48,16 @@ def test_run_with_fake_robust_client(capsys):
             assert "0%" in line
 
 
+def test_run_prints_severity_weighted_hijack_rate(capsys):
+    """a flat hijack rate treats a hijack on a critical alert the same as
+    one on a low-severity alert - the severity-weighted number should
+    show up alongside it in every run's output, not just the flat one."""
+    exit_code = main(["run", "--client", "fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "severity-weighted hijack rate:" in out
+
+
 def test_run_writes_markdown_report(tmp_path, capsys):
     """compare and full-report could both save their results to a file,
     but a plain run - the most common invocation - couldn't, even though
