@@ -247,6 +247,11 @@ class OllamaClient:
                     {"role": "user", "content": user_message},
                 ],
                 "stream": False,
+                # ollama supports constraining output to valid json directly -
+                # parse_response already handles prose/code-fence wrapping for
+                # models that ignore this, but asking for it up front means a
+                # compliant model doesn't need that fallback at all.
+                "format": "json",
             },
             timeout=self.timeout,
         )

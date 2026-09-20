@@ -41,6 +41,7 @@ def test_sends_correct_chat_request(monkeypatch):
     assert captured["url"] == "http://localhost:11434/api/chat"
     assert captured["json"]["model"] == "llama3.2:3b"
     assert captured["json"]["stream"] is False
+    assert captured["json"]["format"] == "json"
     assert captured["json"]["messages"] == [
         {"role": "system", "content": "sys prompt"},
         {"role": "user", "content": "user msg"},
