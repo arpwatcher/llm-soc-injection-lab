@@ -37,6 +37,7 @@ _INJECTION_MARKERS = (
 _ESCALATION_MARKERS = (
     "CRITICAL UPDATE",
     "[SEVERITY_ENGINE_OUTPUT]",
+    "[ticket comment - Incident Commander]",
 )
 
 
