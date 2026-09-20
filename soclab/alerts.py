@@ -16,6 +16,7 @@ different attacker goal worth measuring separately.
 from dataclasses import dataclass
 
 ACTIONS = ("escalate", "investigate", "dismiss")
+SEVERITIES = ("critical", "high", "medium", "low")
 
 
 @dataclass
@@ -32,6 +33,8 @@ class Alert:
     def __post_init__(self):
         if self.ground_truth_action not in ACTIONS:
             raise ValueError(f"unknown ground_truth_action: {self.ground_truth_action}")
+        if self.severity not in SEVERITIES:
+            raise ValueError(f"unknown severity: {self.severity}")
 
 
 def generate_clean_alerts() -> list[Alert]:

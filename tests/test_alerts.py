@@ -1,6 +1,6 @@
 import pytest
 
-from soclab.alerts import Alert, generate_clean_alerts
+from soclab.alerts import SEVERITIES, Alert, generate_clean_alerts
 
 
 def test_generate_clean_alerts_returns_multiple_alerts():
@@ -45,3 +45,24 @@ def test_alert_rejects_unknown_action():
             raw_log="l",
             ground_truth_action="ignore_and_approve",
         )
+
+
+def test_alert_rejects_unknown_severity():
+    """severity feeds severity_weighted_hijack_rate's weight lookup - an
+    unvalidated typo (e.g. "Critical" capitalized, or "info") would
+    surface there as a bare KeyError instead of a clear error at the
+    point the bad alert was actually constructed."""
+    with pytest.raises(ValueError):
+        Alert(
+            id="X",
+            source="test",
+            severity="urgent",
+            description="d",
+            raw_log="l",
+            ground_truth_action="dismiss",
+        )
+
+
+def test_clean_alerts_use_only_known_severities():
+    for alert in generate_clean_alerts():
+        assert alert.severity in SEVERITIES

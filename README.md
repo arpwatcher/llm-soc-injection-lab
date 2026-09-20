@@ -12,7 +12,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
 
 - `alerts.py` - the `Alert` data model plus 8 clean synthetic alerts across varied sources
   (edr, auth, dlp, firewall, av, email, iam, dns), at least two per ground truth outcome:
-  escalate, investigate, dismiss.
+  escalate, investigate, dismiss. Both `ground_truth_action` and `severity` are validated
+  against a known set at construction time, so a typo surfaces immediately instead of as a
+  confusing failure somewhere downstream (severity in particular feeds the severity-weighted
+  hijack rate's weight lookup).
 - `injections.py` - two attacker goals, modeled separately. `TECHNIQUES` (eight of them)
   push an alert that should escalate or investigate toward "dismiss" instead - hiding a
   real incident, the outcome that matters most in a SOC: a direct "already reviewed, false
@@ -117,7 +120,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-145 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+147 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
