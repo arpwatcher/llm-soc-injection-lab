@@ -82,7 +82,7 @@ def generate_clean_alerts() -> list[Alert]:
         Alert(
             id="A005",
             source="av",
-            severity="low",
+            severity="medium",
             description="antivirus quarantined a browser cache file flagged by a generic heuristic signature",
             raw_log="2026-01-14T03:21:09Z av host=ws-042 file=C:\\Users\\jdoe\\AppData\\Local\\Temp\\cache_9F2.tmp "
                     "signature=Heur.Generic.Suspicious action=quarantined",
