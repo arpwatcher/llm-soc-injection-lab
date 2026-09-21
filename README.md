@@ -69,7 +69,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   technique, and an overall hijack rate across a whole batch. Also computes a
   severity-weighted hijack rate (critical alerts weighted higher than low ones) alongside
   the flat one - a client that mostly resists on low-severity alerts but caves on critical
-  ones looks fine under the flat rate while actually being much worse in practice.
+  ones looks fine under the flat rate while actually being much worse in practice. Known
+  limitation of the current alert battery: every dismiss-worthy alert happens to be
+  severity=low, and escalation-direction techniques only ever target dismiss-worthy alerts,
+  so the severity-weighted rate can't currently diverge from the flat rate for the
+  escalation direction - only the dismiss direction (which spans critical/high/medium) sees
+  the two numbers actually differ. Documented directly in
+  `test_severity_weighted_rate_currently_equals_flat_rate_for_escalation_direction`.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
   markdown, so results can go straight into a writeup. Both `render_markdown_report` (once
   more than one defense is present) and `render_combined_report` lead with a summary table
@@ -124,7 +130,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-152 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+153 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

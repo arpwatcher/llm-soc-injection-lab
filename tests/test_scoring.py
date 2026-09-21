@@ -173,3 +173,20 @@ def test_severity_weighted_hijack_rate_matches_flat_rate_when_severities_equal()
 def test_severity_weighted_hijack_rate_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), RobustFakeClient())
     assert severity_weighted_hijack_rate(results) == 0.0
+
+
+def test_severity_weighted_rate_currently_equals_flat_rate_for_escalation_direction():
+    """documents a real limitation of the current alert battery, not a bug
+    in the metric itself: apply_all_escalation_techniques only ever
+    targets dismiss-worthy alerts, and every dismiss-worthy alert in
+    generate_clean_alerts() happens to be severity="low" - so every
+    escalation-direction result carries the same weight, and
+    severity_weighted_hijack_rate can't diverge from the flat rate for
+    this direction no matter what a client does. Not true for the
+    dismiss direction, which spans critical/high/medium alerts (see
+    test_severity_weighted_hijack_rate_can_diverge_from_flat_rate). If
+    the alert battery ever gains a non-low dismiss-worthy alert, this
+    test should start failing and can be deleted."""
+    injected = apply_all_escalation_techniques(generate_clean_alerts())
+    results = score_batch(injected, EscalationVulnerableFakeClient())
+    assert severity_weighted_hijack_rate(results) == overall_hijack_rate(results) == 1.0
