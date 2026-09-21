@@ -179,3 +179,38 @@ def test_render_combined_json_report_includes_severity_weighted_rate_when_given(
     severity_weighted_by_direction = {"dismiss": {"none": 0.9}}
     report = render_combined_json_report("fake-stubborn", by_direction, severity_weighted_by_direction)
     assert json.loads(report)["severity_weighted_by_direction"] == {"dismiss": {"none": 0.9}}
+
+
+def test_render_markdown_report_includes_confidence_interval_when_given():
+    report = render_markdown_report(
+        "fake-vulnerable", {"none": _sample_aggregate()}, confidence_interval_by_defense={"none": (0.4, 0.6)},
+    )
+    assert "95% confidence interval: 40%-60%" in report
+
+
+def test_render_markdown_report_omits_confidence_interval_when_not_given():
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "confidence interval" not in report
+
+
+def test_render_json_report_includes_confidence_interval_when_given():
+    report = render_json_report(
+        "fake-vulnerable", {"none": _sample_aggregate()}, confidence_interval_by_defense={"none": (0.4, 0.6)},
+    )
+    assert json.loads(report)["confidence_interval_by_defense"] == {"none": [0.4, 0.6]}
+
+
+def test_render_combined_report_includes_confidence_interval_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    confidence_interval_by_direction = {"dismiss": {"none": (0.2, 0.8)}}
+    report = render_combined_report("fake-stubborn", by_direction, confidence_interval_by_direction=confidence_interval_by_direction)
+    assert "95% confidence interval: 20%-80%" in report
+
+
+def test_render_combined_json_report_includes_confidence_interval_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    confidence_interval_by_direction = {"dismiss": {"none": (0.2, 0.8)}}
+    report = render_combined_json_report(
+        "fake-stubborn", by_direction, confidence_interval_by_direction=confidence_interval_by_direction
+    )
+    assert json.loads(report)["confidence_interval_by_direction"] == {"dismiss": {"none": [0.2, 0.8]}}

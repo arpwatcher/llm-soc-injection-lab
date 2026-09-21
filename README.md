@@ -86,8 +86,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the overall pattern doesn't require reading every sub-table by hand. `render_json_report`
   and `render_combined_json_report` emit the same data as JSON instead, for a plotting
   script rather than a person to read. Each defense section also shows the
-  severity-weighted hijack rate alongside the flat one, since the per-technique buckets
-  don't carry alert severity and the caller has to compute and pass it in separately.
+  severity-weighted hijack rate and the 95% confidence interval alongside the flat rate,
+  neither derivable from the per-technique buckets alone (severity isn't tracked there, and
+  the interval needs the pooled count) so both are computed by the caller and threaded
+  through as optional arguments.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
   dismiss|escalate [--report FILE]` runs one battery and can optionally save it too;
   `soclab compare --client ... [--direction ...] [--report FILE]` runs it under all four
@@ -133,7 +135,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-161 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+166 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

@@ -105,15 +105,18 @@ def cmd_run(args):
 
     if args.report:
         severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
+        confidence_interval = {args.defense: overall_hijack_rate_confidence_interval(injected_results)}
         if args.report.endswith(".json"):
             content = render_json_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
+                confidence_interval_by_defense=confidence_interval,
             )
         else:
             content = render_markdown_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
+                confidence_interval_by_defense=confidence_interval,
             )
         with open(args.report, "w") as f:
             f.write(content)
@@ -127,6 +130,7 @@ def cmd_compare(args):
     print(f"direction={args.direction}\n")
     per_defense = {}
     severity_weighted_by_defense = {}
+    confidence_interval_by_defense = {}
     for defense in DEFENSES:
         print(f"--- defense={defense} ---")
         results = score_batch(injected_alerts, client, defense=defense)
@@ -134,6 +138,7 @@ def cmd_compare(args):
         _print_report(aggregated, results)
         per_defense[defense] = aggregated
         severity_weighted_by_defense[defense] = severity_weighted_hijack_rate(results)
+        confidence_interval_by_defense[defense] = overall_hijack_rate_confidence_interval(results)
         print()
 
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
@@ -143,11 +148,13 @@ def cmd_compare(args):
             content = render_json_report(
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
+                confidence_interval_by_defense=confidence_interval_by_defense,
             )
         else:
             content = render_markdown_report(
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
+                confidence_interval_by_defense=confidence_interval_by_defense,
             )
         with open(args.report, "w") as f:
             f.write(content)
@@ -163,10 +170,12 @@ def cmd_full_report(args):
 
     by_direction = {}
     severity_weighted_by_direction = {}
+    confidence_interval_by_direction = {}
     for direction in DIRECTIONS:
         injected_alerts = _injected_alerts_for(direction)
         per_defense = {}
         severity_weighted_by_defense = {}
+        confidence_interval_by_defense = {}
         for defense in DEFENSES:
             print(f"--- direction={direction} defense={defense} ---")
             results = score_batch(injected_alerts, client, defense=defense)
@@ -174,9 +183,11 @@ def cmd_full_report(args):
             _print_report(aggregated, results)
             per_defense[defense] = aggregated
             severity_weighted_by_defense[defense] = severity_weighted_hijack_rate(results)
+            confidence_interval_by_defense[defense] = overall_hijack_rate_confidence_interval(results)
             print()
         by_direction[direction] = per_defense
         severity_weighted_by_direction[direction] = severity_weighted_by_defense
+        confidence_interval_by_direction[direction] = confidence_interval_by_defense
 
     _print_summary(
         combined_rate_by_defense(by_direction),
@@ -185,11 +196,15 @@ def cmd_full_report(args):
 
     if args.report.endswith(".json"):
         content = render_combined_json_report(
-            args.client, by_direction, severity_weighted_by_direction=severity_weighted_by_direction
+            args.client, by_direction,
+            severity_weighted_by_direction=severity_weighted_by_direction,
+            confidence_interval_by_direction=confidence_interval_by_direction,
         )
     else:
         content = render_combined_report(
-            args.client, by_direction, severity_weighted_by_direction=severity_weighted_by_direction
+            args.client, by_direction,
+            severity_weighted_by_direction=severity_weighted_by_direction,
+            confidence_interval_by_direction=confidence_interval_by_direction,
         )
     with open(args.report, "w") as f:
         f.write(content)
