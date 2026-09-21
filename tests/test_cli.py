@@ -73,6 +73,7 @@ def test_run_writes_markdown_report(tmp_path, capsys):
     assert "defense: none" in content
     assert "direction: dismiss" in content
     assert "| technique |" in content
+    assert "severity-weighted hijack rate:" in content
 
 
 def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
@@ -86,6 +87,7 @@ def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert parsed["client"] == "fake-vulnerable"
     assert parsed["direction"] == "dismiss"
     assert "direct_override" in parsed["per_defense"]["none"]
+    assert parsed["severity_weighted_by_defense"] == {"none": 0.875}
 
 
 def test_run_without_report_flag_writes_nothing(tmp_path, capsys):
@@ -198,6 +200,7 @@ def test_compare_writes_markdown_report(tmp_path, capsys):
     assert "| technique |" in content
     assert "direction: dismiss" in content
     assert "summary: overall hijack rate by defense" in content
+    assert "severity-weighted hijack rate:" in content
 
 
 def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
@@ -208,6 +211,7 @@ def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     parsed = json.loads(report_path.read_text())
     assert set(parsed["per_defense"]) == {"none", "sandwich", "strict", "both"}
     assert parsed["summary_by_defense"]["sandwich"] < parsed["summary_by_defense"]["none"]
+    assert set(parsed["severity_weighted_by_defense"]) == {"none", "sandwich", "strict", "both"}
 
 
 def test_compare_report_notes_escalate_direction(tmp_path, capsys):
@@ -250,6 +254,7 @@ def test_full_report_writes_combined_markdown(tmp_path, capsys):
     assert "direction: escalate" in content
     assert "defense: none" in content
     assert "defense: both" in content
+    assert "severity-weighted hijack rate:" in content
 
 
 def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
@@ -260,6 +265,8 @@ def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
     parsed = json.loads(report_path.read_text())
     assert set(parsed["by_direction"]) == {"dismiss", "escalate"}
     assert parsed["summary_by_defense"]["both"] == 0.0
+    assert parsed["severity_weighted_by_direction"]["dismiss"]["both"] == 0.0
+    assert parsed["severity_weighted_by_direction"]["escalate"]["both"] == 0.0
 
 
 def test_full_report_summary_shows_stubborn_client_only_helped_by_both(tmp_path, capsys):

@@ -96,10 +96,17 @@ def cmd_run(args):
     _print_report(aggregated, injected_results)
 
     if args.report:
+        severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
         if args.report.endswith(".json"):
-            content = render_json_report(args.client, {args.defense: aggregated}, direction=args.direction)
+            content = render_json_report(
+                args.client, {args.defense: aggregated}, direction=args.direction,
+                severity_weighted_by_defense=severity_weighted,
+            )
         else:
-            content = render_markdown_report(args.client, {args.defense: aggregated}, direction=args.direction)
+            content = render_markdown_report(
+                args.client, {args.defense: aggregated}, direction=args.direction,
+                severity_weighted_by_defense=severity_weighted,
+            )
         with open(args.report, "w") as f:
             f.write(content)
         print(f"\nwrote report to {args.report}")
@@ -111,21 +118,29 @@ def cmd_compare(args):
 
     print(f"direction={args.direction}\n")
     per_defense = {}
+    severity_weighted_by_defense = {}
     for defense in DEFENSES:
         print(f"--- defense={defense} ---")
         results = score_batch(injected_alerts, client, defense=defense)
         aggregated = aggregate_by_technique(results)
         _print_report(aggregated, results)
         per_defense[defense] = aggregated
+        severity_weighted_by_defense[defense] = severity_weighted_hijack_rate(results)
         print()
 
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
 
     if args.report:
         if args.report.endswith(".json"):
-            content = render_json_report(args.client, per_defense, direction=args.direction)
+            content = render_json_report(
+                args.client, per_defense, direction=args.direction,
+                severity_weighted_by_defense=severity_weighted_by_defense,
+            )
         else:
-            content = render_markdown_report(args.client, per_defense, direction=args.direction)
+            content = render_markdown_report(
+                args.client, per_defense, direction=args.direction,
+                severity_weighted_by_defense=severity_weighted_by_defense,
+            )
         with open(args.report, "w") as f:
             f.write(content)
         print(f"wrote report to {args.report}")
@@ -139,17 +154,21 @@ def cmd_full_report(args):
     client = build_client(args)
 
     by_direction = {}
+    severity_weighted_by_direction = {}
     for direction in DIRECTIONS:
         injected_alerts = _injected_alerts_for(direction)
         per_defense = {}
+        severity_weighted_by_defense = {}
         for defense in DEFENSES:
             print(f"--- direction={direction} defense={defense} ---")
             results = score_batch(injected_alerts, client, defense=defense)
             aggregated = aggregate_by_technique(results)
             _print_report(aggregated, results)
             per_defense[defense] = aggregated
+            severity_weighted_by_defense[defense] = severity_weighted_hijack_rate(results)
             print()
         by_direction[direction] = per_defense
+        severity_weighted_by_direction[direction] = severity_weighted_by_defense
 
     _print_summary(
         combined_rate_by_defense(by_direction),
@@ -157,9 +176,13 @@ def cmd_full_report(args):
     )
 
     if args.report.endswith(".json"):
-        content = render_combined_json_report(args.client, by_direction)
+        content = render_combined_json_report(
+            args.client, by_direction, severity_weighted_by_direction=severity_weighted_by_direction
+        )
     else:
-        content = render_combined_report(args.client, by_direction)
+        content = render_combined_report(
+            args.client, by_direction, severity_weighted_by_direction=severity_weighted_by_direction
+        )
     with open(args.report, "w") as f:
         f.write(content)
     print(f"wrote combined report to {args.report}")
