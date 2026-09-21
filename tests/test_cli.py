@@ -59,6 +59,16 @@ def test_run_prints_severity_weighted_hijack_rate(capsys):
     assert "severity-weighted hijack rate:" in out
 
 
+def test_run_prints_confidence_interval(capsys):
+    """each technique only gets 3-5 alerts - a bare point estimate hides
+    how little data backs it, so every run should also print a 95%
+    confidence interval on the overall rate."""
+    exit_code = main(["run", "--client", "fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "95% confidence interval:" in out
+
+
 def test_run_writes_markdown_report(tmp_path, capsys):
     """compare and full-report could both save their results to a file,
     but a plain run - the most common invocation - couldn't, even though

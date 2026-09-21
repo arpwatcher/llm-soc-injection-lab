@@ -74,6 +74,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   escalation-direction techniques only ever target dismiss-worthy alerts and every one of
   those happened to be severity=low - fixed by giving A005 (a generic-heuristic av
   detection, realistically auto-tagged higher before investigation) severity=medium instead.
+  Every per-technique bucket also carries a 95% Wilson confidence interval (ci_low, ci_high)
+  on its hijack rate - each technique only ever gets 3-5 alerts in this harness, so a bare
+  point estimate like "100%" is easy to over-read without seeing how little data backs it.
+  `overall_hijack_rate_confidence_interval` does the same for the bottom-line rate, printed
+  in every `run`/`compare`/`full-report` invocation.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
   markdown, so results can go straight into a writeup. Both `render_markdown_report` (once
   more than one defense is present) and `render_combined_report` lead with a summary table
@@ -128,7 +133,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-153 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+161 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

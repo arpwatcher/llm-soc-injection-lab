@@ -6,8 +6,10 @@ from soclab.scoring import (
     aggregate_by_technique,
     classify_outcome,
     overall_hijack_rate,
+    overall_hijack_rate_confidence_interval,
     score_batch,
     severity_weighted_hijack_rate,
+    wilson_confidence_interval,
 )
 from soclab.analyst import AnalystDecision
 
@@ -102,6 +104,18 @@ def test_aggregate_by_technique_hijack_rate_for_vulnerable_client():
 def test_aggregate_by_technique_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), RobustFakeClient())
     assert aggregate_by_technique(results) == {}
+
+
+def test_aggregate_by_technique_includes_confidence_interval():
+    """each technique only ever gets 3-5 alerts, so the point estimate
+    alone is easy to over-read - a 95% interval should be attached to
+    every bucket, wide enough to reflect how little data backs it."""
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    aggregated = aggregate_by_technique(results)
+    bucket = aggregated["direct_override"]  # 5/5 hijacked
+    assert bucket["ci_low"] < bucket["hijack_rate"] <= bucket["ci_high"]
+    assert 0.5 < bucket["ci_low"] < 0.6  # wilson interval for 5/5, not naive [1.0, 1.0]
 
 
 def test_overall_hijack_rate_zero_for_robust_client():
@@ -207,3 +221,42 @@ def test_severity_weighted_hijack_rate_can_diverge_for_escalation_direction_too(
     ]
     assert overall_hijack_rate(results) == 1 / 3
     assert severity_weighted_hijack_rate(results) == 0.5
+
+
+def test_wilson_confidence_interval_bounds_are_valid_probabilities():
+    low, high = wilson_confidence_interval(5, 5)
+    assert 0.0 <= low < high <= 1.0
+
+
+def test_wilson_confidence_interval_widens_a_perfect_point_estimate():
+    """the whole reason for using this over a naive normal approximation:
+    5/5 is a 100% point estimate, but with only 5 trials that's nowhere
+    near certain - the interval's lower bound should reflect that instead
+    of collapsing to (1.0, 1.0)."""
+    low, high = wilson_confidence_interval(5, 5)
+    assert high == 1.0
+    assert low < 0.6
+
+
+def test_wilson_confidence_interval_zero_trials():
+    assert wilson_confidence_interval(0, 0) == (0.0, 0.0)
+
+
+def test_wilson_confidence_interval_narrows_with_more_trials():
+    """same 100% point estimate, but 40/40 should carry a tighter interval
+    than 5/5 - more data, less uncertainty."""
+    low_small, _ = wilson_confidence_interval(5, 5)
+    low_large, _ = wilson_confidence_interval(40, 40)
+    assert low_large > low_small
+
+
+def test_overall_hijack_rate_confidence_interval_matches_manual_computation():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    # 35 hijacked out of 40 (every technique but unicode_homoglyph, 5 alerts each)
+    assert overall_hijack_rate_confidence_interval(results) == wilson_confidence_interval(35, 40)
+
+
+def test_overall_hijack_rate_confidence_interval_ignores_clean_alerts():
+    results = score_batch(generate_clean_alerts(), RobustFakeClient())
+    assert overall_hijack_rate_confidence_interval(results) == (0.0, 0.0)

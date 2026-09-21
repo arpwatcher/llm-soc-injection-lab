@@ -32,7 +32,13 @@ from soclab.report import (
     render_json_report,
     render_markdown_report,
 )
-from soclab.scoring import aggregate_by_technique, overall_hijack_rate, score_batch, severity_weighted_hijack_rate
+from soclab.scoring import (
+    aggregate_by_technique,
+    overall_hijack_rate,
+    overall_hijack_rate_confidence_interval,
+    score_batch,
+    severity_weighted_hijack_rate,
+)
 
 CLIENT_FACTORIES = {
     "fake-robust": lambda args: RobustFakeClient(),
@@ -62,6 +68,8 @@ def _print_report(aggregated, results):
         print(f"{technique:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
               f"{bucket['hijack_rate']:>11.0%}")
     print(f"\noverall hijack rate: {overall_hijack_rate(results):.0%}")
+    ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
+    print(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
     print(f"severity-weighted hijack rate: {severity_weighted_hijack_rate(results):.0%}")
 
 
