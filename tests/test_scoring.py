@@ -266,6 +266,16 @@ def test_wilson_confidence_interval_narrows_with_more_trials():
     assert low_large > low_small
 
 
+def test_wilson_confidence_interval_z_parameter_changes_the_confidence_level():
+    """z defaults to 1.96 (95%), but it's a real parameter, not decoration
+    - a smaller z (e.g. 1.645 for 90%) should give a narrower, less
+    conservative interval for the same data."""
+    low_95, high_95 = wilson_confidence_interval(5, 5, z=1.96)
+    low_90, high_90 = wilson_confidence_interval(5, 5, z=1.645)
+    assert low_90 > low_95
+    assert high_90 <= high_95
+
+
 def test_overall_hijack_rate_confidence_interval_matches_manual_computation():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
@@ -276,3 +286,9 @@ def test_overall_hijack_rate_confidence_interval_matches_manual_computation():
 def test_overall_hijack_rate_confidence_interval_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), RobustFakeClient())
     assert overall_hijack_rate_confidence_interval(results) == (0.0, 0.0)
+
+
+def test_overall_hijack_rate_confidence_interval_forwards_z():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    assert overall_hijack_rate_confidence_interval(results, z=1.645) == wilson_confidence_interval(35, 40, z=1.645)
