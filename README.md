@@ -47,7 +47,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   server - requests it as `format: json` so a compliant model returns valid JSON directly
   instead of relying on `parse_response`'s prose/code-fence fallback. Its request building
   and response parsing are unit tested against a mocked
-  `requests.post`. Nine fake clients model different failure modes without needing a real
+  `requests.post`. Ten fake clients model different failure modes without needing a real
   model running: `RobustFakeClient` always reads the alert honestly by keyword;
   `VulnerableFakeClient` caves the moment it sees a known injection marker phrase, but does
   NOT catch the homoglyph technique (naive keyword filter, on purpose);
@@ -62,8 +62,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   entirely; `EscalationSandwichSensitiveFakeClient` and
   `EscalationStrictPromptSensitiveFakeClient` prove both defenses actually help against the
   escalation direction too, not just the dismiss direction they were originally built to
-  demonstrate. These aren't stand-ins for missing functionality; they're what let the
-  harness and scoring logic get proven correct before a single real model call happens.
+  demonstrate; `EscalationStubbornFakeClient` mirrors `StubbornFakeClient` the same way -
+  without it, nothing proved "both" is uniquely necessary for the escalation direction
+  either, since `StubbornFakeClient` itself only recognizes the dismiss-direction markers
+  and resists every escalation alert regardless of defense. These aren't stand-ins for
+  missing functionality; they're what let the harness and scoring logic get proven correct
+  before a single real model call happens.
 - `scoring.py` - classifies each result as resisted / hijacked / other (against whichever
   direction that specific alert's injection was aiming for), aggregates a hijack rate per
   technique, and an overall hijack rate across a whole batch. Also computes a
@@ -135,7 +139,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-166 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+167 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

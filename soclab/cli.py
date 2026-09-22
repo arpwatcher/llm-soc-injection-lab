@@ -15,6 +15,7 @@ from soclab.injections import (
 from soclab.llm_client import (
     EscalationSandwichSensitiveFakeClient,
     EscalationStrictPromptSensitiveFakeClient,
+    EscalationStubbornFakeClient,
     EscalationVulnerableFakeClient,
     OllamaClient,
     RobustFakeClient,
@@ -50,6 +51,7 @@ CLIENT_FACTORIES = {
     "fake-escalation-vulnerable": lambda args: EscalationVulnerableFakeClient(),
     "fake-escalation-sandwich-sensitive": lambda args: EscalationSandwichSensitiveFakeClient(),
     "fake-escalation-strict-sensitive": lambda args: EscalationStrictPromptSensitiveFakeClient(),
+    "fake-escalation-stubborn": lambda args: EscalationStubbornFakeClient(),
     "ollama": lambda args: OllamaClient(model=args.model, host=args.host),
 }
 

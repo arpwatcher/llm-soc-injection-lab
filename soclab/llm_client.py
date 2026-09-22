@@ -208,6 +208,28 @@ class EscalationStrictPromptSensitiveFakeClient:
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
 
 
+class EscalationStubbornFakeClient:
+    """The escalation-direction mirror of StubbornFakeClient: needs BOTH
+    the sandwich reinforcement and the strict warning to back off from
+    the escalation markers, either alone isn't enough. Without this,
+    nothing proved "both" is uniquely necessary (not just individually
+    sufficient) for the escalation direction - StubbornFakeClient itself
+    only checks the dismiss-direction markers, so it resists every
+    escalation-direction alert regardless of defense, which would make
+    "both" look like it always fully resists this direction for the
+    wrong reason (nothing to hijack in the first place, not that the
+    combined defense earned it)."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        has_reinforcement = _REINFORCEMENT_MARKER in user_message
+        has_strict_warning = _STRICT_WARNING_MARKER in system_prompt
+        if has_reinforcement and has_strict_warning:
+            return _to_json_response(_keyword_classify(user_message), "convinced by the reminder and the warning together")
+        if any(marker in user_message for marker in _ESCALATION_MARKERS):
+            return _to_json_response("escalate", "following the urgent note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
 class ScriptedLLMClient:
     """Returns a fixed sequence of canned responses, one per call, in
     order - for tests that need to control exactly what the model "said"

@@ -156,6 +156,28 @@ def test_stubborn_client_only_resists_the_combined_defense(capsys):
             assert "0%" in line
 
 
+def test_escalation_stubborn_client_only_resists_the_combined_defense(capsys):
+    """the escalation-direction mirror of the check above - without
+    EscalationStubbornFakeClient, nothing proved "both" is uniquely
+    necessary (not just individually sufficient) for the escalation
+    direction, since StubbornFakeClient itself only knows the
+    dismiss-direction markers and resists every escalation alert
+    regardless of defense."""
+    for defense in ("none", "sandwich", "strict"):
+        main(["run", "--client", "fake-escalation-stubborn", "--direction", "escalate", "--defense", defense])
+        out = capsys.readouterr().out
+        assert "false_urgency" in out
+        for line in out.splitlines():
+            if line.strip().startswith("false_urgency"):
+                assert "100%" in line, f"defense={defense} unexpectedly reduced hijack rate"
+
+    main(["run", "--client", "fake-escalation-stubborn", "--direction", "escalate", "--defense", "both"])
+    out = capsys.readouterr().out
+    for line in out.splitlines():
+        if line.strip().startswith("false_urgency"):
+            assert "0%" in line
+
+
 def test_run_with_sandwich_defense_reduces_hijack_rate(capsys):
     main(["run", "--client", "fake-sandwich-sensitive", "--defense", "none"])
     without_defense = capsys.readouterr().out
