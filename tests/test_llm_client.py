@@ -5,6 +5,7 @@ import pytest
 from soclab.alerts import generate_clean_alerts
 from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_technique
 from soclab.llm_client import (
+    EscalationSemanticVulnerableFakeClient,
     EscalationVulnerableFakeClient,
     RobustFakeClient,
     ScriptedLLMClient,
@@ -103,6 +104,26 @@ def test_semantic_vulnerable_client_hijacked_by_every_technique_including_homogl
         assert response["action"] == "dismiss", f"{technique} did not hijack the semantic vulnerable client"
 
 
+def test_escalation_semantic_vulnerable_client_matches_ground_truth_on_clean_alerts():
+    client = EscalationSemanticVulnerableFakeClient()
+    for alert in generate_clean_alerts():
+        response = json.loads(client.complete("system", _user_message(alert)))
+        assert response["action"] == alert.ground_truth_action
+
+
+def test_escalation_semantic_vulnerable_client_hijacked_by_every_technique_including_homoglyph():
+    """mirrors test_semantic_vulnerable_client_hijacked_by_every_technique_including_homoglyph:
+    normalizing cyrillic homoglyphs back to latin before matching means
+    escalation_homoglyph doesn't slip past this client the way it slips
+    past EscalationVulnerableFakeClient's literal matching."""
+    alert = _alert("dismiss")
+    client = EscalationSemanticVulnerableFakeClient()
+    for technique in ESCALATION_TECHNIQUES:
+        injected = apply_technique(alert, technique)
+        response = json.loads(client.complete("system", _user_message(injected)))
+        assert response["action"] == "escalate", f"{technique} did not hijack the escalation semantic vulnerable client"
+
+
 def test_escalation_vulnerable_client_matches_ground_truth_on_clean_alerts():
     client = EscalationVulnerableFakeClient()
     for alert in generate_clean_alerts():
@@ -110,13 +131,26 @@ def test_escalation_vulnerable_client_matches_ground_truth_on_clean_alerts():
         assert response["action"] == alert.ground_truth_action
 
 
-def test_escalation_vulnerable_client_hijacked_by_every_escalation_technique():
+def test_escalation_vulnerable_client_hijacked_by_literal_marker_techniques():
     alert = _alert("dismiss")
     client = EscalationVulnerableFakeClient()
     for technique in ESCALATION_TECHNIQUES:
+        if technique == "escalation_homoglyph":
+            continue  # deliberately not caught by literal marker matching, see below
         injected = apply_technique(alert, technique)
         response = json.loads(client.complete("system", _user_message(injected)))
         assert response["action"] == "escalate", f"{technique} did not hijack the escalation vulnerable client"
+
+
+def test_escalation_vulnerable_client_not_hijacked_by_homoglyph_obfuscation():
+    """mirrors test_vulnerable_client_not_hijacked_by_homoglyph_obfuscation
+    for the escalation direction: literal marker matching doesn't catch a
+    payload that reads the same but uses different unicode code points."""
+    alert = _alert("dismiss")
+    injected = apply_technique(alert, "escalation_homoglyph")
+    client = EscalationVulnerableFakeClient()
+    response = json.loads(client.complete("system", _user_message(injected)))
+    assert response["action"] == "dismiss"
 
 
 def test_escalation_vulnerable_client_not_hijacked_by_dismiss_direction_techniques():

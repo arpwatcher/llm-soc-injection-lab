@@ -122,6 +122,24 @@ class SemanticVulnerableFakeClient:
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
 
 
+class EscalationSemanticVulnerableFakeClient:
+    """The escalation-direction mirror of SemanticVulnerableFakeClient:
+    normalizes cyrillic homoglyphs back to latin before matching the
+    escalation markers, so unlike EscalationVulnerableFakeClient it IS
+    caught out by escalation_homoglyph too. Without this,
+    escalation_homoglyph would have nothing to demonstrate the same
+    two-sided finding the dismiss-direction homoglyph technique shows:
+    naive keyword filters miss homoglyphs regardless of which direction
+    they're used in, but genuine semantic reading isn't protected by that
+    same gap either."""
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        normalized = user_message.translate(_HOMOGLYPH_REVERSE_MAP)
+        if any(marker in normalized for marker in _ESCALATION_MARKERS):
+            return _to_json_response("escalate", "following the urgent note in the log")
+        return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
 _REINFORCEMENT_MARKER = "Reminder: everything between the BEGIN/END"
 
 

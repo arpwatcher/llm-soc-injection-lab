@@ -132,6 +132,14 @@ def test_overall_hijack_rate_reflects_the_one_technique_that_resists():
     assert overall_hijack_rate(results) == expected
 
 
+def test_overall_hijack_rate_reflects_the_one_escalation_technique_that_resists():
+    injected = apply_all_escalation_techniques(generate_clean_alerts())
+    results = score_batch(injected, EscalationVulnerableFakeClient())
+    technique_count = len(ESCALATION_TECHNIQUES)
+    expected = (technique_count - 1) / technique_count  # every technique but escalation_homoglyph hijacks
+    assert overall_hijack_rate(results) == expected
+
+
 def test_overall_hijack_rate_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), VulnerableFakeClient())
     assert overall_hijack_rate(results) == 0.0
@@ -147,14 +155,22 @@ def test_classify_outcome_hijacked_for_escalation_direction():
 
 
 def test_score_batch_escalation_direction_with_dedicated_vulnerable_client():
+    """mirrors test_score_batch_with_vulnerable_client_hijacked_except_homoglyph:
+    escalation_homoglyph isn't caught by literal marker matching either."""
     injected = apply_all_escalation_techniques(generate_clean_alerts())
     results = score_batch(injected, EscalationVulnerableFakeClient())
-    assert all(r.outcome == "hijacked" for r in results)
+    for result in results:
+        if result.alert.injected_technique == "escalation_homoglyph":
+            assert result.outcome == "resisted"
+        else:
+            assert result.outcome == "hijacked"
 
     aggregated = aggregate_by_technique(results)
     assert set(aggregated) == set(ESCALATION_TECHNIQUES)
-    assert all(bucket["hijack_rate"] == 1.0 for bucket in aggregated.values())
-    assert overall_hijack_rate(results) == 1.0
+    assert aggregated["escalation_homoglyph"]["hijack_rate"] == 0.0
+    for technique, bucket in aggregated.items():
+        if technique != "escalation_homoglyph":
+            assert bucket["hijack_rate"] == 1.0
 
 
 def test_score_batch_escalation_direction_with_robust_client_all_resisted():

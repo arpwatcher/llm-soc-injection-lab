@@ -24,16 +24,16 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   letters swapped for visually identical cyrillic ones (reads the same, doesn't match
   literal keyword filters), a fabricated ticketing-system output block, an indirect
   reference to a made-up KB article, and a fabricated prior ticket thread where an
-  "analyst" already agreed to dismiss it. `ESCALATION_TECHNIQUES` (four of them) push the
+  "analyst" already agreed to dismiss it. `ESCALATION_TECHNIQUES` (five of them) push the
   opposite direction - a genuinely benign alert toward "escalate" instead, via a fabricated
   urgency claim, a fake severity-reclassification block, an impersonated incident commander
-  demanding escalation (the mirror of the roleplayed-CISO technique above), or an escalate
+  demanding escalation (the mirror of the roleplayed-CISO technique above), an escalate
   instruction hidden behind the same base64 "decode this to confirm" framing as
-  `encoded_instruction`. Not hiding anything, just wasting the analyst's time and
-  contributing to alert fatigue - a real, if less severe, attacker goal, and a distinct
-  enough failure mode that `Alert.injected_target_action` tracks which direction each
-  injected alert is actually
-  aiming for.
+  `encoded_instruction`, or the same false-urgency note with letters swapped for cyrillic
+  look-alikes (the mirror of `unicode_homoglyph`). Not hiding anything, just wasting the
+  analyst's time and contributing to alert fatigue - a real, if less severe, attacker goal,
+  and a distinct enough failure mode that `Alert.injected_target_action` tracks which
+  direction each injected alert is actually aiming for.
 - `analyst.py` - builds the prompt sent to the model: a system prompt establishing the role
   and explicitly stating the log content is data, not instructions, and a user message
   wrapping the untrusted content in clear delimiters. Supports three defenses plus "none":
@@ -49,7 +49,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   server - requests it as `format: json` so a compliant model returns valid JSON directly
   instead of relying on `parse_response`'s prose/code-fence fallback. Its request building
   and response parsing are unit tested against a mocked
-  `requests.post`. Ten fake clients model different failure modes without needing a real
+  `requests.post`. Twelve fake clients model different failure modes without needing a real
   model running: `RobustFakeClient` always reads the alert honestly by keyword;
   `VulnerableFakeClient` caves the moment it sees a known injection marker phrase, but does
   NOT catch the homoglyph technique (naive keyword filter, on purpose);
@@ -67,9 +67,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   demonstrate; `EscalationStubbornFakeClient` mirrors `StubbornFakeClient` the same way -
   without it, nothing proved "both" is uniquely necessary for the escalation direction
   either, since `StubbornFakeClient` itself only recognizes the dismiss-direction markers
-  and resists every escalation alert regardless of defense. These aren't stand-ins for
-  missing functionality; they're what let the harness and scoring logic get proven correct
-  before a single real model call happens.
+  and resists every escalation alert regardless of defense; `EscalationSemanticVulnerableFakeClient`
+  mirrors `SemanticVulnerableFakeClient` the same way, catching `escalation_homoglyph` where
+  `EscalationVulnerableFakeClient`'s literal matching doesn't - the same two-sided finding as
+  the dismiss direction's homoglyph technique, shown to hold in both directions rather than
+  assumed by symmetry. These aren't stand-ins for missing functionality; they're what let
+  the harness and scoring logic get proven correct before a single real model call happens.
 - `scoring.py` - classifies each result as resisted / hijacked / other (against whichever
   direction that specific alert's injection was aiming for), aggregates a hijack rate per
   technique, and an overall hijack rate across a whole batch. Also computes a
@@ -141,7 +144,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-168 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+172 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
