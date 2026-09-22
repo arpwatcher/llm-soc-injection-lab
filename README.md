@@ -49,7 +49,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   server - requests it as `format: json` so a compliant model returns valid JSON directly
   instead of relying on `parse_response`'s prose/code-fence fallback. Its request building
   and response parsing are unit tested against a mocked
-  `requests.post`. Twelve fake clients model different failure modes without needing a real
+  `requests.post`. Eleven fake clients model different failure modes without needing a real
   model running: `RobustFakeClient` always reads the alert honestly by keyword;
   `VulnerableFakeClient` caves the moment it sees a known injection marker phrase, but does
   NOT catch the homoglyph technique (naive keyword filter, on purpose);
