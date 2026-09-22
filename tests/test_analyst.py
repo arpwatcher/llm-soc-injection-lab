@@ -175,6 +175,7 @@ def test_get_system_prompt_strict_covers_both_attacker_directions():
     assert "urgency" in strict.lower()
     assert "severity-reclassification" in strict.lower()
     assert "incident commander" in strict.lower()
+    assert "encoded directives" in strict.lower()
 
 
 def test_get_system_prompt_rejects_unknown_defense():

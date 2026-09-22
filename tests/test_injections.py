@@ -11,6 +11,7 @@ from soclab.injections import (
     apply_technique,
     conversational_drift,
     direct_override,
+    encoded_escalation_instruction,
     encoded_instruction,
     fake_incident_commander,
     fake_severity_upgrade,
@@ -139,6 +140,17 @@ def test_fake_incident_commander_pushes_toward_escalate():
     injected = fake_incident_commander(alert)
     assert "[ticket comment - Incident Commander]" in injected.raw_log
     assert injected.injected_technique == "fake_incident_commander"
+    assert injected.injected_target_action == "escalate"
+    assert injected.ground_truth_action == "dismiss"  # unchanged
+
+
+def test_encoded_escalation_instruction_pushes_toward_escalate():
+    alert = _dismiss_alert()
+    injected = encoded_escalation_instruction(alert)
+    assert "[TRIAGE_ENGINE]" in injected.raw_log
+    encoded_payload = injected.raw_log.rsplit(": ", 1)[-1]
+    assert "escalate" in base64.b64decode(encoded_payload).decode()
+    assert injected.injected_technique == "encoded_escalation_instruction"
     assert injected.injected_target_action == "escalate"
     assert injected.ground_truth_action == "dismiss"  # unchanged
 

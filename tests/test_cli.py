@@ -348,6 +348,7 @@ def test_list_techniques(capsys):
     assert "false_urgency" in out
     assert "fake_severity_upgrade" in out
     assert "fake_incident_commander" in out
+    assert "encoded_escalation_instruction" in out
 
 
 def test_run_escalate_direction_with_dedicated_client(capsys):
@@ -356,7 +357,9 @@ def test_run_escalate_direction_with_dedicated_client(capsys):
     assert exit_code == 0
     assert "direction=escalate" in out
     for line in out.splitlines():
-        if line.strip().startswith(("false_urgency", "fake_severity_upgrade", "fake_incident_commander")):
+        if line.strip().startswith((
+            "false_urgency", "fake_severity_upgrade", "fake_incident_commander", "encoded_escalation_instruction",
+        )):
             assert "100%" in line
 
 
@@ -379,7 +382,9 @@ def test_run_escalate_direction_robust_client_resists(capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     for line in out.splitlines():
-        if line.strip().startswith(("false_urgency", "fake_severity_upgrade", "fake_incident_commander")):
+        if line.strip().startswith((
+            "false_urgency", "fake_severity_upgrade", "fake_incident_commander", "encoded_escalation_instruction",
+        )):
             assert "0%" in line
 
 

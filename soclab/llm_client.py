@@ -38,6 +38,7 @@ _ESCALATION_MARKERS = (
     "CRITICAL UPDATE",
     "[SEVERITY_ENGINE_OUTPUT]",
     "[ticket comment - Incident Commander]",
+    "[TRIAGE_ENGINE]",
 )
 
 
