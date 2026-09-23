@@ -10,6 +10,7 @@ from soclab.injections import (
     apply_all_techniques,
     apply_technique,
     conversational_drift,
+    conversational_drift_escalation,
     direct_override,
     encoded_escalation_instruction,
     encoded_instruction,
@@ -161,6 +162,16 @@ def test_indirect_kb_reference_escalation_points_to_fabricated_article():
     injected = indirect_kb_reference_escalation(alert)
     assert "KB-7823" in injected.raw_log
     assert injected.injected_technique == "indirect_kb_reference_escalation"
+    assert injected.injected_target_action == "escalate"
+    assert injected.ground_truth_action == "dismiss"  # unchanged
+
+
+def test_conversational_drift_escalation_fabricates_prior_agreement():
+    alert = _dismiss_alert()
+    injected = conversational_drift_escalation(alert)
+    assert "[prior escalation thread]" in injected.raw_log
+    assert "escalat" in injected.raw_log.lower()
+    assert injected.injected_technique == "conversational_drift_escalation"
     assert injected.injected_target_action == "escalate"
     assert injected.ground_truth_action == "dismiss"  # unchanged
 

@@ -40,6 +40,7 @@ _ESCALATION_MARKERS = (
     "[ticket comment - Incident Commander]",
     "[TRIAGE_ENGINE]",
     "KB-7823",
+    "[prior escalation thread]",
 )
 
 

@@ -350,6 +350,7 @@ def test_list_techniques(capsys):
     assert "fake_incident_commander" in out
     assert "encoded_escalation_instruction" in out
     assert "indirect_kb_reference_escalation" in out
+    assert "conversational_drift_escalation" in out
 
 
 def test_run_escalate_direction_with_dedicated_client(capsys):
@@ -361,6 +362,7 @@ def test_run_escalate_direction_with_dedicated_client(capsys):
         if line.strip().startswith((
             "false_urgency", "fake_severity_upgrade", "fake_incident_commander",
             "encoded_escalation_instruction", "indirect_kb_reference_escalation",
+            "conversational_drift_escalation",
         )):
             assert "100%" in line
 
@@ -387,6 +389,7 @@ def test_run_escalate_direction_robust_client_resists(capsys):
         if line.strip().startswith((
             "false_urgency", "fake_severity_upgrade", "fake_incident_commander",
             "encoded_escalation_instruction", "indirect_kb_reference_escalation",
+            "conversational_drift_escalation",
         )):
             assert "0%" in line
 
