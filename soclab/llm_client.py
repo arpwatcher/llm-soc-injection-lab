@@ -297,4 +297,12 @@ class OllamaClient:
             timeout=self.timeout,
         )
         response.raise_for_status()
-        return response.json()["message"]["content"]
+        body = response.json()
+        try:
+            return body["message"]["content"]
+        except (KeyError, TypeError) as exc:
+            # a 200 with an unexpected shape (wrong ollama version, a
+            # proxy in the way, a future api change) would otherwise
+            # surface as a bare KeyError/TypeError instead of the same
+            # clean "error: ..." message every other failure gets.
+            raise ValueError(f"unexpected response shape from ollama: {body!r}") from exc

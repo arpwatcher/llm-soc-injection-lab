@@ -92,3 +92,27 @@ def test_raises_on_http_error_status(monkeypatch):
     client = OllamaClient(model="m")
     with pytest.raises(requests.HTTPError):
         client.complete("s", "u")
+
+
+def test_raises_clean_error_on_missing_message_key(monkeypatch):
+    """a 200 response with an unexpected shape (wrong ollama version, a
+    proxy in the way, a future api change) should fail the same clean
+    way as every other error path here - not a bare KeyError."""
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse({"error": "model not found"}))
+    client = OllamaClient(model="m")
+    with pytest.raises(ValueError, match="unexpected response shape"):
+        client.complete("s", "u")
+
+
+def test_raises_clean_error_on_missing_content_key(monkeypatch):
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse({"message": {"role": "assistant"}}))
+    client = OllamaClient(model="m")
+    with pytest.raises(ValueError, match="unexpected response shape"):
+        client.complete("s", "u")
+
+
+def test_raises_clean_error_when_message_is_not_a_dict(monkeypatch):
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse({"message": "not a dict"}))
+    client = OllamaClient(model="m")
+    with pytest.raises(ValueError, match="unexpected response shape"):
+        client.complete("s", "u")

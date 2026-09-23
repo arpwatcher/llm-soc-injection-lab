@@ -47,8 +47,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
 - `llm_client.py` - one small interface (`complete(system_prompt, user_message) -> str`)
   behind everything. `OllamaClient` is the real implementation, talking to a local Ollama
   server - requests it as `format: json` so a compliant model returns valid JSON directly
-  instead of relying on `parse_response`'s prose/code-fence fallback. Its request building
-  and response parsing are unit tested against a mocked
+  instead of relying on `parse_response`'s prose/code-fence fallback, and raises a clean
+  error (instead of a bare KeyError) if a 200 response ever comes back in an unexpected
+  shape. Its request building and response parsing are unit tested against a mocked
   `requests.post`. Eleven fake clients model different failure modes without needing a real
   model running: `RobustFakeClient` always reads the alert honestly by keyword;
   `VulnerableFakeClient` caves the moment it sees a known injection marker phrase, but does
@@ -144,7 +145,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-174 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+177 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
