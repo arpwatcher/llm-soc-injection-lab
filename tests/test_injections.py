@@ -207,3 +207,11 @@ def test_apply_all_escalation_techniques_covers_every_escalation_technique():
 
 def test_dismiss_and_escalation_technique_sets_are_disjoint():
     assert set(TECHNIQUES).isdisjoint(set(ESCALATION_TECHNIQUES))
+
+
+def test_escalation_and_dismiss_technique_counts_match():
+    """not required for correctness, but locks in the parity reached
+    after a week of incrementally mirroring each dismiss-direction
+    technique to its escalation-direction counterpart - worth noticing
+    if a future change makes one direction outpace the other again."""
+    assert len(ESCALATION_TECHNIQUES) == len(TECHNIQUES)

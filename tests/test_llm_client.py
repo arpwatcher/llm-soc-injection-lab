@@ -11,6 +11,8 @@ from soclab.llm_client import (
     ScriptedLLMClient,
     SemanticVulnerableFakeClient,
     VulnerableFakeClient,
+    _ESCALATION_MARKERS,
+    _INJECTION_MARKERS,
 )
 
 
@@ -187,3 +189,19 @@ def test_scripted_client_raises_when_exhausted():
     client.complete("s", "u")
     with pytest.raises(IndexError):
         client.complete("s", "u")
+
+
+def test_dismiss_and_escalation_markers_have_no_substring_collisions():
+    """the two marker lists have to stay direction-exclusive for
+    VulnerableFakeClient / EscalationVulnerableFakeClient (and every
+    other fake client checking one list or the other) to keep working
+    correctly - a marker that's a literal substring of one in the other
+    list would make a client fire on the wrong direction's technique.
+    Caught this by hand while adding fake_system_tag_escalation (its
+    naive first draft reused ###SYSTEM### verbatim); this locks the
+    check in instead of relying on remembering to check it by hand every
+    time a new technique goes in."""
+    for dismiss_marker in _INJECTION_MARKERS:
+        for escalation_marker in _ESCALATION_MARKERS:
+            assert dismiss_marker not in escalation_marker, f"{dismiss_marker!r} collides with {escalation_marker!r}"
+            assert escalation_marker not in dismiss_marker, f"{escalation_marker!r} collides with {dismiss_marker!r}"
