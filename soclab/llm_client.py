@@ -39,6 +39,7 @@ _ESCALATION_MARKERS = (
     "[SEVERITY_ENGINE_OUTPUT]",
     "[ticket comment - Incident Commander]",
     "[TRIAGE_ENGINE]",
+    "KB-7823",
 )
 
 

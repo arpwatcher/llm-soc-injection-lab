@@ -24,16 +24,17 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   letters swapped for visually identical cyrillic ones (reads the same, doesn't match
   literal keyword filters), a fabricated ticketing-system output block, an indirect
   reference to a made-up KB article, and a fabricated prior ticket thread where an
-  "analyst" already agreed to dismiss it. `ESCALATION_TECHNIQUES` (five of them) push the
+  "analyst" already agreed to dismiss it. `ESCALATION_TECHNIQUES` (six of them) push the
   opposite direction - a genuinely benign alert toward "escalate" instead, via a fabricated
   urgency claim, a fake severity-reclassification block, an impersonated incident commander
   demanding escalation (the mirror of the roleplayed-CISO technique above), an escalate
   instruction hidden behind the same base64 "decode this to confirm" framing as
-  `encoded_instruction`, or the same false-urgency note with letters swapped for cyrillic
-  look-alikes (the mirror of `unicode_homoglyph`). Not hiding anything, just wasting the
-  analyst's time and contributing to alert fatigue - a real, if less severe, attacker goal,
-  and a distinct enough failure mode that `Alert.injected_target_action` tracks which
-  direction each injected alert is actually aiming for.
+  `encoded_instruction`, the same false-urgency note with letters swapped for cyrillic
+  look-alikes (the mirror of `unicode_homoglyph`), or a fabricated KB article cited as
+  external authority (the mirror of `indirect_kb_reference`). Not hiding anything, just
+  wasting the analyst's time and contributing to alert fatigue - a real, if less severe,
+  attacker goal, and a distinct enough failure mode that `Alert.injected_target_action`
+  tracks which direction each injected alert is actually aiming for.
 - `analyst.py` - builds the prompt sent to the model: a system prompt establishing the role
   and explicitly stating the log content is data, not instructions, and a user message
   wrapping the untrusted content in clear delimiters. Supports three defenses plus "none":
@@ -145,7 +146,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-177 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+178 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

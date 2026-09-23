@@ -18,6 +18,7 @@ from soclab.injections import (
     fake_tool_output,
     false_urgency,
     indirect_kb_reference,
+    indirect_kb_reference_escalation,
     unicode_homoglyph,
 )
 
@@ -151,6 +152,15 @@ def test_encoded_escalation_instruction_pushes_toward_escalate():
     encoded_payload = injected.raw_log.rsplit(": ", 1)[-1]
     assert "escalate" in base64.b64decode(encoded_payload).decode()
     assert injected.injected_technique == "encoded_escalation_instruction"
+    assert injected.injected_target_action == "escalate"
+    assert injected.ground_truth_action == "dismiss"  # unchanged
+
+
+def test_indirect_kb_reference_escalation_points_to_fabricated_article():
+    alert = _dismiss_alert()
+    injected = indirect_kb_reference_escalation(alert)
+    assert "KB-7823" in injected.raw_log
+    assert injected.injected_technique == "indirect_kb_reference_escalation"
     assert injected.injected_target_action == "escalate"
     assert injected.ground_truth_action == "dismiss"  # unchanged
 
