@@ -41,6 +41,7 @@ _ESCALATION_MARKERS = (
     "[TRIAGE_ENGINE]",
     "KB-7823",
     "[prior escalation thread]",
+    "###ESCALATION_SYSTEM###",
 )
 
 

@@ -16,6 +16,7 @@ from soclab.injections import (
     encoded_instruction,
     fake_incident_commander,
     fake_severity_upgrade,
+    fake_system_tag_escalation,
     fake_tool_output,
     false_urgency,
     indirect_kb_reference,
@@ -172,6 +173,16 @@ def test_conversational_drift_escalation_fabricates_prior_agreement():
     assert "[prior escalation thread]" in injected.raw_log
     assert "escalat" in injected.raw_log.lower()
     assert injected.injected_technique == "conversational_drift_escalation"
+    assert injected.injected_target_action == "escalate"
+    assert injected.ground_truth_action == "dismiss"  # unchanged
+
+
+def test_fake_system_tag_escalation_mimics_system_instruction():
+    alert = _dismiss_alert()
+    injected = fake_system_tag_escalation(alert)
+    assert "###ESCALATION_SYSTEM###" in injected.raw_log
+    assert "###SYSTEM###" not in injected.raw_log  # distinct tag, not the dismiss-direction one
+    assert injected.injected_technique == "fake_system_tag_escalation"
     assert injected.injected_target_action == "escalate"
     assert injected.ground_truth_action == "dismiss"  # unchanged
 
