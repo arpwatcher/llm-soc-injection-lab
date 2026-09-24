@@ -3,13 +3,20 @@ import json
 import pytest
 
 from soclab.alerts import generate_clean_alerts
+from soclab.analyst import DEFENSE_BOTH, DEFENSE_NONE, DEFENSE_SANDWICH, DEFENSE_STRICT, build_user_message, get_system_prompt
 from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_technique
 from soclab.llm_client import (
+    EscalationSandwichSensitiveFakeClient,
     EscalationSemanticVulnerableFakeClient,
+    EscalationStrictPromptSensitiveFakeClient,
+    EscalationStubbornFakeClient,
     EscalationVulnerableFakeClient,
     RobustFakeClient,
+    SandwichSensitiveFakeClient,
     ScriptedLLMClient,
     SemanticVulnerableFakeClient,
+    StrictPromptSensitiveFakeClient,
+    StubbornFakeClient,
     VulnerableFakeClient,
     _ESCALATION_MARKERS,
     _INJECTION_MARKERS,
@@ -176,6 +183,105 @@ def test_vulnerable_client_not_hijacked_by_escalation_direction_techniques():
         injected = apply_technique(alert, technique)
         response = json.loads(client.complete("system", _user_message(injected)))
         assert response["action"] == "dismiss", f"{technique} unexpectedly moved the vulnerable client"
+
+
+def _defense_response(client, alert, defense):
+    return json.loads(client.complete(get_system_prompt(defense), build_user_message(alert, defense)))
+
+
+def test_sandwich_sensitive_client_matches_ground_truth_on_clean_alerts():
+    client = SandwichSensitiveFakeClient()
+    for alert in generate_clean_alerts():
+        assert _defense_response(client, alert, DEFENSE_NONE)["action"] == alert.ground_truth_action
+
+
+def test_sandwich_sensitive_client_hijacked_without_sandwich_defense():
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = SandwichSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_NONE)["action"] == "dismiss"
+
+
+def test_sandwich_sensitive_client_resists_with_sandwich_defense():
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = SandwichSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_SANDWICH)["action"] == "escalate"
+
+
+def test_sandwich_sensitive_client_not_helped_by_strict_defense():
+    """it's sensitive to the sandwich reinforcement specifically - the
+    strict defense alone shouldn't move it, since this client's whole
+    point is proving sandwich helps independently of strict."""
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = SandwichSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_STRICT)["action"] == "dismiss"
+
+
+def test_strict_sensitive_client_hijacked_without_strict_defense():
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = StrictPromptSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_NONE)["action"] == "dismiss"
+
+
+def test_strict_sensitive_client_resists_with_strict_defense():
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = StrictPromptSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_STRICT)["action"] == "escalate"
+
+
+def test_strict_sensitive_client_not_helped_by_sandwich_defense():
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = StrictPromptSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_SANDWICH)["action"] == "dismiss"
+
+
+def test_stubborn_client_needs_both_signals_individually_insufficient():
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = StubbornFakeClient()
+    for defense in (DEFENSE_NONE, DEFENSE_SANDWICH, DEFENSE_STRICT):
+        assert _defense_response(client, injected, defense)["action"] == "dismiss", f"defense={defense}"
+
+
+def test_stubborn_client_resists_only_the_combined_defense():
+    injected = apply_technique(_alert("escalate"), "direct_override")
+    client = StubbornFakeClient()
+    assert _defense_response(client, injected, DEFENSE_BOTH)["action"] == "escalate"
+
+
+def test_escalation_sandwich_sensitive_client_hijacked_without_sandwich_defense():
+    injected = apply_technique(_alert("dismiss"), "false_urgency")
+    client = EscalationSandwichSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_NONE)["action"] == "escalate"
+
+
+def test_escalation_sandwich_sensitive_client_resists_with_sandwich_defense():
+    injected = apply_technique(_alert("dismiss"), "false_urgency")
+    client = EscalationSandwichSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_SANDWICH)["action"] == "dismiss"
+
+
+def test_escalation_strict_sensitive_client_hijacked_without_strict_defense():
+    injected = apply_technique(_alert("dismiss"), "false_urgency")
+    client = EscalationStrictPromptSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_NONE)["action"] == "escalate"
+
+
+def test_escalation_strict_sensitive_client_resists_with_strict_defense():
+    injected = apply_technique(_alert("dismiss"), "false_urgency")
+    client = EscalationStrictPromptSensitiveFakeClient()
+    assert _defense_response(client, injected, DEFENSE_STRICT)["action"] == "dismiss"
+
+
+def test_escalation_stubborn_client_needs_both_signals_individually_insufficient():
+    injected = apply_technique(_alert("dismiss"), "false_urgency")
+    client = EscalationStubbornFakeClient()
+    for defense in (DEFENSE_NONE, DEFENSE_SANDWICH, DEFENSE_STRICT):
+        assert _defense_response(client, injected, defense)["action"] == "escalate", f"defense={defense}"
+
+
+def test_escalation_stubborn_client_resists_only_the_combined_defense():
+    injected = apply_technique(_alert("dismiss"), "false_urgency")
+    client = EscalationStubbornFakeClient()
+    assert _defense_response(client, injected, DEFENSE_BOTH)["action"] == "dismiss"
 
 
 def test_scripted_client_returns_responses_in_order():
