@@ -247,6 +247,24 @@ def test_render_transcript_is_valid_json_with_expected_shape():
     assert parsed[0]["parse_error"] is False
 
 
+def test_render_transcript_includes_raw_response_for_parse_errors():
+    """reasoning is empty when parse_error is True - there was nothing
+    valid to extract it from - so raw_response is the only place a
+    parse failure can actually be debugged from the transcript alone."""
+    alert = Alert(
+        id="A002", source="edr", severity="low", description="d", raw_log="l",
+        ground_truth_action="dismiss", injected_technique="direct_override", injected_target_action="dismiss",
+    )
+    decision = AnalystDecision(
+        alert_id="A002", action="unknown", reasoning="", raw_response="I refuse to answer.", parse_error=True,
+    )
+    result = ScoredResult(alert=alert, decision=decision, outcome="other")
+    parsed = json.loads(render_transcript({"none": [result]}))
+    assert parsed[0]["parse_error"] is True
+    assert parsed[0]["reasoning"] == ""
+    assert parsed[0]["raw_response"] == "I refuse to answer."
+
+
 def test_render_transcript_defaults_to_dismiss_direction():
     results = [_scored_result("hijacked")]
     parsed = json.loads(render_transcript({"none": results}))

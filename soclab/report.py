@@ -17,7 +17,10 @@ def render_transcript(per_defense: dict, direction: str = "dismiss") -> str:
     (same shape as the other report functions' input, but with raw
     results instead of an already-aggregated dict), so a single call
     covers every defense a caller ran, each entry tagged with which one
-    it came from."""
+    it came from. raw_response is included alongside the parsed
+    reasoning specifically for parse_error=True entries: reasoning is
+    empty in that case (there was nothing valid to extract it from), so
+    raw_response is the only place to see what the model actually said."""
     entries = [
         {
             "alert_id": r.alert.id,
@@ -30,6 +33,7 @@ def render_transcript(per_defense: dict, direction: str = "dismiss") -> str:
             "outcome": r.outcome,
             "reasoning": r.decision.reasoning,
             "parse_error": r.decision.parse_error,
+            "raw_response": r.decision.raw_response,
         }
         for defense, results in per_defense.items()
         for r in results

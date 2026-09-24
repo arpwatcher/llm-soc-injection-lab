@@ -106,10 +106,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the interval needs the pooled count) so both are computed by the caller and threaded
   through as optional arguments. `render_transcript` (and `render_combined_transcript` for
   the full-report shape) renders a per-alert JSON record (technique, defense, direction,
-  action, outcome, and the analyst's own reasoning text) instead of an aggregate - the
-  hijack-rate tables say how often something got hijacked, nothing about what a specific
-  decision actually looked like, which matters for quoting a concrete example or
-  spot-checking a surprising result.
+  action, outcome, the analyst's own reasoning text, and the full raw response) instead of
+  an aggregate - the hijack-rate tables say how often something got hijacked, nothing about
+  what a specific decision actually looked like, which matters for quoting a concrete
+  example or spot-checking a surprising result. raw_response matters specifically for a
+  parse_error=True entry, where reasoning comes back empty - it's the only place to see
+  what the model actually said.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
   dismiss|escalate [--report FILE] [--transcript FILE]` runs one battery and can optionally
   save the aggregate report and/or the per-alert transcript;
@@ -159,7 +161,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-191 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+192 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
