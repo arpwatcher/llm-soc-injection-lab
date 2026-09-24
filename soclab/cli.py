@@ -33,6 +33,7 @@ from soclab.report import (
     render_combined_report,
     render_json_report,
     render_markdown_report,
+    render_transcript,
 )
 from soclab.scoring import (
     aggregate_by_technique,
@@ -125,6 +126,11 @@ def cmd_run(args):
         with open(args.report, "w") as f:
             f.write(content)
         print(f"\nwrote report to {args.report}")
+
+    if args.transcript:
+        with open(args.transcript, "w") as f:
+            f.write(render_transcript(injected_results))
+        print(f"wrote transcript to {args.transcript}")
 
 
 def cmd_compare(args):
@@ -247,6 +253,10 @@ def build_parser():
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     run_parser.add_argument("--report", help="write results to this path - markdown, or json if the path ends in .json")
+    run_parser.add_argument(
+        "--transcript",
+        help="write a per-alert json record (action, reasoning, outcome) to this path, for qualitative review",
+    )
     run_parser.set_defaults(func=cmd_run)
 
     compare_parser = sub.add_parser("compare", help="run the battery under every defense and compare hijack rates")

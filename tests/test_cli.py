@@ -102,6 +102,32 @@ def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert "none" in parsed["confidence_interval_by_defense"]
 
 
+def test_run_writes_transcript(tmp_path, capsys):
+    """the aggregate report says how often a technique got hijacked, but
+    nothing about what a specific decision actually looked like - the
+    transcript is for pulling out an example to quote or spot-checking a
+    surprising result instead of trusting the aggregate blindly."""
+    transcript_path = tmp_path / "transcript.json"
+    exit_code = main(["run", "--client", "fake-vulnerable", "--transcript", str(transcript_path)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"wrote transcript to {transcript_path}" in out
+    entries = json.loads(transcript_path.read_text())
+    assert len(entries) == 40  # 8 techniques x 5 alerts each
+    assert all("reasoning" in e for e in entries)
+    hijacked = [e for e in entries if e["outcome"] == "hijacked"]
+    resisted = [e for e in entries if e["outcome"] == "resisted"]
+    assert len(hijacked) == 35  # every technique but unicode_homoglyph
+    assert len(resisted) == 5
+
+
+def test_run_without_transcript_flag_writes_nothing(tmp_path, capsys):
+    exit_code = main(["run", "--client", "fake-robust"])
+    capsys.readouterr()
+    assert exit_code == 0
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_run_without_report_flag_writes_nothing(tmp_path, capsys):
     exit_code = main(["run", "--client", "fake-robust"])
     capsys.readouterr()

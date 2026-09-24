@@ -104,9 +104,14 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   severity-weighted hijack rate and the 95% confidence interval alongside the flat rate,
   neither derivable from the per-technique buckets alone (severity isn't tracked there, and
   the interval needs the pooled count) so both are computed by the caller and threaded
-  through as optional arguments.
+  through as optional arguments. `render_transcript` renders a per-alert JSON record
+  (technique, action, outcome, and the analyst's own reasoning text) instead of an
+  aggregate - the hijack-rate tables say how often something got hijacked, nothing about
+  what a specific decision actually looked like, which matters for quoting a concrete
+  example or spot-checking a surprising result.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
-  dismiss|escalate [--report FILE]` runs one battery and can optionally save it too;
+  dismiss|escalate [--report FILE] [--transcript FILE]` runs one battery and can optionally
+  save the aggregate report and/or the per-alert transcript;
   `soclab compare --client ... [--direction ...] [--report FILE]` runs it under all four
   defenses back to back, prints the same defense-summary table straight to the terminal,
   and optionally writes the comparison; `soclab full-report --client ... --report FILE` is
@@ -138,6 +143,7 @@ python -m soclab.cli run --client fake-sandwich-sensitive --defense sandwich
 python -m soclab.cli run --client fake-strict-sensitive --defense strict
 python -m soclab.cli run --client fake-stubborn --defense both
 python -m soclab.cli run --client fake-escalation-vulnerable --direction escalate
+python -m soclab.cli run --client fake-vulnerable --transcript transcript.json  # per-alert reasoning, for review
 python -m soclab.cli compare --client fake-stubborn --report results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.json  # same data, for plotting
@@ -150,7 +156,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-182 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+186 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

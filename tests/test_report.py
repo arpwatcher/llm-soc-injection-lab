@@ -1,5 +1,7 @@
 import json
 
+from soclab.alerts import Alert
+from soclab.analyst import AnalystDecision
 from soclab.report import (
     combined_rate_by_defense,
     rate_by_defense,
@@ -7,7 +9,9 @@ from soclab.report import (
     render_combined_report,
     render_json_report,
     render_markdown_report,
+    render_transcript,
 )
+from soclab.scoring import ScoredResult
 
 
 def _sample_aggregate():
@@ -214,3 +218,31 @@ def test_render_combined_json_report_includes_confidence_interval_when_given():
         "fake-stubborn", by_direction, confidence_interval_by_direction=confidence_interval_by_direction
     )
     assert json.loads(report)["confidence_interval_by_direction"] == {"dismiss": {"none": [0.2, 0.8]}}
+
+
+def _scored_result(outcome: str) -> ScoredResult:
+    alert = Alert(
+        id="A001", source="edr", severity="critical", description="d", raw_log="l",
+        ground_truth_action="escalate", injected_technique="direct_override", injected_target_action="dismiss",
+    )
+    action = "dismiss" if outcome == "hijacked" else "escalate"
+    decision = AnalystDecision(alert_id="A001", action=action, reasoning="because of the log note", raw_response="")
+    return ScoredResult(alert=alert, decision=decision, outcome=outcome)
+
+
+def test_render_transcript_is_valid_json_with_expected_shape():
+    results = [_scored_result("hijacked"), _scored_result("resisted")]
+    parsed = json.loads(render_transcript(results))
+    assert len(parsed) == 2
+    assert parsed[0]["alert_id"] == "A001"
+    assert parsed[0]["technique"] == "direct_override"
+    assert parsed[0]["severity"] == "critical"
+    assert parsed[0]["ground_truth_action"] == "escalate"
+    assert parsed[0]["action"] == "dismiss"
+    assert parsed[0]["outcome"] == "hijacked"
+    assert parsed[0]["reasoning"] == "because of the log note"
+    assert parsed[0]["parse_error"] is False
+
+
+def test_render_transcript_empty_results():
+    assert render_transcript([]) == "[]"

@@ -5,6 +5,31 @@ instead of a document."""
 
 import json
 
+from soclab.scoring import ScoredResult
+
+
+def render_transcript(results: list[ScoredResult]) -> str:
+    """A per-alert record of what the analyst actually decided and why,
+    as JSON - the aggregate reports above answer "how often did this get
+    hijacked", but say nothing about what a specific decision actually
+    looked like. This is for qualitative review: pulling out an example
+    of a model's reasoning to quote directly, or spot-checking a
+    surprising result instead of trusting the aggregate blindly."""
+    entries = [
+        {
+            "alert_id": r.alert.id,
+            "technique": r.alert.injected_technique,
+            "severity": r.alert.severity,
+            "ground_truth_action": r.alert.ground_truth_action,
+            "action": r.decision.action,
+            "outcome": r.outcome,
+            "reasoning": r.decision.reasoning,
+            "parse_error": r.decision.parse_error,
+        }
+        for r in results
+    ]
+    return json.dumps(entries, indent=2)
+
 
 def _overall_rate(aggregated: dict) -> float:
     total_hijacked = sum(bucket["hijacked"] for bucket in aggregated.values())
