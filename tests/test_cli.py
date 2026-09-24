@@ -276,6 +276,19 @@ def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert set(parsed["confidence_interval_by_defense"]) == {"none", "sandwich", "strict", "both"}
 
 
+def test_compare_writes_transcript(tmp_path, capsys):
+    transcript_path = tmp_path / "transcript.json"
+    exit_code = main([
+        "compare", "--client", "fake-sandwich-sensitive", "--transcript", str(transcript_path),
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"wrote transcript to {transcript_path}" in out
+    entries = json.loads(transcript_path.read_text())
+    assert set(e["defense"] for e in entries) == {"none", "sandwich", "strict", "both"}
+    assert set(e["direction"] for e in entries) == {"dismiss"}
+
+
 def test_compare_report_notes_escalate_direction(tmp_path, capsys):
     report_path = tmp_path / "report.md"
     main(["compare", "--client", "fake-escalation-sandwich-sensitive", "--direction", "escalate",
@@ -333,6 +346,21 @@ def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
     low, high = parsed["confidence_interval_by_direction"]["dismiss"]["both"]
     assert low == 0.0
     assert high == pytest.approx(0.0876, abs=0.01)
+
+
+def test_full_report_writes_transcript(tmp_path, capsys):
+    report_path = tmp_path / "full.md"
+    transcript_path = tmp_path / "transcript.json"
+    exit_code = main([
+        "full-report", "--client", "fake-stubborn",
+        "--report", str(report_path), "--transcript", str(transcript_path),
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"wrote combined transcript to {transcript_path}" in out
+    entries = json.loads(transcript_path.read_text())
+    assert set(e["direction"] for e in entries) == {"dismiss", "escalate"}
+    assert set(e["defense"] for e in entries) == {"none", "sandwich", "strict", "both"}
 
 
 def test_full_report_summary_shows_stubborn_client_only_helped_by_both(tmp_path, capsys):

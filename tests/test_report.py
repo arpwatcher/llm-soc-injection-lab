@@ -7,6 +7,7 @@ from soclab.report import (
     rate_by_defense,
     render_combined_json_report,
     render_combined_report,
+    render_combined_transcript,
     render_json_report,
     render_markdown_report,
     render_transcript,
@@ -232,17 +233,40 @@ def _scored_result(outcome: str) -> ScoredResult:
 
 def test_render_transcript_is_valid_json_with_expected_shape():
     results = [_scored_result("hijacked"), _scored_result("resisted")]
-    parsed = json.loads(render_transcript(results))
+    parsed = json.loads(render_transcript({"none": results}, direction="escalate"))
     assert len(parsed) == 2
     assert parsed[0]["alert_id"] == "A001"
     assert parsed[0]["technique"] == "direct_override"
     assert parsed[0]["severity"] == "critical"
     assert parsed[0]["ground_truth_action"] == "escalate"
+    assert parsed[0]["defense"] == "none"
+    assert parsed[0]["direction"] == "escalate"
     assert parsed[0]["action"] == "dismiss"
     assert parsed[0]["outcome"] == "hijacked"
     assert parsed[0]["reasoning"] == "because of the log note"
     assert parsed[0]["parse_error"] is False
 
 
+def test_render_transcript_defaults_to_dismiss_direction():
+    results = [_scored_result("hijacked")]
+    parsed = json.loads(render_transcript({"none": results}))
+    assert parsed[0]["direction"] == "dismiss"
+
+
+def test_render_transcript_covers_multiple_defenses():
+    results = [_scored_result("hijacked")]
+    parsed = json.loads(render_transcript({"none": results, "sandwich": results}))
+    assert {e["defense"] for e in parsed} == {"none", "sandwich"}
+
+
 def test_render_transcript_empty_results():
-    assert render_transcript([]) == "[]"
+    assert render_transcript({}) == "[]"
+    assert render_transcript({"none": []}) == "[]"
+
+
+def test_render_combined_transcript_covers_every_direction():
+    results = [_scored_result("hijacked")]
+    by_direction = {"dismiss": {"none": results}, "escalate": {"none": results}}
+    parsed = json.loads(render_combined_transcript(by_direction))
+    assert len(parsed) == 2
+    assert {e["direction"] for e in parsed} == {"dismiss", "escalate"}

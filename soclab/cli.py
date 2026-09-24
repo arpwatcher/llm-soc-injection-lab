@@ -31,6 +31,7 @@ from soclab.report import (
     rate_by_defense,
     render_combined_json_report,
     render_combined_report,
+    render_combined_transcript,
     render_json_report,
     render_markdown_report,
     render_transcript,
@@ -129,7 +130,7 @@ def cmd_run(args):
 
     if args.transcript:
         with open(args.transcript, "w") as f:
-            f.write(render_transcript(injected_results))
+            f.write(render_transcript({args.defense: injected_results}, direction=args.direction))
         print(f"wrote transcript to {args.transcript}")
 
 
@@ -139,6 +140,7 @@ def cmd_compare(args):
 
     print(f"direction={args.direction}\n")
     per_defense = {}
+    results_by_defense = {}
     severity_weighted_by_defense = {}
     confidence_interval_by_defense = {}
     for defense in DEFENSES:
@@ -147,6 +149,7 @@ def cmd_compare(args):
         aggregated = aggregate_by_technique(results)
         _print_report(aggregated, results)
         per_defense[defense] = aggregated
+        results_by_defense[defense] = results
         severity_weighted_by_defense[defense] = severity_weighted_hijack_rate(results)
         confidence_interval_by_defense[defense] = overall_hijack_rate_confidence_interval(results)
         print()
@@ -170,6 +173,11 @@ def cmd_compare(args):
             f.write(content)
         print(f"wrote report to {args.report}")
 
+    if args.transcript:
+        with open(args.transcript, "w") as f:
+            f.write(render_transcript(results_by_defense, direction=args.direction))
+        print(f"wrote transcript to {args.transcript}")
+
 
 def cmd_full_report(args):
     """The capstone run: every direction, every defense, one client - the
@@ -179,11 +187,13 @@ def cmd_full_report(args):
     client = build_client(args)
 
     by_direction = {}
+    results_by_direction = {}
     severity_weighted_by_direction = {}
     confidence_interval_by_direction = {}
     for direction in DIRECTIONS:
         injected_alerts = _injected_alerts_for(direction)
         per_defense = {}
+        results_by_defense = {}
         severity_weighted_by_defense = {}
         confidence_interval_by_defense = {}
         for defense in DEFENSES:
@@ -192,10 +202,12 @@ def cmd_full_report(args):
             aggregated = aggregate_by_technique(results)
             _print_report(aggregated, results)
             per_defense[defense] = aggregated
+            results_by_defense[defense] = results
             severity_weighted_by_defense[defense] = severity_weighted_hijack_rate(results)
             confidence_interval_by_defense[defense] = overall_hijack_rate_confidence_interval(results)
             print()
         by_direction[direction] = per_defense
+        results_by_direction[direction] = results_by_defense
         severity_weighted_by_direction[direction] = severity_weighted_by_defense
         confidence_interval_by_direction[direction] = confidence_interval_by_defense
 
@@ -219,6 +231,11 @@ def cmd_full_report(args):
     with open(args.report, "w") as f:
         f.write(content)
     print(f"wrote combined report to {args.report}")
+
+    if args.transcript:
+        with open(args.transcript, "w") as f:
+            f.write(render_combined_transcript(results_by_direction))
+        print(f"wrote combined transcript to {args.transcript}")
 
 
 def cmd_list_techniques(args):
@@ -265,6 +282,10 @@ def build_parser():
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--report", help="write results to this path - markdown, or json if the path ends in .json")
+    compare_parser.add_argument(
+        "--transcript",
+        help="write a per-alert json record (action, reasoning, outcome) for every defense to this path",
+    )
     compare_parser.set_defaults(func=cmd_compare)
 
     full_report_parser = sub.add_parser(
@@ -278,6 +299,10 @@ def build_parser():
     full_report_parser.add_argument(
         "--report", required=True,
         help="path to write the combined report to - markdown, or json if the path ends in .json",
+    )
+    full_report_parser.add_argument(
+        "--transcript",
+        help="write a per-alert json record (action, reasoning, outcome) for every direction/defense to this path",
     )
     full_report_parser.set_defaults(func=cmd_full_report)
 

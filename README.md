@@ -104,20 +104,23 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   severity-weighted hijack rate and the 95% confidence interval alongside the flat rate,
   neither derivable from the per-technique buckets alone (severity isn't tracked there, and
   the interval needs the pooled count) so both are computed by the caller and threaded
-  through as optional arguments. `render_transcript` renders a per-alert JSON record
-  (technique, action, outcome, and the analyst's own reasoning text) instead of an
-  aggregate - the hijack-rate tables say how often something got hijacked, nothing about
-  what a specific decision actually looked like, which matters for quoting a concrete
-  example or spot-checking a surprising result.
+  through as optional arguments. `render_transcript` (and `render_combined_transcript` for
+  the full-report shape) renders a per-alert JSON record (technique, defense, direction,
+  action, outcome, and the analyst's own reasoning text) instead of an aggregate - the
+  hijack-rate tables say how often something got hijacked, nothing about what a specific
+  decision actually looked like, which matters for quoting a concrete example or
+  spot-checking a surprising result.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
   dismiss|escalate [--report FILE] [--transcript FILE]` runs one battery and can optionally
   save the aggregate report and/or the per-alert transcript;
-  `soclab compare --client ... [--direction ...] [--report FILE]` runs it under all four
-  defenses back to back, prints the same defense-summary table straight to the terminal,
-  and optionally writes the comparison; `soclab full-report --client ... --report FILE` is
-  the capstone run - both directions, all four defenses, one client, one combined document,
-  with its combined summary table also printed to the
-  terminal before the file is written; `soclab list-techniques` lists both technique sets.
+  `soclab compare --client ... [--direction ...] [--report FILE] [--transcript FILE]` runs
+  it under all four defenses back to back, prints the same defense-summary table straight
+  to the terminal, and optionally writes the comparison and/or transcript (each entry
+  tagged with which defense it came from); `soclab full-report --client ... --report FILE
+  [--transcript FILE]` is the capstone run - both directions, all four defenses, one
+  client, one combined document, with its combined summary table also printed to the
+  terminal before the file is written and an optional combined transcript across every
+  direction and defense; `soclab list-techniques` lists both technique sets.
   Every `--report` path writes markdown by default, or JSON if the path ends in `.json` -
   the format is inferred from the extension, no separate flag needed.
 
@@ -156,7 +159,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-186 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+191 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

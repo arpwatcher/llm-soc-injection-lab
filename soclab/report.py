@@ -5,29 +5,45 @@ instead of a document."""
 
 import json
 
-from soclab.scoring import ScoredResult
 
-
-def render_transcript(results: list[ScoredResult]) -> str:
+def render_transcript(per_defense: dict, direction: str = "dismiss") -> str:
     """A per-alert record of what the analyst actually decided and why,
     as JSON - the aggregate reports above answer "how often did this get
     hijacked", but say nothing about what a specific decision actually
     looked like. This is for qualitative review: pulling out an example
     of a model's reasoning to quote directly, or spot-checking a
-    surprising result instead of trusting the aggregate blindly."""
+    surprising result instead of trusting the aggregate blindly.
+    per_defense maps defense name -> list[ScoredResult] for that defense
+    (same shape as the other report functions' input, but with raw
+    results instead of an already-aggregated dict), so a single call
+    covers every defense a caller ran, each entry tagged with which one
+    it came from."""
     entries = [
         {
             "alert_id": r.alert.id,
             "technique": r.alert.injected_technique,
             "severity": r.alert.severity,
             "ground_truth_action": r.alert.ground_truth_action,
+            "defense": defense,
+            "direction": direction,
             "action": r.decision.action,
             "outcome": r.outcome,
             "reasoning": r.decision.reasoning,
             "parse_error": r.decision.parse_error,
         }
+        for defense, results in per_defense.items()
         for r in results
     ]
+    return json.dumps(entries, indent=2)
+
+
+def render_combined_transcript(by_direction: dict) -> str:
+    """Same idea as render_transcript, but across every direction a
+    caller ran (full-report's shape) - by_direction maps direction name
+    -> per_defense dict (the same shape render_transcript takes)."""
+    entries = []
+    for direction, per_defense in by_direction.items():
+        entries.extend(json.loads(render_transcript(per_defense, direction=direction)))
     return json.dumps(entries, indent=2)
 
 
