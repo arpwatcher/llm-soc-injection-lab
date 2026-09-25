@@ -215,3 +215,25 @@ def test_escalation_and_dismiss_technique_counts_match():
     technique to its escalation-direction counterpart - worth noticing
     if a future change makes one direction outpace the other again."""
     assert len(ESCALATION_TECHNIQUES) == len(TECHNIQUES)
+
+
+def test_every_technique_function_tags_itself_with_its_own_dict_key():
+    """each new technique this week was written by copying an existing
+    one as a template - an easy way to introduce a bug where the
+    function body still sets injected_technique to the name it was
+    copied from instead of its own dict key. apply_all_techniques'
+    coverage check (used_techniques == set(TECHNIQUES)) would probably
+    catch this eventually, but only as a confusing set mismatch with no
+    indication of which technique is actually broken. this points
+    straight at it. alert content doesn't matter here - every technique
+    function is an unconditional transformation regardless of the
+    alert's own ground_truth_action, so any alert works as input."""
+    alert = _dismiss_alert()
+    for name, func in TECHNIQUES.items():
+        injected = func(alert)
+        assert injected.injected_technique == name
+        assert injected.injected_target_action == "dismiss"
+    for name, func in ESCALATION_TECHNIQUES.items():
+        injected = func(alert)
+        assert injected.injected_technique == name
+        assert injected.injected_target_action == "escalate"
