@@ -1,5 +1,7 @@
 # llm-soc-injection-lab
 
+[![tests](https://github.com/arpwatcher/llm-soc-injection-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/arpwatcher/llm-soc-injection-lab/actions/workflows/tests.yml)
+
 A small research harness for a question that comes up whenever people talk about putting
 LLMs in a SOC analyst role: if an attacker can influence what shows up in a log line or a
 ticket comment, can they talk the analyst into the wrong call? This measures that directly
@@ -198,6 +200,10 @@ what's actually running behind `complete()`. Every hijack-focused test used to h
 use an escalate-worthy alert as its example - injection also targets investigate-worthy
 alerts (`apply_all_techniques` skips only dismiss-worthy ones), so that path is checked
 explicitly too now, not just assumed to work by symmetry.
+
+Runs automatically on every push via GitHub Actions (`.github/workflows/tests.yml`) - since
+the whole suite is deterministic and network-free, there's nothing CI can't reproduce
+exactly the same way locally.
 
 Ran a `coverage.py` audit (99% line coverage going in) and closed the two real gaps it
 found rather than chasing the number: `parse_response`'s JSONDecodeError branch had never
