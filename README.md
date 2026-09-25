@@ -122,7 +122,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   [--transcript FILE]` is the capstone run - both directions, all four defenses, one
   client, one combined document, with its combined summary table also printed to the
   terminal before the file is written and an optional combined transcript across every
-  direction and defense; `soclab list-techniques` lists both technique sets.
+  direction and defense; `soclab list-techniques [--json]` lists both technique sets, as
+  plain text or as JSON (name -> description) for pulling into a thesis appendix table.
   Every `--report` path writes markdown by default, or JSON if the path ends in `.json` -
   the format is inferred from the extension, no separate flag needed.
 
@@ -161,7 +162,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 pytest
 ```
 
-207 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+208 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

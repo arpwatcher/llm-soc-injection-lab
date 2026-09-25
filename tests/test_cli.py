@@ -408,6 +408,19 @@ def test_list_techniques(capsys):
     assert "fake_system_tag_escalation" in out
 
 
+def test_list_techniques_json(capsys):
+    exit_code = main(["list-techniques", "--json"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    parsed = json.loads(out)
+    assert set(parsed) == {"dismiss", "escalation"}
+    assert len(parsed["dismiss"]) == 8
+    assert len(parsed["escalation"]) == 8
+    assert "direct_override" in parsed["dismiss"]
+    assert "already reviewed" in parsed["dismiss"]["direct_override"]
+    assert "fake_incident_commander" in parsed["escalation"]
+
+
 def test_run_escalate_direction_with_dedicated_client(capsys):
     exit_code = main(["run", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
     out = capsys.readouterr().out

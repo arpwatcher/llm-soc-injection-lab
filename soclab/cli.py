@@ -2,6 +2,7 @@
 per-technique report, or list the available techniques."""
 
 import argparse
+import json
 import sys
 
 from soclab.alerts import generate_clean_alerts
@@ -239,6 +240,13 @@ def cmd_full_report(args):
 
 
 def cmd_list_techniques(args):
+    if args.json:
+        payload = {
+            "dismiss": {name: (func.__doc__ or "").strip() for name, func in TECHNIQUES.items()},
+            "escalation": {name: (func.__doc__ or "").strip() for name, func in ESCALATION_TECHNIQUES.items()},
+        }
+        print(json.dumps(payload, indent=2))
+        return
     print(f"{len(TECHNIQUES)} dismiss-direction techniques (hide a real incident):")
     for name, func in TECHNIQUES.items():
         print(f"  {name} - {func.__doc__ or '(no description)'}")
@@ -307,6 +315,9 @@ def build_parser():
     full_report_parser.set_defaults(func=cmd_full_report)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
+    list_parser.add_argument(
+        "--json", action="store_true", help="print as json (technique name -> description) instead of plain text"
+    )
     list_parser.set_defaults(func=cmd_list_techniques)
 
     return parser
