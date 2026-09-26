@@ -318,7 +318,8 @@ def build_parser():
 
     compare_parser = sub.add_parser("compare", help="run the battery under every defense and compare hijack rates")
     compare_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP)
-    compare_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss")
+    compare_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
+                                 help="which attacker goal to test: hide a real incident, or waste analyst time")
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")

@@ -36,6 +36,17 @@ def test_run_help_documents_client_and_defense_choices():
     assert "prompt defense to apply" in result.stdout
 
 
+def test_compare_help_documents_direction_choice():
+    """compare's --direction had no help text at all, unlike run's identical
+    flag - the same {dismiss,escalate} choice left unexplained here too."""
+    result = subprocess.run(
+        [sys.executable, "-m", "soclab.cli", "compare", "--help"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0
+    assert "which attacker goal to test" in result.stdout
+
+
 def test_run_with_fake_robust_client(capsys):
     exit_code = main(["run", "--client", "fake-robust"])
     out = capsys.readouterr().out
