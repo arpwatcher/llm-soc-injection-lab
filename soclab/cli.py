@@ -30,9 +30,11 @@ from soclab.llm_client import (
 from soclab.report import (
     combined_rate_by_defense,
     rate_by_defense,
+    render_combined_csv_report,
     render_combined_json_report,
     render_combined_report,
     render_combined_transcript,
+    render_csv_report,
     render_json_report,
     render_markdown_report,
     render_transcript,
@@ -119,6 +121,8 @@ def cmd_run(args):
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
             )
+        elif args.report.endswith(".csv"):
+            content = render_csv_report(args.client, {args.defense: aggregated}, direction=args.direction)
         else:
             content = render_markdown_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
@@ -164,6 +168,8 @@ def cmd_compare(args):
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
             )
+        elif args.report.endswith(".csv"):
+            content = render_csv_report(args.client, per_defense, direction=args.direction)
         else:
             content = render_markdown_report(
                 args.client, per_defense, direction=args.direction,
@@ -223,6 +229,8 @@ def cmd_full_report(args):
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
         )
+    elif args.report.endswith(".csv"):
+        content = render_combined_csv_report(args.client, by_direction)
     else:
         content = render_combined_report(
             args.client, by_direction,
@@ -277,7 +285,7 @@ def build_parser():
                              help="which attacker goal to test: hide a real incident, or waste analyst time")
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
-    run_parser.add_argument("--report", help="write results to this path - markdown, or json if the path ends in .json")
+    run_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     run_parser.add_argument(
         "--transcript",
         help="write a per-alert json record (action, reasoning, outcome) to this path, for qualitative review",
@@ -289,7 +297,7 @@ def build_parser():
     compare_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss")
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
-    compare_parser.add_argument("--report", help="write results to this path - markdown, or json if the path ends in .json")
+    compare_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     compare_parser.add_argument(
         "--transcript",
         help="write a per-alert json record (action, reasoning, outcome) for every defense to this path",
@@ -306,7 +314,7 @@ def build_parser():
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     full_report_parser.add_argument(
         "--report", required=True,
-        help="path to write the combined report to - markdown, or json if the path ends in .json",
+        help="path to write the combined report to - markdown, or json/csv if the path ends in .json/.csv",
     )
     full_report_parser.add_argument(
         "--transcript",

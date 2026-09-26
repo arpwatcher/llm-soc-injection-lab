@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 
 from soclab.alerts import Alert
@@ -5,9 +7,11 @@ from soclab.analyst import AnalystDecision
 from soclab.report import (
     combined_rate_by_defense,
     rate_by_defense,
+    render_combined_csv_report,
     render_combined_json_report,
     render_combined_report,
     render_combined_transcript,
+    render_csv_report,
     render_json_report,
     render_markdown_report,
     render_transcript,
@@ -150,6 +154,40 @@ def test_render_combined_json_report_is_valid_json_with_expected_shape():
     assert parsed["summary_by_defense"] == {"none": 0.5}
     assert set(parsed["by_direction"]) == {"dismiss", "escalate"}
     assert parsed["by_direction"]["dismiss"]["none"]["direct_override"]["hijacked"] == 5
+
+
+def test_render_csv_report_is_valid_csv_with_expected_shape():
+    report = render_csv_report("fake-vulnerable", {"none": _sample_aggregate()}, direction="escalate")
+    rows = list(csv.DictReader(io.StringIO(report)))
+    assert len(rows) == 2  # one per technique in _sample_aggregate()
+    assert rows[0]["client"] == "fake-vulnerable"
+    assert rows[0]["direction"] == "escalate"
+    assert rows[0]["defense"] == "none"
+    assert rows[0]["technique"] == "direct_override"
+    assert rows[0]["hijacked"] == "5"
+    assert rows[0]["hijack_rate"] == "1.0"
+
+
+def test_render_csv_report_defaults_to_dismiss_direction():
+    report = render_csv_report("fake-vulnerable", {"none": _sample_aggregate()})
+    rows = list(csv.DictReader(io.StringIO(report)))
+    assert rows[0]["direction"] == "dismiss"
+
+
+def test_render_csv_report_covers_multiple_defenses():
+    report = render_csv_report("fake-vulnerable", {"none": _sample_aggregate(), "sandwich": _sample_aggregate()})
+    rows = list(csv.DictReader(io.StringIO(report)))
+    assert len(rows) == 4  # 2 defenses x 2 techniques
+    assert {row["defense"] for row in rows} == {"none", "sandwich"}
+
+
+def test_render_combined_csv_report_covers_every_direction():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}, "escalate": {"none": _sample_aggregate()}}
+    report = render_combined_csv_report("fake-stubborn", by_direction)
+    rows = list(csv.DictReader(io.StringIO(report)))
+    assert len(rows) == 4  # 2 directions x 2 techniques
+    assert {row["direction"] for row in rows} == {"dismiss", "escalate"}
+    assert all(row["client"] == "fake-stubborn" for row in rows)
 
 
 def test_render_markdown_report_includes_severity_weighted_rate_when_given():

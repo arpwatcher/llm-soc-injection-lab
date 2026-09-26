@@ -1,3 +1,4 @@
+import csv
 import json
 import subprocess
 import sys
@@ -100,6 +101,17 @@ def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert "direct_override" in parsed["per_defense"]["none"]
     assert parsed["severity_weighted_by_defense"] == {"none": 0.875}
     assert "none" in parsed["confidence_interval_by_defense"]
+
+
+def test_run_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
+    report_path = tmp_path / "report.csv"
+    exit_code = main(["run", "--client", "fake-vulnerable", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    rows = list(csv.DictReader(report_path.open()))
+    assert len(rows) == 8  # one per dismiss-direction technique
+    assert all(row["client"] == "fake-vulnerable" for row in rows)
+    assert all(row["defense"] == "none" for row in rows)
 
 
 def test_run_writes_transcript(tmp_path, capsys):
@@ -276,6 +288,16 @@ def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert set(parsed["confidence_interval_by_defense"]) == {"none", "sandwich", "strict", "both"}
 
 
+def test_compare_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
+    report_path = tmp_path / "report.csv"
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    rows = list(csv.DictReader(report_path.open()))
+    assert len(rows) == 32  # 4 defenses x 8 techniques
+    assert {row["defense"] for row in rows} == {"none", "sandwich", "strict", "both"}
+
+
 def test_compare_writes_transcript(tmp_path, capsys):
     transcript_path = tmp_path / "transcript.json"
     exit_code = main([
@@ -346,6 +368,17 @@ def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
     low, high = parsed["confidence_interval_by_direction"]["dismiss"]["both"]
     assert low == 0.0
     assert high == pytest.approx(0.0876, abs=0.01)
+
+
+def test_full_report_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
+    report_path = tmp_path / "full.csv"
+    exit_code = main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    capsys.readouterr()
+    assert exit_code == 0
+    rows = list(csv.DictReader(report_path.open()))
+    assert len(rows) == 64  # 2 directions x 4 defenses x 8 techniques
+    assert {row["direction"] for row in rows} == {"dismiss", "escalate"}
+    assert all(row["client"] == "fake-stubborn" for row in rows)
 
 
 def test_full_report_writes_transcript(tmp_path, capsys):

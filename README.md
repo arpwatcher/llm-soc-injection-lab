@@ -102,7 +102,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   (hijack rate per defense, `render_combined_report`'s summed across both directions) so
   the overall pattern doesn't require reading every sub-table by hand. `render_json_report`
   and `render_combined_json_report` emit the same data as JSON instead, for a plotting
-  script rather than a person to read. Each defense section also shows the
+  script rather than a person to read; `render_csv_report` and `render_combined_csv_report`
+  emit it as CSV (one row per defense/technique pair, each tagged with the client name so
+  multiple exports can be concatenated) - for opening straight in a spreadsheet instead of
+  writing a script against the JSON. Each defense section also shows the
   severity-weighted hijack rate and the 95% confidence interval alongside the flat rate,
   neither derivable from the per-technique buckets alone (severity isn't tracked there, and
   the interval needs the pooled count) so both are computed by the caller and threaded
@@ -126,8 +129,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   terminal before the file is written and an optional combined transcript across every
   direction and defense; `soclab list-techniques [--json]` lists both technique sets, as
   plain text or as JSON (name -> description) for pulling into a thesis appendix table.
-  Every `--report` path writes markdown by default, or JSON if the path ends in `.json` -
-  the format is inferred from the extension, no separate flag needed.
+  Every `--report` path writes markdown by default, or JSON/CSV if the path ends in
+  `.json`/`.csv` - the format is inferred from the extension, no separate flag needed.
 
 Current status: the harness is fully built and tested against the fake clients. Still
 hasn't run against a real model - this development environment's network policy blocks
@@ -155,6 +158,7 @@ python -m soclab.cli run --client fake-vulnerable --transcript transcript.json  
 python -m soclab.cli compare --client fake-stubborn --report results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.json  # same data, for plotting
+python -m soclab.cli full-report --client fake-stubborn --report full-results.csv  # same data, for a spreadsheet
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -192,7 +196,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-209 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+216 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

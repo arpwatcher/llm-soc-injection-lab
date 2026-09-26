@@ -3,6 +3,8 @@ dropped straight into a writeup instead of copied out of terminal output.
 Also renders the same data as JSON, for feeding into a plotting script
 instead of a document."""
 
+import csv
+import io
 import json
 
 
@@ -226,3 +228,53 @@ def render_combined_json_report(
         "by_direction": by_direction,
     }
     return json.dumps(payload, indent=2)
+
+
+_CSV_FIELDS = [
+    "client", "direction", "defense", "technique",
+    "hijacked", "resisted", "other", "total", "hijack_rate", "ci_low", "ci_high",
+]
+
+
+def _csv_rows(client_name: str, direction: str, per_defense: dict) -> list[dict]:
+    rows = []
+    for defense, aggregated in per_defense.items():
+        for technique, bucket in aggregated.items():
+            rows.append({
+                "client": client_name,
+                "direction": direction,
+                "defense": defense,
+                "technique": technique,
+                "hijacked": bucket["hijacked"],
+                "resisted": bucket["resisted"],
+                "other": bucket["other"],
+                "total": bucket["total"],
+                "hijack_rate": bucket["hijack_rate"],
+                "ci_low": bucket.get("ci_low", ""),
+                "ci_high": bucket.get("ci_high", ""),
+            })
+    return rows
+
+
+def render_csv_report(client_name: str, per_defense: dict, direction: str = "dismiss") -> str:
+    """Same technique-level data as the markdown/json reports, as CSV -
+    for opening directly in a spreadsheet instead of writing a script
+    against the JSON. One row per (defense, technique) pair, each tagged
+    with the client name so multiple exports can be concatenated and
+    compared in one spreadsheet."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=_CSV_FIELDS)
+    writer.writeheader()
+    writer.writerows(_csv_rows(client_name, direction, per_defense))
+    return output.getvalue()
+
+
+def render_combined_csv_report(client_name: str, by_direction: dict) -> str:
+    """Same idea as render_csv_report, but across every direction a caller
+    ran (full-report's shape)."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=_CSV_FIELDS)
+    writer.writeheader()
+    for direction, per_defense in by_direction.items():
+        writer.writerows(_csv_rows(client_name, direction, per_defense))
+    return output.getvalue()
