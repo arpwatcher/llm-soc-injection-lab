@@ -347,10 +347,11 @@ def build_parser():
     full_report_parser.set_defaults(func=cmd_full_report)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
-    list_parser.add_argument(
+    list_format_group = list_parser.add_mutually_exclusive_group()
+    list_format_group.add_argument(
         "--json", action="store_true", help="print as json (technique name -> description) instead of plain text"
     )
-    list_parser.add_argument(
+    list_format_group.add_argument(
         "--csv", action="store_true", help="print as csv (direction, technique, description) instead of plain text"
     )
     list_parser.set_defaults(func=cmd_list_techniques)

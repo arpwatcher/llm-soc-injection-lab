@@ -485,6 +485,14 @@ def test_list_techniques_csv(capsys):
     assert any(r[1] == "fake_incident_commander" for r in escalation_rows)
 
 
+def test_list_techniques_json_and_csv_are_mutually_exclusive():
+    """before this was a mutually exclusive group, --json silently won
+    whenever both flags were passed, quietly discarding --csv instead of
+    telling the caller their command line doesn't make sense."""
+    with pytest.raises(SystemExit):
+        main(["list-techniques", "--json", "--csv"])
+
+
 def test_run_escalate_direction_with_dedicated_client(capsys):
     exit_code = main(["run", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
     out = capsys.readouterr().out
