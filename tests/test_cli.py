@@ -1,4 +1,5 @@
 import csv
+import io
 import json
 import subprocess
 import sys
@@ -465,6 +466,23 @@ def test_list_techniques_json(capsys):
     assert "direct_override" in parsed["dismiss"]
     assert "already reviewed" in parsed["dismiss"]["direct_override"]
     assert "fake_incident_commander" in parsed["escalation"]
+
+
+def test_list_techniques_csv(capsys):
+    exit_code = main(["list-techniques", "--csv"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    rows = list(csv.reader(io.StringIO(out)))
+    assert rows[0] == ["direction", "technique", "description"]
+    body = rows[1:]
+    assert len(body) == 16
+    dismiss_rows = [r for r in body if r[0] == "dismiss"]
+    escalation_rows = [r for r in body if r[0] == "escalation"]
+    assert len(dismiss_rows) == 8
+    assert len(escalation_rows) == 8
+    direct_override = next(r for r in dismiss_rows if r[1] == "direct_override")
+    assert "already reviewed" in direct_override[2]
+    assert any(r[1] == "fake_incident_commander" for r in escalation_rows)
 
 
 def test_run_escalate_direction_with_dedicated_client(capsys):

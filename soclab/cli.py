@@ -2,6 +2,7 @@
 per-technique report, or list the available techniques."""
 
 import argparse
+import csv
 import json
 import sys
 
@@ -270,6 +271,14 @@ def cmd_list_techniques(args):
         }
         print(json.dumps(payload, indent=2))
         return
+    if args.csv:
+        writer = csv.writer(sys.stdout)
+        writer.writerow(["direction", "technique", "description"])
+        for name, func in TECHNIQUES.items():
+            writer.writerow(["dismiss", name, (func.__doc__ or "").strip()])
+        for name, func in ESCALATION_TECHNIQUES.items():
+            writer.writerow(["escalation", name, (func.__doc__ or "").strip()])
+        return
     print(f"{len(TECHNIQUES)} dismiss-direction techniques (hide a real incident):")
     for name, func in TECHNIQUES.items():
         print(f"  {name} - {func.__doc__ or '(no description)'}")
@@ -340,6 +349,9 @@ def build_parser():
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_parser.add_argument(
         "--json", action="store_true", help="print as json (technique name -> description) instead of plain text"
+    )
+    list_parser.add_argument(
+        "--csv", action="store_true", help="print as csv (direction, technique, description) instead of plain text"
     )
     list_parser.set_defaults(func=cmd_list_techniques)
 
