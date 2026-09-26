@@ -203,9 +203,10 @@ explicitly too now, not just assumed to work by symmetry.
 
 Runs automatically on every push via GitHub Actions (`.github/workflows/tests.yml`) - since
 the whole suite is deterministic and network-free, there's nothing CI can't reproduce
-exactly the same way locally. The workflow also runs the suite under `coverage` and prints
-the per-file report in the CI logs, so the number stays visible without anyone needing to
-run it by hand.
+exactly the same way locally. The workflow also lints with `ruff check .` (default rule
+set - real issues like unused imports, not style nitpicks the codebase would need
+reformatting to satisfy) and runs the suite under `coverage`, printing the per-file report
+in the CI logs so the number stays visible without anyone needing to run it by hand.
 
 Ran a `coverage.py` audit (99% line coverage going in) and closed the two real gaps it
 found rather than chasing the number: `parse_response`'s JSONDecodeError branch had never
