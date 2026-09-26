@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from soclab.cli import build_client, main
+from soclab.cli import _report_format, build_client, main
 
 
 def test_module_invocation_as_real_subprocess():
@@ -112,6 +112,19 @@ def test_run_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
     assert len(rows) == 8  # one per dismiss-direction technique
     assert all(row["client"] == "fake-vulnerable" for row in rows)
     assert all(row["defense"] == "none" for row in rows)
+
+
+def test_report_format_is_case_insensitive():
+    """a bare .endswith(".json") check would silently fall back to
+    markdown for results.JSON - the extension should be recognized
+    regardless of case."""
+    assert _report_format("results.json") == "json"
+    assert _report_format("results.JSON") == "json"
+    assert _report_format("results.Json") == "json"
+    assert _report_format("results.csv") == "csv"
+    assert _report_format("results.CSV") == "csv"
+    assert _report_format("results.md") == "markdown"
+    assert _report_format("results") == "markdown"
 
 
 def test_run_writes_transcript(tmp_path, capsys):

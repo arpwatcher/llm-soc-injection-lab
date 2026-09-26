@@ -90,6 +90,18 @@ def _print_summary(rates: dict, heading: str):
     print()
 
 
+def _report_format(path: str) -> str:
+    """The report format inferred from a --report path's extension - case
+    insensitively, so results.JSON or results.CSV (not just the lowercase
+    spelling) picks up the right renderer instead of silently falling
+    back to markdown."""
+    if path.lower().endswith(".json"):
+        return "json"
+    if path.lower().endswith(".csv"):
+        return "csv"
+    return "markdown"
+
+
 def _injected_alerts_for(direction: str) -> list:
     clean_alerts = generate_clean_alerts()
     if direction == "escalate":
@@ -115,13 +127,14 @@ def cmd_run(args):
     if args.report:
         severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
         confidence_interval = {args.defense: overall_hijack_rate_confidence_interval(injected_results)}
-        if args.report.endswith(".json"):
+        report_format = _report_format(args.report)
+        if report_format == "json":
             content = render_json_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
             )
-        elif args.report.endswith(".csv"):
+        elif report_format == "csv":
             content = render_csv_report(args.client, {args.defense: aggregated}, direction=args.direction)
         else:
             content = render_markdown_report(
@@ -162,13 +175,14 @@ def cmd_compare(args):
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
 
     if args.report:
-        if args.report.endswith(".json"):
+        report_format = _report_format(args.report)
+        if report_format == "json":
             content = render_json_report(
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
             )
-        elif args.report.endswith(".csv"):
+        elif report_format == "csv":
             content = render_csv_report(args.client, per_defense, direction=args.direction)
         else:
             content = render_markdown_report(
@@ -223,13 +237,14 @@ def cmd_full_report(args):
         "summary: overall hijack rate by defense (both directions combined)",
     )
 
-    if args.report.endswith(".json"):
+    report_format = _report_format(args.report)
+    if report_format == "json":
         content = render_combined_json_report(
             args.client, by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
         )
-    elif args.report.endswith(".csv"):
+    elif report_format == "csv":
         content = render_combined_csv_report(args.client, by_direction)
     else:
         content = render_combined_report(
