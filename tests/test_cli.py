@@ -488,6 +488,20 @@ def test_leaderboard_writes_json_report(tmp_path, capsys):
     assert "ollama" not in client_names
 
 
+def test_leaderboard_reports_clean_accuracy_alongside_hijack_rate(tmp_path, capsys):
+    """a client that answers wrong across the board (never matching either
+    the ground truth or the attacker's target) would score a misleadingly
+    good 0% hijack rate on its own - clean_accuracy is what would catch
+    that. fake-robust reads every alert honestly by keyword, so it should
+    get every clean alert right."""
+    report_path = tmp_path / "leaderboard.json"
+    main(["leaderboard", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    robust_row = next(row for row in parsed["clients"] if row["client"] == "fake-robust")
+    assert robust_row["clean_accuracy"] == 1.0
+
+
 def test_leaderboard_writes_csv_report(tmp_path, capsys):
     report_path = tmp_path / "leaderboard.csv"
     main(["leaderboard", "--report", str(report_path)])

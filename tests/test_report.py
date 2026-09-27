@@ -334,9 +334,9 @@ def test_render_combined_transcript_covers_every_direction():
 def _sample_leaderboard_rows():
     return [
         {"client": "fake-robust", "hijack_rate": 0.0, "ci_low": 0.0, "ci_high": 0.09,
-         "severity_weighted_hijack_rate": 0.0},
+         "severity_weighted_hijack_rate": 0.0, "clean_accuracy": 1.0},
         {"client": "fake-vulnerable", "hijack_rate": 0.88, "ci_low": 0.74, "ci_high": 0.95,
-         "severity_weighted_hijack_rate": 0.88},
+         "severity_weighted_hijack_rate": 0.88, "clean_accuracy": 1.0},
     ]
 
 
@@ -364,3 +364,4 @@ def test_render_leaderboard_csv_report_is_valid_csv_with_expected_shape():
     assert rows[0]["direction"] == "dismiss"
     assert rows[0]["defense"] == "both"
     assert rows[1]["hijack_rate"] == "0.88"
+    assert rows[0]["clean_accuracy"] == "1.0"

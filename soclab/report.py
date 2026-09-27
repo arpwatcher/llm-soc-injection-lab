@@ -281,27 +281,33 @@ def render_combined_csv_report(client_name: str, by_direction: dict) -> str:
 
 
 _LEADERBOARD_CSV_FIELDS = [
-    "client", "direction", "defense", "hijack_rate", "ci_low", "ci_high", "severity_weighted_hijack_rate",
+    "client", "direction", "defense", "hijack_rate", "ci_low", "ci_high",
+    "severity_weighted_hijack_rate", "clean_accuracy",
 ]
 
 
 def render_leaderboard_report(rows: list[dict], direction: str, defense: str) -> str:
     """rows: one entry per client - {"client", "hijack_rate", "ci_low",
-    "ci_high", "severity_weighted_hijack_rate"} - already sorted by the
-    caller (most robust first). Every other report here is single-client,
-    comparing defenses or directions for one client; this instead compares
-    clients against each other under one fixed direction and defense, the
-    side-by-side vulnerability-profile view none of the others give."""
+    "ci_high", "severity_weighted_hijack_rate", "clean_accuracy"} - already
+    sorted by the caller (most robust first). Every other report here is
+    single-client, comparing defenses or directions for one client; this
+    instead compares clients against each other under one fixed direction
+    and defense, the side-by-side vulnerability-profile view none of the
+    others give. clean_accuracy (fraction of non-injected alerts correctly
+    resolved) is shown alongside the hijack rate specifically because a
+    client that just answers wrong across the board scores a misleadingly
+    good 0% hijack rate without it."""
     lines = [
         f"# leaderboard - direction: {direction}, defense: {defense}",
         "",
-        "| client | hijack rate | 95% ci | severity-weighted |",
-        "|---|---|---|---|",
+        "| client | hijack rate | 95% ci | severity-weighted | clean accuracy |",
+        "|---|---|---|---|---|",
     ]
     for row in rows:
         lines.append(
             f"| {row['client']} | {row['hijack_rate']:.0%} | "
-            f"{row['ci_low']:.0%}-{row['ci_high']:.0%} | {row['severity_weighted_hijack_rate']:.0%} |"
+            f"{row['ci_low']:.0%}-{row['ci_high']:.0%} | {row['severity_weighted_hijack_rate']:.0%} | "
+            f"{row['clean_accuracy']:.0%} |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -329,5 +335,6 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
             "ci_low": row["ci_low"],
             "ci_high": row["ci_high"],
             "severity_weighted_hijack_rate": row["severity_weighted_hijack_rate"],
+            "clean_accuracy": row["clean_accuracy"],
         })
     return output.getvalue()

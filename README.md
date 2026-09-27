@@ -136,7 +136,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   runs every fake-* client (ollama excluded - it needs a real, reachable server) against the
   same battery under one fixed direction/defense and ranks them by hijack rate, most robust
   first - every other subcommand compares defenses or directions for one client, this
-  compares clients against each other instead; `soclab list-techniques [--json] [--csv]`
+  compares clients against each other instead. Also reports clean-alert accuracy alongside
+  the hijack rate: a client that answers wrong across the board (matching neither the
+  ground truth nor the attacker's target action) would otherwise score a misleadingly good
+  0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
+  can't tell apart from a genuinely robust one; `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
   technique, description) for pulling into a thesis appendix table or spreadsheet.
   Every `--report` path writes markdown by default, or JSON/CSV if the path ends in
@@ -208,7 +212,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-228 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+229 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
