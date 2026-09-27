@@ -632,9 +632,25 @@ def test_build_client_ollama_without_model_raises():
         client = "ollama"
         model = None
         host = None
+        timeout = 120.0
 
     with pytest.raises(ValueError):
         build_client(Args())
+
+
+def test_build_client_ollama_wires_custom_timeout():
+    """--timeout used to be hardcoded to OllamaClient's 120s default with
+    no way to change it from the cli, despite the constructor already
+    supporting it - a slower local model (or a deliberately short timeout
+    while iterating) had no way to ask for anything else."""
+    class Args:
+        client = "ollama"
+        model = "test-model"
+        host = None
+        timeout = 5.0
+
+    client = build_client(Args())
+    assert client.timeout == 5.0
 
 
 def test_ollama_client_unreachable_host_fails_cleanly(capsys):

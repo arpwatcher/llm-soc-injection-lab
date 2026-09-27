@@ -151,7 +151,8 @@ hasn't run against a real model - this development environment's network policy 
 both ollama.com and huggingface.co (checked directly, both return a hard connection
 refusal at the proxy level, not a timeout), so there's currently no way to reach either a
 local Ollama server or download open weights here. `OllamaClient` is real, working code
-regardless, pointed at via `OLLAMA_HOST` / `--host` / `--model` - it'll run for real the
+regardless, pointed at via `OLLAMA_HOST` / `--host` / `--model` / `--timeout` (default 120s,
+plenty of slower local models can exceed that) - it'll run for real the
 moment Ollama is reachable, either here with a different network policy or wherever the
 actual thesis experiments run.
 
@@ -212,7 +213,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-229 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+230 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

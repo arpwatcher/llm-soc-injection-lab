@@ -63,7 +63,7 @@ CLIENT_FACTORIES = {
     "fake-escalation-sandwich-sensitive": lambda args: EscalationSandwichSensitiveFakeClient(),
     "fake-escalation-strict-sensitive": lambda args: EscalationStrictPromptSensitiveFakeClient(),
     "fake-escalation-stubborn": lambda args: EscalationStubbornFakeClient(),
-    "ollama": lambda args: OllamaClient(model=args.model, host=args.host),
+    "ollama": lambda args: OllamaClient(model=args.model, host=args.host, timeout=args.timeout),
 }
 
 DIRECTIONS = ("dismiss", "escalate")
@@ -353,6 +353,7 @@ _DEFENSE_HELP = (
     "prompt defense to apply: none, sandwich (reinforce after the untrusted content), "
     "strict (name attack patterns up front in the system prompt), or both together"
 )
+_TIMEOUT_HELP = "request timeout in seconds for --client ollama, default 120 (ignored by every fake-* client)"
 
 
 def build_parser():
@@ -366,6 +367,7 @@ def build_parser():
                              help="which attacker goal to test: hide a real incident, or waste analyst time")
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    run_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     run_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     run_parser.add_argument(
         "--transcript",
@@ -379,6 +381,7 @@ def build_parser():
                                  help="which attacker goal to test: hide a real incident, or waste analyst time")
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    compare_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     compare_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     compare_parser.add_argument(
         "--transcript",
@@ -394,6 +397,7 @@ def build_parser():
     )
     full_report_parser.add_argument("--model", help="model name, required for --client ollama")
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    full_report_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     full_report_parser.add_argument(
         "--report", required=True,
         help="path to write the combined report to - markdown, or json/csv if the path ends in .json/.csv",
