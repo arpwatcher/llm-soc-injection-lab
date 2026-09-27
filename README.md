@@ -140,7 +140,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
-  can't tell apart from a genuinely robust one; `soclab list-techniques [--json] [--csv]`
+  can't tell apart from a genuinely robust one. `--clients name,name` narrows the comparison
+  to a chosen subset instead of always all eleven, e.g. just the escalation-direction
+  clients, and rejects an unrecognized name with a clean error rather than silently ignoring
+  it; `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
   technique, description) for pulling into a thesis appendix table or spreadsheet.
   Every `--report` path writes markdown by default, or JSON/CSV if the path ends in
@@ -176,6 +179,7 @@ python -m soclab.cli full-report --client fake-stubborn --report full-results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.json  # same data, for plotting
 python -m soclab.cli full-report --client fake-stubborn --report full-results.csv  # same data, for a spreadsheet
 python -m soclab.cli leaderboard --direction dismiss --report leaderboard.md  # every fake-* client, ranked
+python -m soclab.cli leaderboard --clients fake-robust,fake-vulnerable  # just a chosen subset
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -213,7 +217,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-230 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+232 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

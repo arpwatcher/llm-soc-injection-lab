@@ -476,6 +476,24 @@ def test_leaderboard_excludes_ollama(capsys):
     assert "ollama" not in out
 
 
+def test_leaderboard_clients_restricts_to_the_requested_subset(capsys):
+    exit_code = main(["leaderboard", "--clients", "fake-robust,fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-robust" in out
+    assert "fake-vulnerable" in out
+    assert "fake-semantic-vulnerable" not in out
+    assert "fake-stubborn" not in out
+
+
+def test_leaderboard_clients_rejects_unknown_name(capsys):
+    exit_code = main(["leaderboard", "--clients", "fake-nonexistent"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown client" in err
+    assert "fake-nonexistent" in err
+
+
 def test_leaderboard_writes_json_report(tmp_path, capsys):
     report_path = tmp_path / "leaderboard.json"
     main(["leaderboard", "--direction", "escalate", "--report", str(report_path)])

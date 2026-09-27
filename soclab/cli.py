@@ -281,10 +281,18 @@ def cmd_leaderboard(args):
     ground truth or the attacker's target action) scores a misleadingly
     good 0% hijack rate despite being useless as an analyst - clean
     accuracy catches that a bare hijack-rate ranking alone would miss."""
+    if args.clients:
+        client_names = [name.strip() for name in args.clients.split(",")]
+        unknown = [name for name in client_names if name not in FAKE_CLIENT_NAMES]
+        if unknown:
+            raise ValueError(f"unknown client(s) for leaderboard: {', '.join(unknown)}")
+    else:
+        client_names = FAKE_CLIENT_NAMES
+
     injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
     rows = []
-    for name in FAKE_CLIENT_NAMES:
+    for name in client_names:
         client = CLIENT_FACTORIES[name](args)
         clean_results = score_batch(clean_alerts, client, defense=args.defense)
         clean_accuracy = sum(1 for r in clean_results if r.outcome == "resisted") / len(clean_results)
@@ -414,6 +422,11 @@ def build_parser():
     leaderboard_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                                      help="which attacker goal to test: hide a real incident, or waste analyst time")
     leaderboard_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
+    leaderboard_parser.add_argument(
+        "--clients",
+        help="comma-separated subset of fake-* clients to compare (default: all of them) - "
+             "see CLIENT_FACTORIES in cli.py or the readme for the available names",
+    )
     leaderboard_parser.add_argument(
         "--report", help="write the leaderboard to this path - markdown, or json/csv if the path ends in .json/.csv"
     )
