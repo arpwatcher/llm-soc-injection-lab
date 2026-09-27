@@ -235,3 +235,9 @@ permission) crashed with a raw traceback instead of the clean "error: ..." messa
 other failure gets - `main()` now catches `OSError` too, which also means a connection
 failure against `--client ollama` (wrong host, not running) fails cleanly instead of
 crashing, since `requests.exceptions.ConnectionError` subclasses `OSError`.
+
+At 100% line and branch coverage now - the one remaining gap was the
+`if __name__ == "__main__":` guard itself, which is real, intentionally-untestable-in-process
+code (it only runs when the module is executed directly, which the subprocess test above
+does cover, just not in a way `coverage` can see from inside the parent process), so it
+carries a `# pragma: no cover` rather than a workaround that would test nothing new.
