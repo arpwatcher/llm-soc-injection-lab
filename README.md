@@ -223,7 +223,8 @@ there's nothing CI can't reproduce exactly the same way locally with the same tw
 commands. `make check` lints with `ruff check .` (default rule set - real issues like
 unused imports, not style nitpicks the codebase would need reformatting to satisfy) and
 runs the suite under `coverage`, printing the per-file report so the number stays visible
-without anyone needing to run it by hand.
+without anyone needing to run it by hand. `make clean` removes the `__pycache__`,
+`.pytest_cache`, `.ruff_cache`, `.coverage`, and `htmlcov` artifacts those two leave behind.
 
 Ran a `coverage.py` audit (99% line coverage going in) and closed the two real gaps it
 found rather than chasing the number: `parse_response`'s JSONDecodeError branch had never
