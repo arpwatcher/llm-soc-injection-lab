@@ -13,6 +13,9 @@ from soclab.report import (
     render_combined_transcript,
     render_csv_report,
     render_json_report,
+    render_leaderboard_csv_report,
+    render_leaderboard_json_report,
+    render_leaderboard_report,
     render_markdown_report,
     render_transcript,
 )
@@ -326,3 +329,38 @@ def test_render_combined_transcript_covers_every_direction():
     parsed = json.loads(render_combined_transcript(by_direction))
     assert len(parsed) == 2
     assert {e["direction"] for e in parsed} == {"dismiss", "escalate"}
+
+
+def _sample_leaderboard_rows():
+    return [
+        {"client": "fake-robust", "hijack_rate": 0.0, "ci_low": 0.0, "ci_high": 0.09,
+         "severity_weighted_hijack_rate": 0.0},
+        {"client": "fake-vulnerable", "hijack_rate": 0.88, "ci_low": 0.74, "ci_high": 0.95,
+         "severity_weighted_hijack_rate": 0.88},
+    ]
+
+
+def test_render_leaderboard_report_lists_every_client_in_order():
+    report = render_leaderboard_report(_sample_leaderboard_rows(), direction="dismiss", defense="none")
+    assert "direction: dismiss, defense: none" in report
+    assert report.index("fake-robust") < report.index("fake-vulnerable")
+    assert "0%" in report
+    assert "88%" in report
+
+
+def test_render_leaderboard_json_report_is_valid_json_with_expected_shape():
+    report = render_leaderboard_json_report(_sample_leaderboard_rows(), direction="escalate", defense="strict")
+    parsed = json.loads(report)
+    assert parsed["direction"] == "escalate"
+    assert parsed["defense"] == "strict"
+    assert [row["client"] for row in parsed["clients"]] == ["fake-robust", "fake-vulnerable"]
+
+
+def test_render_leaderboard_csv_report_is_valid_csv_with_expected_shape():
+    report = render_leaderboard_csv_report(_sample_leaderboard_rows(), direction="dismiss", defense="both")
+    rows = list(csv.DictReader(io.StringIO(report)))
+    assert len(rows) == 2
+    assert rows[0]["client"] == "fake-robust"
+    assert rows[0]["direction"] == "dismiss"
+    assert rows[0]["defense"] == "both"
+    assert rows[1]["hijack_rate"] == "0.88"

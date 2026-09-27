@@ -278,3 +278,56 @@ def render_combined_csv_report(client_name: str, by_direction: dict) -> str:
     for direction, per_defense in by_direction.items():
         writer.writerows(_csv_rows(client_name, direction, per_defense))
     return output.getvalue()
+
+
+_LEADERBOARD_CSV_FIELDS = [
+    "client", "direction", "defense", "hijack_rate", "ci_low", "ci_high", "severity_weighted_hijack_rate",
+]
+
+
+def render_leaderboard_report(rows: list[dict], direction: str, defense: str) -> str:
+    """rows: one entry per client - {"client", "hijack_rate", "ci_low",
+    "ci_high", "severity_weighted_hijack_rate"} - already sorted by the
+    caller (most robust first). Every other report here is single-client,
+    comparing defenses or directions for one client; this instead compares
+    clients against each other under one fixed direction and defense, the
+    side-by-side vulnerability-profile view none of the others give."""
+    lines = [
+        f"# leaderboard - direction: {direction}, defense: {defense}",
+        "",
+        "| client | hijack rate | 95% ci | severity-weighted |",
+        "|---|---|---|---|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row['client']} | {row['hijack_rate']:.0%} | "
+            f"{row['ci_low']:.0%}-{row['ci_high']:.0%} | {row['severity_weighted_hijack_rate']:.0%} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_leaderboard_json_report(rows: list[dict], direction: str, defense: str) -> str:
+    """Same data as render_leaderboard_report, as JSON instead of a document."""
+    payload = {"direction": direction, "defense": defense, "clients": rows}
+    return json.dumps(payload, indent=2)
+
+
+def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str) -> str:
+    """Same data as render_leaderboard_report, as CSV - one row per client,
+    each tagged with the direction/defense the whole leaderboard ran under
+    so exports from different runs can still be told apart if concatenated."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=_LEADERBOARD_CSV_FIELDS)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({
+            "client": row["client"],
+            "direction": direction,
+            "defense": defense,
+            "hijack_rate": row["hijack_rate"],
+            "ci_low": row["ci_low"],
+            "ci_high": row["ci_high"],
+            "severity_weighted_hijack_rate": row["severity_weighted_hijack_rate"],
+        })
+    return output.getvalue()

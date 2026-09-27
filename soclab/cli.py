@@ -37,6 +37,9 @@ from soclab.report import (
     render_combined_transcript,
     render_csv_report,
     render_json_report,
+    render_leaderboard_csv_report,
+    render_leaderboard_json_report,
+    render_leaderboard_report,
     render_markdown_report,
     render_transcript,
 )
@@ -64,6 +67,8 @@ CLIENT_FACTORIES = {
 }
 
 DIRECTIONS = ("dismiss", "escalate")
+
+FAKE_CLIENT_NAMES = [name for name in CLIENT_FACTORIES if name != "ollama"]
 
 
 def build_client(args):
@@ -263,6 +268,49 @@ def cmd_full_report(args):
         print(f"wrote combined transcript to {args.transcript}")
 
 
+def cmd_leaderboard(args):
+    """Runs every fake-* client against the same battery under one fixed
+    direction/defense and ranks them by hijack rate (most robust first) -
+    every other subcommand here is single-client, comparing defenses or
+    directions for one client at a time; this instead compares clients
+    against each other, the side-by-side vulnerability-profile view none
+    of the others give. Skips ollama - it needs a real, reachable server
+    and --model, not a fair comparison against the deterministic fakes."""
+    injected_alerts = _injected_alerts_for(args.direction)
+    rows = []
+    for name in FAKE_CLIENT_NAMES:
+        client = CLIENT_FACTORIES[name](args)
+        results = score_batch(injected_alerts, client, defense=args.defense)
+        ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
+        rows.append({
+            "client": name,
+            "hijack_rate": overall_hijack_rate(results),
+            "ci_low": ci_low,
+            "ci_high": ci_high,
+            "severity_weighted_hijack_rate": severity_weighted_hijack_rate(results),
+        })
+    rows.sort(key=lambda row: row["hijack_rate"])
+
+    print(f"direction={args.direction} defense={args.defense}\n")
+    print(f"{'client':<38} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18}")
+    for row in rows:
+        ci = f"{row['ci_low']:.0%}-{row['ci_high']:.0%}"
+        print(f"{row['client']:<38} {row['hijack_rate']:>11.0%} {ci:>15} "
+              f"{row['severity_weighted_hijack_rate']:>17.0%}")
+
+    if args.report:
+        report_format = _report_format(args.report)
+        if report_format == "json":
+            content = render_leaderboard_json_report(rows, direction=args.direction, defense=args.defense)
+        elif report_format == "csv":
+            content = render_leaderboard_csv_report(rows, direction=args.direction, defense=args.defense)
+        else:
+            content = render_leaderboard_report(rows, direction=args.direction, defense=args.defense)
+        with open(args.report, "w") as f:
+            f.write(content)
+        print(f"\nwrote leaderboard to {args.report}")
+
+
 def cmd_list_techniques(args):
     if args.json:
         payload = {
@@ -346,6 +394,17 @@ def build_parser():
         help="write a per-alert json record (action, reasoning, outcome) for every direction/defense to this path",
     )
     full_report_parser.set_defaults(func=cmd_full_report)
+
+    leaderboard_parser = sub.add_parser(
+        "leaderboard", help="rank every fake-* client by hijack rate under one direction/defense"
+    )
+    leaderboard_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
+                                     help="which attacker goal to test: hide a real incident, or waste analyst time")
+    leaderboard_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
+    leaderboard_parser.add_argument(
+        "--report", help="write the leaderboard to this path - markdown, or json/csv if the path ends in .json/.csv"
+    )
+    leaderboard_parser.set_defaults(func=cmd_leaderboard)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_format_group = list_parser.add_mutually_exclusive_group()

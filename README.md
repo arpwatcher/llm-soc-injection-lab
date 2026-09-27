@@ -105,7 +105,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   script rather than a person to read; `render_csv_report` and `render_combined_csv_report`
   emit it as CSV (one row per defense/technique pair, each tagged with the client name so
   multiple exports can be concatenated) - for opening straight in a spreadsheet instead of
-  writing a script against the JSON. Each defense section also shows the
+  writing a script against the JSON. `render_leaderboard_report`/`_json_report`/`_csv_report`
+  are the odd ones out here: every other report function is single-client, comparing
+  defenses or directions for one client; these instead compare clients against each other
+  under one fixed direction/defense, the side-by-side vulnerability-profile view the CLI's
+  `leaderboard` subcommand needs and nothing else here produces. Each defense section also
+  shows the
   severity-weighted hijack rate and the 95% confidence interval alongside the flat rate,
   neither derivable from the per-technique buckets alone (severity isn't tracked there, and
   the interval needs the pooled count) so both are computed by the caller and threaded
@@ -127,9 +132,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   [--transcript FILE]` is the capstone run - both directions, all four defenses, one
   client, one combined document, with its combined summary table also printed to the
   terminal before the file is written and an optional combined transcript across every
-  direction and defense; `soclab list-techniques [--json] [--csv]` lists both technique
-  sets, as plain text, JSON (name -> description), or CSV (direction, technique,
-  description) for pulling into a thesis appendix table or spreadsheet.
+  direction and defense; `soclab leaderboard --direction ... --defense ... [--report FILE]`
+  runs every fake-* client (ollama excluded - it needs a real, reachable server) against the
+  same battery under one fixed direction/defense and ranks them by hijack rate, most robust
+  first - every other subcommand compares defenses or directions for one client, this
+  compares clients against each other instead; `soclab list-techniques [--json] [--csv]`
+  lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
+  technique, description) for pulling into a thesis appendix table or spreadsheet.
   Every `--report` path writes markdown by default, or JSON/CSV if the path ends in
   `.json`/`.csv` - the format is inferred from the extension, no separate flag needed.
 
@@ -161,6 +170,7 @@ python -m soclab.cli compare --client fake-stubborn --report results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.json  # same data, for plotting
 python -m soclab.cli full-report --client fake-stubborn --report full-results.csv  # same data, for a spreadsheet
+python -m soclab.cli leaderboard --direction dismiss --report leaderboard.md  # every fake-* client, ranked
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -198,7 +208,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-220 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+228 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

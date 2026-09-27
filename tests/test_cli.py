@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from soclab.cli import _report_format, build_client, main
+from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
 
 
 def test_module_invocation_as_real_subprocess():
@@ -449,6 +449,62 @@ def test_full_report_prints_summary_to_terminal(tmp_path, capsys):
 def test_full_report_requires_report_path():
     with pytest.raises(SystemExit):
         main(["full-report", "--client", "fake-stubborn"])
+
+
+def test_leaderboard_ranks_fake_clients_by_hijack_rate(capsys):
+    exit_code = main(["leaderboard", "--direction", "dismiss", "--defense", "none"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direction=dismiss defense=none" in out
+    assert "fake-robust" in out
+    assert "fake-semantic-vulnerable" in out
+    robust_line = next(line for line in out.splitlines() if line.strip().startswith("fake-robust"))
+    vulnerable_line = next(line for line in out.splitlines() if line.strip().startswith("fake-vulnerable "))
+    # fake-robust never caves, fake-vulnerable does - robust's line must show 0%
+    # and come before vulnerable's in the most-robust-first ranking.
+    assert "0%" in robust_line
+    assert out.index(robust_line) < out.index(vulnerable_line)
+
+
+def test_leaderboard_excludes_ollama(capsys):
+    """ollama needs a real, reachable server and --model - it isn't a fair
+    or even runnable comparison against the deterministic fakes, so it
+    should never show up as a leaderboard row."""
+    exit_code = main(["leaderboard"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "ollama" not in out
+
+
+def test_leaderboard_writes_json_report(tmp_path, capsys):
+    report_path = tmp_path / "leaderboard.json"
+    main(["leaderboard", "--direction", "escalate", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["direction"] == "escalate"
+    assert parsed["defense"] == "none"
+    client_names = {row["client"] for row in parsed["clients"]}
+    assert "fake-escalation-vulnerable" in client_names
+    assert "ollama" not in client_names
+
+
+def test_leaderboard_writes_csv_report(tmp_path, capsys):
+    report_path = tmp_path / "leaderboard.csv"
+    main(["leaderboard", "--report", str(report_path)])
+    capsys.readouterr()
+    rows = list(csv.DictReader(report_path.read_text().splitlines()))
+    assert len(rows) == len(FAKE_CLIENT_NAMES)
+    assert all(row["direction"] == "dismiss" and row["defense"] == "none" for row in rows)
+
+
+def test_leaderboard_writes_markdown_report_by_default(tmp_path, capsys):
+    report_path = tmp_path / "leaderboard.md"
+    main(["leaderboard", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    content = report_path.read_text()
+    assert "direction: dismiss, defense: none" in content
+    assert "fake-robust" in content
+    assert f"wrote leaderboard to {report_path}" in out
 
 
 def test_list_techniques(capsys):
