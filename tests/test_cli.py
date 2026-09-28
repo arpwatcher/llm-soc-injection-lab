@@ -524,6 +524,25 @@ def test_leaderboard_clients_rejects_unknown_name(capsys):
     assert "fake-nonexistent" in err
 
 
+def test_leaderboard_clients_ignores_stray_commas(capsys):
+    """a trailing/extra comma used to leave an empty string in the parsed
+    list, which then failed as an "unknown client" with nothing shown
+    after the colon - a confusing error for what's really just loose
+    input formatting, not an actual bad client name."""
+    exit_code = main(["leaderboard", "--clients", "fake-robust,fake-vulnerable,"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-robust" in out
+    assert "fake-vulnerable" in out
+
+
+def test_leaderboard_clients_all_commas_is_a_clear_error(capsys):
+    exit_code = main(["leaderboard", "--clients", ",,"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "no client names" in err
+
+
 def test_leaderboard_writes_json_report(tmp_path, capsys):
     report_path = tmp_path / "leaderboard.json"
     main(["leaderboard", "--direction", "escalate", "--report", str(report_path)])

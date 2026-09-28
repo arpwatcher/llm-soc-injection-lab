@@ -146,8 +146,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
   can't tell apart from a genuinely robust one. `--clients name,name` narrows the comparison
   to a chosen subset instead of always all eleven, e.g. just the escalation-direction
-  clients, and rejects an unrecognized name with a clean error rather than silently ignoring
-  it. `--sort-by hijack_rate|severity_weighted_hijack_rate|clean_accuracy` picks which column
+  clients, tolerates a stray trailing/extra comma (ignored, not an "unknown client"), and
+  rejects an unrecognized name - or a value that's nothing but commas - with a clear error.
+  `--sort-by hijack_rate|severity_weighted_hijack_rate|clean_accuracy` picks which column
   ranks the table (default hijack_rate) - always most-robust-first regardless of column,
   since higher is better for clean_accuracy but lower is better for the other two. Also
   accepts `--transcript FILE`, same per-alert JSON idea as the other subcommands but keyed
@@ -231,7 +232,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-242 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+244 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

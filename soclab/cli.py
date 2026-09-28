@@ -294,7 +294,9 @@ def cmd_leaderboard(args):
     robust" for clean_accuracy, so _LEADERBOARD_SORT_ASCENDING keeps
     "best first" meaning what it says regardless of which column."""
     if args.clients:
-        client_names = [name.strip() for name in args.clients.split(",")]
+        client_names = [name.strip() for name in args.clients.split(",") if name.strip()]
+        if not client_names:
+            raise ValueError("--clients was given but contained no client names")
         unknown = [name for name in client_names if name not in FAKE_CLIENT_NAMES]
         if unknown:
             raise ValueError(f"unknown client(s) for leaderboard: {', '.join(unknown)}")
