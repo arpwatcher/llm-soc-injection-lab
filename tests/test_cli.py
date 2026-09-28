@@ -466,6 +466,36 @@ def test_leaderboard_ranks_fake_clients_by_hijack_rate(capsys):
     assert out.index(robust_line) < out.index(vulnerable_line)
 
 
+def test_leaderboard_sort_by_defaults_are_most_robust_first():
+    """lower is "more robust" for the two hijack-rate columns, but higher
+    is "more robust" for clean_accuracy - without per-column direction,
+    sorting by clean_accuracy the same way as hijack_rate would put the
+    worst analysts first instead of the best ones."""
+    from soclab.cli import _LEADERBOARD_SORT_ASCENDING
+    assert _LEADERBOARD_SORT_ASCENDING["hijack_rate"] is True
+    assert _LEADERBOARD_SORT_ASCENDING["severity_weighted_hijack_rate"] is True
+    assert _LEADERBOARD_SORT_ASCENDING["clean_accuracy"] is False
+
+
+def test_leaderboard_sort_by_severity_weighted_hijack_rate(capsys):
+    exit_code = main([
+        "leaderboard", "--clients", "fake-robust,fake-vulnerable,fake-semantic-vulnerable",
+        "--sort-by", "severity_weighted_hijack_rate",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    robust_line = next(line for line in out.splitlines() if line.strip().startswith("fake-robust"))
+    semantic_line = next(line for line in out.splitlines() if line.strip().startswith("fake-semantic-vulnerable"))
+    # fake-robust (0% severity-weighted) must rank ahead of
+    # fake-semantic-vulnerable (100%) when sorted by that column.
+    assert out.index(robust_line) < out.index(semantic_line)
+
+
+def test_leaderboard_rejects_unknown_sort_by():
+    with pytest.raises(SystemExit):
+        main(["leaderboard", "--sort-by", "not-a-real-column"])
+
+
 def test_leaderboard_excludes_ollama(capsys):
     """ollama needs a real, reachable server and --model - it isn't a fair
     or even runnable comparison against the deterministic fakes, so it

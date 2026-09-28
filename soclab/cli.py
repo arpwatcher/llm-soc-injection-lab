@@ -268,9 +268,16 @@ def cmd_full_report(args):
         print(f"wrote combined transcript to {args.transcript}")
 
 
+_LEADERBOARD_SORT_ASCENDING = {
+    "hijack_rate": True,
+    "severity_weighted_hijack_rate": True,
+    "clean_accuracy": False,
+}
+
+
 def cmd_leaderboard(args):
     """Runs every fake-* client against the same battery under one fixed
-    direction/defense and ranks them by hijack rate (most robust first) -
+    direction/defense and ranks them, most robust first by default -
     every other subcommand here is single-client, comparing defenses or
     directions for one client at a time; this instead compares clients
     against each other, the side-by-side vulnerability-profile view none
@@ -280,7 +287,11 @@ def cmd_leaderboard(args):
     that just answers wrong across the board (never matching either the
     ground truth or the attacker's target action) scores a misleadingly
     good 0% hijack rate despite being useless as an analyst - clean
-    accuracy catches that a bare hijack-rate ranking alone would miss."""
+    accuracy catches that a bare hijack-rate ranking alone would miss.
+    --sort-by picks which of those three columns to rank by - lower is
+    "more robust" for the two hijack-rate columns, but higher is "more
+    robust" for clean_accuracy, so _LEADERBOARD_SORT_ASCENDING keeps
+    "best first" meaning what it says regardless of which column."""
     if args.clients:
         client_names = [name.strip() for name in args.clients.split(",")]
         unknown = [name for name in client_names if name not in FAKE_CLIENT_NAMES]
@@ -306,7 +317,7 @@ def cmd_leaderboard(args):
             "severity_weighted_hijack_rate": severity_weighted_hijack_rate(results),
             "clean_accuracy": clean_accuracy,
         })
-    rows.sort(key=lambda row: row["hijack_rate"])
+    rows.sort(key=lambda row: row[args.sort_by], reverse=not _LEADERBOARD_SORT_ASCENDING[args.sort_by])
 
     print(f"direction={args.direction} defense={args.defense}\n")
     print(f"{'client':<38} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18} {'clean_accuracy':>15}")
@@ -426,6 +437,10 @@ def build_parser():
         "--clients",
         help="comma-separated subset of fake-* clients to compare (default: all of them) - "
              "see CLIENT_FACTORIES in cli.py or the readme for the available names",
+    )
+    leaderboard_parser.add_argument(
+        "--sort-by", choices=list(_LEADERBOARD_SORT_ASCENDING), default="hijack_rate", dest="sort_by",
+        help="which column to rank by, most-robust-first either way (default: hijack_rate)",
     )
     leaderboard_parser.add_argument(
         "--report", help="write the leaderboard to this path - markdown, or json/csv if the path ends in .json/.csv"
