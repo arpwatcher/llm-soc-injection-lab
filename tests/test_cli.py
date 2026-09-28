@@ -550,6 +550,19 @@ def test_leaderboard_reports_clean_accuracy_alongside_hijack_rate(tmp_path, caps
     assert robust_row["clean_accuracy"] == 1.0
 
 
+def test_leaderboard_writes_transcript(tmp_path, capsys):
+    transcript_path = tmp_path / "leaderboard-transcript.json"
+    main([
+        "leaderboard", "--clients", "fake-robust,fake-vulnerable",
+        "--transcript", str(transcript_path),
+    ])
+    out = capsys.readouterr().out
+    entries = json.loads(transcript_path.read_text())
+    assert {e["client"] for e in entries} == {"fake-robust", "fake-vulnerable"}
+    assert all(e["direction"] == "dismiss" and e["defense"] == "none" for e in entries)
+    assert f"wrote leaderboard transcript to {transcript_path}" in out
+
+
 def test_leaderboard_writes_csv_report(tmp_path, capsys):
     report_path = tmp_path / "leaderboard.csv"
     main(["leaderboard", "--report", str(report_path)])

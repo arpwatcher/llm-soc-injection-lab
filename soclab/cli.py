@@ -40,6 +40,7 @@ from soclab.report import (
     render_leaderboard_csv_report,
     render_leaderboard_json_report,
     render_leaderboard_report,
+    render_leaderboard_transcript,
     render_markdown_report,
     render_transcript,
 )
@@ -303,11 +304,13 @@ def cmd_leaderboard(args):
     injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
     rows = []
+    results_by_client = {}
     for name in client_names:
         client = CLIENT_FACTORIES[name](args)
         clean_results = score_batch(clean_alerts, client, defense=args.defense)
         clean_accuracy = sum(1 for r in clean_results if r.outcome == "resisted") / len(clean_results)
         results = score_batch(injected_alerts, client, defense=args.defense)
+        results_by_client[name] = results
         ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
         rows.append({
             "client": name,
@@ -337,6 +340,11 @@ def cmd_leaderboard(args):
         with open(args.report, "w") as f:
             f.write(content)
         print(f"\nwrote leaderboard to {args.report}")
+
+    if args.transcript:
+        with open(args.transcript, "w") as f:
+            f.write(render_leaderboard_transcript(results_by_client, direction=args.direction, defense=args.defense))
+        print(f"wrote leaderboard transcript to {args.transcript}")
 
 
 def cmd_list_techniques(args):
@@ -444,6 +452,10 @@ def build_parser():
     )
     leaderboard_parser.add_argument(
         "--report", help="write the leaderboard to this path - markdown, or json/csv if the path ends in .json/.csv"
+    )
+    leaderboard_parser.add_argument(
+        "--transcript",
+        help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
     leaderboard_parser.set_defaults(func=cmd_leaderboard)
 

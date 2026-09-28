@@ -53,6 +53,34 @@ def render_combined_transcript(by_direction: dict) -> str:
     return json.dumps(entries, indent=2)
 
 
+def render_leaderboard_transcript(by_client: dict, direction: str = "dismiss", defense: str = "none") -> str:
+    """Same idea as render_transcript, but keyed by client instead of
+    defense - leaderboard's axis is comparing clients against each other
+    under one fixed direction/defense, not comparing defenses for one
+    client, so direction and defense are the same for every entry here
+    (tagged anyway, for consistency with the other transcript shapes) and
+    by_client maps client name -> list[ScoredResult] instead."""
+    entries = [
+        {
+            "client": client,
+            "alert_id": r.alert.id,
+            "technique": r.alert.injected_technique,
+            "severity": r.alert.severity,
+            "ground_truth_action": r.alert.ground_truth_action,
+            "defense": defense,
+            "direction": direction,
+            "action": r.decision.action,
+            "outcome": r.outcome,
+            "reasoning": r.decision.reasoning,
+            "parse_error": r.decision.parse_error,
+            "raw_response": r.decision.raw_response,
+        }
+        for client, results in by_client.items()
+        for r in results
+    ]
+    return json.dumps(entries, indent=2)
+
+
 def _overall_rate(aggregated: dict) -> float:
     total_hijacked = sum(bucket["hijacked"] for bucket in aggregated.values())
     total_count = sum(bucket["total"] for bucket in aggregated.values())

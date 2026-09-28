@@ -16,6 +16,7 @@ from soclab.report import (
     render_leaderboard_csv_report,
     render_leaderboard_json_report,
     render_leaderboard_report,
+    render_leaderboard_transcript,
     render_markdown_report,
     render_transcript,
 )
@@ -365,3 +366,23 @@ def test_render_leaderboard_csv_report_is_valid_csv_with_expected_shape():
     assert rows[0]["defense"] == "both"
     assert rows[1]["hijack_rate"] == "0.88"
     assert rows[0]["clean_accuracy"] == "1.0"
+
+
+def test_render_leaderboard_transcript_is_valid_json_keyed_by_client():
+    results = [_scored_result("hijacked")]
+    by_client = {"fake-robust": results, "fake-vulnerable": results}
+    parsed = json.loads(render_leaderboard_transcript(by_client, direction="escalate", defense="strict"))
+    assert len(parsed) == 2
+    assert {e["client"] for e in parsed} == {"fake-robust", "fake-vulnerable"}
+    assert all(e["direction"] == "escalate" and e["defense"] == "strict" for e in parsed)
+
+
+def test_render_leaderboard_transcript_defaults_to_dismiss_and_none():
+    results = [_scored_result("hijacked")]
+    parsed = json.loads(render_leaderboard_transcript({"fake-robust": results}))
+    assert parsed[0]["direction"] == "dismiss"
+    assert parsed[0]["defense"] == "none"
+
+
+def test_render_leaderboard_transcript_empty_by_client():
+    assert render_leaderboard_transcript({}) == "[]"
