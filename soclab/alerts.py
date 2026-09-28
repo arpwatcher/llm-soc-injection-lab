@@ -35,6 +35,8 @@ class Alert:
             raise ValueError(f"unknown ground_truth_action: {self.ground_truth_action}")
         if self.severity not in SEVERITIES:
             raise ValueError(f"unknown severity: {self.severity}")
+        if self.injected_target_action is not None and self.injected_target_action not in ACTIONS:
+            raise ValueError(f"unknown injected_target_action: {self.injected_target_action}")
 
 
 def generate_clean_alerts() -> list[Alert]:

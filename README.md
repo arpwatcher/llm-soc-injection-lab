@@ -14,10 +14,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
 
 - `alerts.py` - the `Alert` data model plus 8 clean synthetic alerts across varied sources
   (edr, auth, dlp, firewall, av, email, iam, dns), at least two per ground truth outcome:
-  escalate, investigate, dismiss. Both `ground_truth_action` and `severity` are validated
-  against a known set at construction time, so a typo surfaces immediately instead of as a
-  confusing failure somewhere downstream (severity in particular feeds the severity-weighted
-  hijack rate's weight lookup).
+  escalate, investigate, dismiss. `ground_truth_action`, `severity`, and (when set)
+  `injected_target_action` are all validated against a known set at construction time, so a
+  typo surfaces immediately instead of as a confusing failure somewhere downstream (severity
+  feeds the severity-weighted hijack rate's weight lookup; an unvalidated
+  `injected_target_action` typo would instead silently zero out that technique's hijack rate
+  with nothing pointing at the actual mistake, since `classify_outcome` would never see it
+  match).
 - `injections.py` - two attacker goals, modeled separately. `TECHNIQUES` (eight of them)
   push an alert that should escalate or investigate toward "dismiss" instead - hiding a
   real incident, the outcome that matters most in a SOC: a direct "already reviewed, false
@@ -217,7 +220,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-232 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+234 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

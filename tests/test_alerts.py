@@ -66,3 +66,31 @@ def test_alert_rejects_unknown_severity():
 def test_clean_alerts_use_only_known_severities():
     for alert in generate_clean_alerts():
         assert alert.severity in SEVERITIES
+
+
+def test_alert_rejects_unknown_injected_target_action():
+    """injected_target_action feeds classify_outcome's hijacked check
+    directly - an unvalidated typo (e.g. "escalte") would silently make
+    that technique's hijack rate always read 0%, with no error anywhere
+    to point at the actual mistake, instead of failing at construction
+    time the way ground_truth_action and severity already do."""
+    with pytest.raises(ValueError):
+        Alert(
+            id="X",
+            source="test",
+            severity="low",
+            description="d",
+            raw_log="l",
+            ground_truth_action="escalate",
+            injected_technique="some_technique",
+            injected_target_action="escalte",
+        )
+
+
+def test_alert_allows_none_injected_target_action():
+    # clean alerts (no injection) legitimately have no target action at all
+    alert = Alert(
+        id="X", source="test", severity="low", description="d", raw_log="l",
+        ground_truth_action="dismiss",
+    )
+    assert alert.injected_target_action is None
