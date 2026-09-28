@@ -153,7 +153,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   accepts `--transcript FILE`, same per-alert JSON idea as the other subcommands but keyed
   by client instead of defense; `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
-  technique, description) for pulling into a thesis appendix table or spreadsheet.
+  technique, description) for pulling into a thesis appendix table or spreadsheet. The
+  plain-text listing prints each docstring as-is (multi-line is fine on a terminal), but
+  `--json`/`--csv` collapse it to a single line first - a multi-line docstring's own source
+  indentation used to carry straight through as literal embedded newlines, harmless in json
+  but an awkward wrapped cell once pasted into a spreadsheet.
   Every `--report` path writes markdown by default, or JSON/CSV if the path ends in
   `.json`/`.csv` - the format is inferred from the extension, no separate flag needed.
 
@@ -227,7 +231,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-241 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+242 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

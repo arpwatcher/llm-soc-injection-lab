@@ -610,10 +610,23 @@ def test_list_techniques_json(capsys):
     assert "fake_incident_commander" in parsed["escalation"]
 
 
+def test_list_techniques_json_descriptions_have_no_embedded_newlines(capsys):
+    """unicode_homoglyph's docstring spans multiple source lines - without
+    collapsing whitespace, its embedded "\\n    " sequences would carry
+    the source file's own indentation straight into the json value."""
+    main(["list-techniques", "--json"])
+    parsed = json.loads(capsys.readouterr().out)
+    assert "\n" not in parsed["dismiss"]["unicode_homoglyph"]
+    assert "  " not in parsed["dismiss"]["unicode_homoglyph"]
+
+
 def test_list_techniques_csv(capsys):
     exit_code = main(["list-techniques", "--csv"])
     out = capsys.readouterr().out
     assert exit_code == 0
+    # 1 header + 16 technique rows - would be far more physical lines if
+    # descriptions still carried embedded newlines from their docstrings.
+    assert len(out.splitlines()) == 17
     rows = list(csv.reader(io.StringIO(out)))
     assert rows[0] == ["direction", "technique", "description"]
     body = rows[1:]

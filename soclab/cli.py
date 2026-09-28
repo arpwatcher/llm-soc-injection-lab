@@ -347,11 +347,22 @@ def cmd_leaderboard(args):
         print(f"wrote leaderboard transcript to {args.transcript}")
 
 
+def _technique_doc(func) -> str:
+    """A technique function's docstring, collapsed to one line. Multi-line
+    docstrings otherwise carry their source indentation straight through
+    into --json/--csv output as literal embedded newlines - harmless in
+    json, but a real annoyance in a spreadsheet, where it makes the cell
+    wrap oddly instead of reading as one plain sentence. The plain-text
+    listing below deliberately doesn't use this - multi-line is fine, even
+    preferable, when it's printed straight to a terminal."""
+    return " ".join((func.__doc__ or "").split())
+
+
 def cmd_list_techniques(args):
     if args.json:
         payload = {
-            "dismiss": {name: (func.__doc__ or "").strip() for name, func in TECHNIQUES.items()},
-            "escalation": {name: (func.__doc__ or "").strip() for name, func in ESCALATION_TECHNIQUES.items()},
+            "dismiss": {name: _technique_doc(func) for name, func in TECHNIQUES.items()},
+            "escalation": {name: _technique_doc(func) for name, func in ESCALATION_TECHNIQUES.items()},
         }
         print(json.dumps(payload, indent=2))
         return
@@ -359,9 +370,9 @@ def cmd_list_techniques(args):
         writer = csv.writer(sys.stdout)
         writer.writerow(["direction", "technique", "description"])
         for name, func in TECHNIQUES.items():
-            writer.writerow(["dismiss", name, (func.__doc__ or "").strip()])
+            writer.writerow(["dismiss", name, _technique_doc(func)])
         for name, func in ESCALATION_TECHNIQUES.items():
-            writer.writerow(["escalation", name, (func.__doc__ or "").strip()])
+            writer.writerow(["escalation", name, _technique_doc(func)])
         return
     print(f"{len(TECHNIQUES)} dismiss-direction techniques (hide a real incident):")
     for name, func in TECHNIQUES.items():
