@@ -267,6 +267,7 @@ def cmd_full_report(args):
         results_by_direction[direction] = results_by_defense
         severity_weighted_by_direction[direction] = severity_weighted_by_defense
         confidence_interval_by_direction[direction] = confidence_interval_by_defense
+        _print_significance_vs_baseline(results_by_defense, DEFENSE_NONE)
 
     _print_summary(
         combined_rate_by_defense(by_direction),

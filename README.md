@@ -143,9 +143,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   sample), and optionally writes the comparison and/or transcript (each entry
   tagged with which defense it came from); `soclab full-report --client ... --report FILE
   [--transcript FILE]` is the capstone run - both directions, all four defenses, one
-  client, one combined document, with its combined summary table also printed to the
-  terminal before the file is written and an optional combined transcript across every
-  direction and defense; `soclab leaderboard --direction ... --defense ... [--report FILE]`
+  client, one combined document, with the same per-direction significance check `compare`
+  does and its combined summary table also printed to the terminal before the file is
+  written, plus an optional combined transcript across every direction and defense;
+  `soclab leaderboard --direction ... --defense ... [--report FILE]`
   runs every fake-* client (ollama excluded - it needs a real, reachable server) against the
   same battery under one fixed direction/defense and ranks them by hijack rate, most robust
   first - every other subcommand compares defenses or directions for one client, this
@@ -241,7 +242,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-252 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+253 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

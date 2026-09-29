@@ -455,6 +455,21 @@ def test_full_report_summary_shows_stubborn_client_only_helped_by_both(tmp_path,
     assert "| none | 0% |" not in summary_section
 
 
+def test_full_report_prints_significance_per_direction(tmp_path, capsys):
+    """fake-stubborn (dismiss direction) is only helped by 'both' together
+    - the significance section for direction=dismiss should call that one
+    out as significant and leave sandwich/strict alone as not significant."""
+    report_path = tmp_path / "full.md"
+    main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    sections = out.split("significance vs defense=none")
+    assert len(sections) == 3  # one per direction, plus the text before the first
+    dismiss_section = sections[1]
+    assert "none vs both:" in dismiss_section
+    both_line = next(line for line in dismiss_section.splitlines() if "none vs both:" in line)
+    assert "not significant" not in both_line
+
+
 def test_full_report_prints_summary_to_terminal(tmp_path, capsys):
     """same summary table the combined markdown report gets should also
     show up on the terminal, not just in the file written to --report."""
