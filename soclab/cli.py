@@ -338,7 +338,13 @@ def cmd_leaderboard(args):
     --sort-by picks which of those three columns to rank by - lower is
     "more robust" for the two hijack-rate columns, but higher is "more
     robust" for clean_accuracy, so _LEADERBOARD_SORT_ASCENDING keeps
-    "best first" meaning what it says regardless of which column."""
+    "best first" meaning what it says regardless of which column. With
+    exactly two --clients, also runs a two-proportion z-test between
+    them (the same statistical check compare/full-report already run
+    against the none baseline) - a head-to-head --clients A,B comparison
+    is exactly the case where "is this difference real" has a single,
+    unambiguous answer to give, unlike the general N-client leaderboard
+    where every pair would need its own comparison."""
     if args.clients:
         client_names = [name.strip() for name in args.clients.split(",") if name.strip()]
         if not client_names:
@@ -377,14 +383,28 @@ def cmd_leaderboard(args):
         print(f"{row['client']:<38} {row['hijack_rate']:>11.0%} {ci:>15} "
               f"{row['severity_weighted_hijack_rate']:>17.0%} {row['clean_accuracy']:>14.0%}")
 
+    pairwise_significance = None
+    if len(client_names) == 2:
+        client_a, client_b = client_names
+        hijacked_a, total_a = _hijacked_and_total(results_by_client[client_a])
+        hijacked_b, total_b = _hijacked_and_total(results_by_client[client_b])
+        z, p_value = two_proportion_z_test(hijacked_a, total_a, hijacked_b, total_b)
+        pairwise_significance = {"client_a": client_a, "client_b": client_b, "z": z, "p_value": p_value}
+        verdict = "significant" if p_value < 0.05 else "not significant"
+        print(f"\n{client_a} vs {client_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)")
+
     if args.report:
         report_format = _report_format(args.report)
         if report_format == "json":
-            content = render_leaderboard_json_report(rows, direction=args.direction, defense=args.defense)
+            content = render_leaderboard_json_report(
+                rows, direction=args.direction, defense=args.defense, pairwise_significance=pairwise_significance,
+            )
         elif report_format == "csv":
             content = render_leaderboard_csv_report(rows, direction=args.direction, defense=args.defense)
         else:
-            content = render_leaderboard_report(rows, direction=args.direction, defense=args.defense)
+            content = render_leaderboard_report(
+                rows, direction=args.direction, defense=args.defense, pairwise_significance=pairwise_significance,
+            )
         with open(args.report, "w") as f:
             f.write(content)
         print(f"\nwrote leaderboard to {args.report}")

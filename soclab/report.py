@@ -333,7 +333,9 @@ _LEADERBOARD_CSV_FIELDS = [
 ]
 
 
-def render_leaderboard_report(rows: list[dict], direction: str, defense: str) -> str:
+def render_leaderboard_report(
+    rows: list[dict], direction: str, defense: str, pairwise_significance: dict | None = None,
+) -> str:
     """rows: one entry per client - {"client", "hijack_rate", "ci_low",
     "ci_high", "severity_weighted_hijack_rate", "clean_accuracy"} - already
     sorted by the caller (most robust first). Every other report here is
@@ -343,7 +345,10 @@ def render_leaderboard_report(rows: list[dict], direction: str, defense: str) ->
     others give. clean_accuracy (fraction of non-injected alerts correctly
     resolved) is shown alongside the hijack rate specifically because a
     client that just answers wrong across the board scores a misleadingly
-    good 0% hijack rate without it."""
+    good 0% hijack rate without it. pairwise_significance, when given (only
+    meaningful with exactly two clients compared), is
+    {"client_a", "client_b", "z", "p_value"} from a two-proportion z-test
+    between them, appended as one line below the table."""
     lines = [
         f"# leaderboard - direction: {direction}, defense: {defense}",
         "",
@@ -357,12 +362,27 @@ def render_leaderboard_report(rows: list[dict], direction: str, defense: str) ->
             f"{row['clean_accuracy']:.0%} |"
         )
     lines.append("")
+    if pairwise_significance is not None:
+        p_value = pairwise_significance["p_value"]
+        verdict = "significant" if p_value < 0.05 else "not significant"
+        lines.append(
+            f"{pairwise_significance['client_a']} vs {pairwise_significance['client_b']} "
+            f"(two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)"
+        )
+        lines.append("")
     return "\n".join(lines)
 
 
-def render_leaderboard_json_report(rows: list[dict], direction: str, defense: str) -> str:
+def render_leaderboard_json_report(
+    rows: list[dict], direction: str, defense: str, pairwise_significance: dict | None = None,
+) -> str:
     """Same data as render_leaderboard_report, as JSON instead of a document."""
-    payload = {"direction": direction, "defense": defense, "clients": rows}
+    payload = {
+        "direction": direction,
+        "defense": defense,
+        "clients": rows,
+        "pairwise_significance": pairwise_significance,
+    }
     return json.dumps(payload, indent=2)
 
 

@@ -165,7 +165,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   rejects an unrecognized name - or a value that's nothing but commas - with a clear error.
   `--sort-by hijack_rate|severity_weighted_hijack_rate|clean_accuracy` picks which column
   ranks the table (default hijack_rate) - always most-robust-first regardless of column,
-  since higher is better for clean_accuracy but lower is better for the other two. Also
+  since higher is better for clean_accuracy but lower is better for the other two. With
+  exactly two `--clients`, also runs the same two-proportion z-test `compare`/`full-report`
+  use, head-to-head between the two (a general N-client leaderboard has no single
+  unambiguous pair to test, so this only kicks in for the two-client case). Also
   accepts `--transcript FILE`, same per-alert JSON idea as the other subcommands but keyed
   by client instead of defense; `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
@@ -207,7 +210,7 @@ python -m soclab.cli full-report --client fake-stubborn --report full-results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.json  # same data, for plotting
 python -m soclab.cli full-report --client fake-stubborn --report full-results.csv  # same data, for a spreadsheet
 python -m soclab.cli leaderboard --direction dismiss --report leaderboard.md  # every fake-* client, ranked
-python -m soclab.cli leaderboard --clients fake-robust,fake-vulnerable  # just a chosen subset
+python -m soclab.cli leaderboard --clients fake-robust,fake-vulnerable  # a chosen subset - exactly 2 also runs a z-test between them
 python -m soclab.cli leaderboard --sort-by clean_accuracy  # rank by a different column
 python -m soclab.cli leaderboard --transcript leaderboard-transcript.json  # per-alert reasoning, per client
 python -m soclab.cli run --client ollama --model llama3.2:3b
@@ -247,7 +250,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-258 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+265 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

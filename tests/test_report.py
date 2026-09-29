@@ -396,6 +396,28 @@ def test_render_leaderboard_json_report_is_valid_json_with_expected_shape():
     assert parsed["direction"] == "escalate"
     assert parsed["defense"] == "strict"
     assert [row["client"] for row in parsed["clients"]] == ["fake-robust", "fake-vulnerable"]
+    assert parsed["pairwise_significance"] is None
+
+
+def test_render_leaderboard_report_includes_pairwise_significance_when_given():
+    pairwise = {"client_a": "fake-robust", "client_b": "fake-vulnerable", "z": -7.9, "p_value": 0.0001}
+    report = render_leaderboard_report(
+        _sample_leaderboard_rows(), direction="dismiss", defense="none", pairwise_significance=pairwise,
+    )
+    assert "fake-robust vs fake-vulnerable (two-proportion z-test): p=0.0001 (significant at p<0.05)" in report
+
+
+def test_render_leaderboard_report_omits_pairwise_significance_when_not_given():
+    report = render_leaderboard_report(_sample_leaderboard_rows(), direction="dismiss", defense="none")
+    assert "two-proportion z-test" not in report
+
+
+def test_render_leaderboard_json_report_includes_pairwise_significance_when_given():
+    pairwise = {"client_a": "fake-robust", "client_b": "fake-vulnerable", "z": -7.9, "p_value": 0.0001}
+    report = render_leaderboard_json_report(
+        _sample_leaderboard_rows(), direction="dismiss", defense="none", pairwise_significance=pairwise,
+    )
+    assert json.loads(report)["pairwise_significance"] == pairwise
 
 
 def test_render_leaderboard_csv_report_is_valid_csv_with_expected_shape():

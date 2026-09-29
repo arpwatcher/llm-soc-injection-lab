@@ -532,6 +532,42 @@ def test_leaderboard_sort_by_severity_weighted_hijack_rate(capsys):
     assert out.index(robust_line) < out.index(semantic_line)
 
 
+def test_leaderboard_two_clients_prints_pairwise_significance(capsys):
+    exit_code = main(["leaderboard", "--clients", "fake-robust,fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-robust vs fake-vulnerable (two-proportion z-test):" in out
+    assert "not significant" not in out
+
+
+def test_leaderboard_more_than_two_clients_has_no_pairwise_significance(capsys):
+    """with three or more clients there's no single unambiguous pair to
+    compare - every pair would need its own line, which is a different,
+    bigger feature this doesn't try to be."""
+    exit_code = main(["leaderboard", "--clients", "fake-robust,fake-vulnerable,fake-stubborn"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "two-proportion z-test" not in out
+
+
+def test_leaderboard_writes_pairwise_significance_to_json_report(tmp_path, capsys):
+    report_path = tmp_path / "leaderboard.json"
+    main(["leaderboard", "--clients", "fake-robust,fake-vulnerable", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["pairwise_significance"]["client_a"] == "fake-robust"
+    assert parsed["pairwise_significance"]["client_b"] == "fake-vulnerable"
+    assert parsed["pairwise_significance"]["p_value"] < 0.05
+
+
+def test_leaderboard_writes_pairwise_significance_to_markdown_report(tmp_path, capsys):
+    report_path = tmp_path / "leaderboard.md"
+    main(["leaderboard", "--clients", "fake-robust,fake-vulnerable", "--report", str(report_path)])
+    capsys.readouterr()
+    content = report_path.read_text()
+    assert "fake-robust vs fake-vulnerable (two-proportion z-test):" in content
+
+
 def test_leaderboard_rejects_unknown_sort_by():
     with pytest.raises(SystemExit):
         main(["leaderboard", "--sort-by", "not-a-real-column"])
