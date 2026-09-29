@@ -98,7 +98,14 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   on its hijack rate - each technique only ever gets 3-5 alerts in this harness, so a bare
   point estimate like "100%" is easy to over-read without seeing how little data backs it.
   `overall_hijack_rate_confidence_interval` does the same for the bottom-line rate, printed
-  in every `run`/`compare`/`full-report` invocation.
+  in every `run`/`compare`/`full-report` invocation. `two_proportion_z_test` goes a step
+  further than a confidence interval: given two hijack rates as raw (hijacked, total) pairs,
+  it answers whether the difference between them is likely real or could plausibly be
+  sampling noise, using a pooled-variance two-proportion z-test (implemented directly with
+  `math.erf` for the normal CDF, no extra dependency). `compare` prints this for every
+  defense against the `none` baseline - a percentage-point gap between two small samples can
+  look big without actually being significant, which a bare rate or even a confidence
+  interval doesn't make explicit the way a p-value does.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
   markdown, so results can go straight into a writeup. Both `render_markdown_report` (once
   more than one defense is present) and `render_combined_report` lead with a summary table
@@ -131,7 +138,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   save the aggregate report and/or the per-alert transcript;
   `soclab compare --client ... [--direction ...] [--report FILE] [--transcript FILE]` runs
   it under all four defenses back to back, prints the same defense-summary table straight
-  to the terminal, and optionally writes the comparison and/or transcript (each entry
+  to the terminal, followed by a two-proportion z-test comparing each defense's hijack rate
+  against `none` (is the difference actually significant, or could it be noise from a small
+  sample), and optionally writes the comparison and/or transcript (each entry
   tagged with which defense it came from); `soclab full-report --client ... --report FILE
   [--transcript FILE]` is the capstone run - both directions, all four defenses, one
   client, one combined document, with its combined summary table also printed to the
@@ -232,7 +241,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-244 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+252 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

@@ -9,6 +9,7 @@ from soclab.scoring import (
     overall_hijack_rate_confidence_interval,
     score_batch,
     severity_weighted_hijack_rate,
+    two_proportion_z_test,
     wilson_confidence_interval,
 )
 from soclab.analyst import AnalystDecision
@@ -292,3 +293,48 @@ def test_overall_hijack_rate_confidence_interval_forwards_z():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
     assert overall_hijack_rate_confidence_interval(results, z=1.645) == wilson_confidence_interval(35, 40, z=1.645)
+
+
+def test_two_proportion_z_test_identical_rates_gives_no_significance():
+    z, p = two_proportion_z_test(5, 10, 5, 10)
+    assert z == 0.0
+    assert p == 1.0
+
+
+def test_two_proportion_z_test_large_difference_with_decent_sample_is_significant():
+    z, p = two_proportion_z_test(9, 10, 1, 10)
+    assert p < 0.01
+    assert z > 0
+
+
+def test_two_proportion_z_test_same_percentage_gap_but_tiny_sample_is_not_significant():
+    """the same ~20-point gap as a significant case above, but on n=5 per
+    side instead of n=10 - too little data to call it real, the same
+    "small sample, wide uncertainty" point wilson_confidence_interval's
+    tests make about the interval, here made about a hypothesis test."""
+    z, p = two_proportion_z_test(3, 5, 2, 5)
+    assert p > 0.05
+
+
+def test_two_proportion_z_test_is_antisymmetric_in_sign_but_not_in_p_value():
+    z_ab, p_ab = two_proportion_z_test(8, 10, 2, 10)
+    z_ba, p_ba = two_proportion_z_test(2, 10, 8, 10)
+    assert z_ab == -z_ba
+    assert p_ab == p_ba
+
+
+def test_two_proportion_z_test_zero_total_gives_no_significance():
+    assert two_proportion_z_test(0, 0, 5, 10) == (0.0, 1.0)
+    assert two_proportion_z_test(5, 10, 0, 0) == (0.0, 1.0)
+
+
+def test_two_proportion_z_test_no_variance_when_both_groups_are_unanimous():
+    # both groups hijacked 100% of the time - pooled proportion is 1.0,
+    # so there's no variance to test a difference against.
+    assert two_proportion_z_test(5, 5, 10, 10) == (0.0, 1.0)
+
+
+def test_two_proportion_z_test_p_value_is_a_valid_probability():
+    for hijacked_a, total_a, hijacked_b, total_b in [(3, 8, 5, 8), (0, 5, 5, 5), (1, 20, 1, 20)]:
+        _, p = two_proportion_z_test(hijacked_a, total_a, hijacked_b, total_b)
+        assert 0.0 <= p <= 1.0

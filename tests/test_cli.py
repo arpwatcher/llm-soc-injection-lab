@@ -272,6 +272,27 @@ def test_compare_prints_summary_to_terminal_even_without_report_flag(capsys):
     assert "sandwich" in out.split("summary: overall hijack rate by defense")[1]
 
 
+def test_compare_prints_significance_vs_none_baseline(capsys):
+    """a percentage-point gap between two small samples can look big
+    without being statistically meaningful - this is the number that
+    actually answers whether a defense measurably helped. sandwich should
+    come back significant for fake-sandwich-sensitive (0% vs 88%), strict
+    should come back not significant (it doesn't affect this client at all,
+    88% vs 88% - the same rate, not just a similar one)."""
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "significance vs defense=none (two-proportion z-test):" in out
+    significance_section = out.split("significance vs defense=none")[1]
+    assert "none vs sandwich:" in significance_section
+    assert "none vs strict:" in significance_section
+    assert "none vs both:" in significance_section
+    sandwich_line = next(line for line in significance_section.splitlines() if "none vs sandwich:" in line)
+    strict_line = next(line for line in significance_section.splitlines() if "none vs strict:" in line)
+    assert "not significant" not in sandwich_line
+    assert "not significant" in strict_line
+
+
 def test_strict_defense_only_helps_the_strict_sensitive_client(capsys):
     main(["run", "--client", "fake-strict-sensitive", "--defense", "none"])
     without_defense = capsys.readouterr().out
