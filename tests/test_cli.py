@@ -320,6 +320,7 @@ def test_compare_writes_markdown_report(tmp_path, capsys):
     assert "summary: overall hijack rate by defense" in content
     assert "severity-weighted hijack rate:" in content
     assert "95% confidence interval:" in content
+    assert "significance vs none (two-proportion z-test):" in content
 
 
 def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
@@ -332,6 +333,8 @@ def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert parsed["summary_by_defense"]["sandwich"] < parsed["summary_by_defense"]["none"]
     assert set(parsed["severity_weighted_by_defense"]) == {"none", "sandwich", "strict", "both"}
     assert set(parsed["confidence_interval_by_defense"]) == {"none", "sandwich", "strict", "both"}
+    # none itself never gets an entry - nothing to compare it against itself.
+    assert set(parsed["significance_vs_none_by_defense"]) == {"sandwich", "strict", "both"}
 
 
 def test_compare_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
@@ -399,6 +402,7 @@ def test_full_report_writes_combined_markdown(tmp_path, capsys):
     assert "defense: both" in content
     assert "severity-weighted hijack rate:" in content
     assert "95% confidence interval:" in content
+    assert "significance vs none (two-proportion z-test):" in content
 
 
 def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
@@ -414,6 +418,7 @@ def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
     low, high = parsed["confidence_interval_by_direction"]["dismiss"]["both"]
     assert low == 0.0
     assert high == pytest.approx(0.0876, abs=0.01)
+    assert set(parsed["significance_vs_none_by_direction"]["dismiss"]) == {"sandwich", "strict", "both"}
 
 
 def test_full_report_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):

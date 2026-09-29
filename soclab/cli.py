@@ -106,20 +106,29 @@ def _hijacked_and_total(results) -> tuple[int, int]:
     return sum(1 for r in injected if r.outcome == "hijacked"), len(injected)
 
 
-def _print_significance_vs_baseline(results_by_defense: dict, baseline: str):
+def _significance_vs_baseline(results_by_defense: dict, baseline: str) -> dict:
+    """defense name -> (z, p_value) for a two-proportion z-test of that
+    defense's overall hijack rate against the baseline's (defense=none),
+    for every defense except the baseline itself. Computed once here so
+    both the terminal printout and the written report render from the
+    same numbers instead of recomputing them separately."""
+    baseline_hijacked, baseline_total = _hijacked_and_total(results_by_defense[baseline])
+    return {
+        defense: two_proportion_z_test(baseline_hijacked, baseline_total, *_hijacked_and_total(results))
+        for defense, results in results_by_defense.items()
+        if defense != baseline
+    }
+
+
+def _print_significance_vs_baseline(significance: dict, baseline: str):
     """Prints a two-proportion z-test comparing each other defense's
     overall hijack rate against the baseline's (defense=none) - a
     percentage-point gap between two small samples can look big without
     being statistically meaningful, and this is the number that actually
     answers whether a defense measurably helped rather than just reading
     the rates off and eyeballing the difference."""
-    baseline_hijacked, baseline_total = _hijacked_and_total(results_by_defense[baseline])
     print(f"significance vs defense={baseline} (two-proportion z-test):")
-    for defense, results in results_by_defense.items():
-        if defense == baseline:
-            continue
-        hijacked, total = _hijacked_and_total(results)
-        _, p_value = two_proportion_z_test(baseline_hijacked, baseline_total, hijacked, total)
+    for defense, (_, p_value) in significance.items():
         verdict = "significant" if p_value < 0.05 else "not significant"
         print(f"  {baseline} vs {defense}: p={p_value:.4f} ({verdict} at p<0.05)")
     print()
@@ -208,7 +217,8 @@ def cmd_compare(args):
         print()
 
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
-    _print_significance_vs_baseline(results_by_defense, DEFENSE_NONE)
+    significance_by_defense = _significance_vs_baseline(results_by_defense, DEFENSE_NONE)
+    _print_significance_vs_baseline(significance_by_defense, DEFENSE_NONE)
 
     if args.report:
         report_format = _report_format(args.report)
@@ -217,6 +227,7 @@ def cmd_compare(args):
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
+                significance_by_defense=significance_by_defense,
             )
         elif report_format == "csv":
             content = render_csv_report(args.client, per_defense, direction=args.direction)
@@ -225,6 +236,7 @@ def cmd_compare(args):
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
+                significance_by_defense=significance_by_defense,
             )
         with open(args.report, "w") as f:
             f.write(content)
@@ -247,6 +259,7 @@ def cmd_full_report(args):
     results_by_direction = {}
     severity_weighted_by_direction = {}
     confidence_interval_by_direction = {}
+    significance_by_direction = {}
     for direction in DIRECTIONS:
         injected_alerts = _injected_alerts_for(direction)
         per_defense = {}
@@ -267,7 +280,8 @@ def cmd_full_report(args):
         results_by_direction[direction] = results_by_defense
         severity_weighted_by_direction[direction] = severity_weighted_by_defense
         confidence_interval_by_direction[direction] = confidence_interval_by_defense
-        _print_significance_vs_baseline(results_by_defense, DEFENSE_NONE)
+        significance_by_direction[direction] = _significance_vs_baseline(results_by_defense, DEFENSE_NONE)
+        _print_significance_vs_baseline(significance_by_direction[direction], DEFENSE_NONE)
 
     _print_summary(
         combined_rate_by_defense(by_direction),
@@ -280,6 +294,7 @@ def cmd_full_report(args):
             args.client, by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
+            significance_by_direction=significance_by_direction,
         )
     elif report_format == "csv":
         content = render_combined_csv_report(args.client, by_direction)
@@ -288,6 +303,7 @@ def cmd_full_report(args):
             args.client, by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
+            significance_by_direction=significance_by_direction,
         )
     with open(args.report, "w") as f:
         f.write(content)

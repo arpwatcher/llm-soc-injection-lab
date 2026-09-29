@@ -102,10 +102,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   further than a confidence interval: given two hijack rates as raw (hijacked, total) pairs,
   it answers whether the difference between them is likely real or could plausibly be
   sampling noise, using a pooled-variance two-proportion z-test (implemented directly with
-  `math.erf` for the normal CDF, no extra dependency). `compare` prints this for every
-  defense against the `none` baseline - a percentage-point gap between two small samples can
-  look big without actually being significant, which a bare rate or even a confidence
-  interval doesn't make explicit the way a p-value does.
+  `math.erf` for the normal CDF, no extra dependency). `compare` and `full-report` both print
+  this for every defense against the `none` baseline, and thread the same numbers into their
+  markdown/json `--report` output (not csv - like the severity-weighted rate and confidence
+  interval, it's an overall-rate-level stat, not a per-technique one, so it doesn't fit that
+  file's per-technique row shape) - a percentage-point gap between two small samples can look
+  big without actually being significant, which a bare rate or even a confidence interval
+  doesn't make explicit the way a p-value does.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
   markdown, so results can go straight into a writeup. Both `render_markdown_report` (once
   more than one defense is present) and `render_combined_report` lead with a summary table
@@ -121,10 +124,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   under one fixed direction/defense, the side-by-side vulnerability-profile view the CLI's
   `leaderboard` subcommand needs and nothing else here produces. Each defense section also
   shows the
-  severity-weighted hijack rate and the 95% confidence interval alongside the flat rate,
-  neither derivable from the per-technique buckets alone (severity isn't tracked there, and
-  the interval needs the pooled count) so both are computed by the caller and threaded
-  through as optional arguments. `render_transcript` (and `render_combined_transcript` for
+  severity-weighted hijack rate, the 95% confidence interval, and (for every defense but the
+  `none` baseline itself) the two-proportion z-test p-value against it, alongside the flat
+  rate - none of the three derivable from the per-technique buckets alone (severity isn't
+  tracked there, the interval needs the pooled count, and significance needs the baseline's
+  counts too) so all three are computed by the caller and threaded through as optional
+  arguments. `render_transcript` (and `render_combined_transcript` for
   the full-report shape, `render_leaderboard_transcript` keyed by client instead of defense
   for the leaderboard shape) renders a per-alert JSON record (technique, defense, direction,
   action, outcome, the analyst's own reasoning text, and the full raw response) instead of
@@ -242,7 +247,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-253 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+258 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

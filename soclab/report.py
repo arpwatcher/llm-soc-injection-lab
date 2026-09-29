@@ -108,18 +108,22 @@ def _render_defense_sections(
     per_defense: dict,
     severity_weighted_by_defense: dict | None = None,
     confidence_interval_by_defense: dict | None = None,
+    significance_by_defense: dict | None = None,
     heading_level: str = "##",
 ) -> list[str]:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense, e.g. {"none": {...}, "sandwich": {...}}. Shared by both
     render_markdown_report and render_combined_report so the two don't
-    duplicate the table-building logic. severity_weighted_by_defense and
-    confidence_interval_by_defense, when given, map defense name ->
-    severity_weighted_hijack_rate() / overall_hijack_rate_confidence_interval()
-    for that defense's results - neither is derivable from
-    aggregate_by_technique's per-technique buckets alone (severity isn't
-    tracked there, and the CI needs the pooled total/hijacked count, not
-    an average of the per-technique CIs), so both have to be computed
+    duplicate the table-building logic. severity_weighted_by_defense,
+    confidence_interval_by_defense, and significance_by_defense, when
+    given, map defense name -> severity_weighted_hijack_rate() /
+    overall_hijack_rate_confidence_interval() / two_proportion_z_test()
+    (against the none baseline; none itself and every key have no entry
+    here) for that defense's results - none of the three are derivable
+    from aggregate_by_technique's per-technique buckets alone (severity
+    isn't tracked there, the CI needs the pooled total/hijacked count
+    rather than an average of the per-technique CIs, and significance
+    needs the baseline's counts too), so all three have to be computed
     separately by the caller and threaded through."""
     lines = []
     for defense, aggregated in per_defense.items():
@@ -140,6 +144,10 @@ def _render_defense_sections(
             lines.append(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
         if severity_weighted_by_defense is not None:
             lines.append(f"severity-weighted hijack rate: {severity_weighted_by_defense[defense]:.0%}")
+        if significance_by_defense is not None and defense in significance_by_defense:
+            _, p_value = significance_by_defense[defense]
+            verdict = "significant" if p_value < 0.05 else "not significant"
+            lines.append(f"significance vs none (two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)")
         lines.append("")
     return lines
 
@@ -150,13 +158,15 @@ def render_markdown_report(
     direction: str = "dismiss",
     severity_weighted_by_defense: dict | None = None,
     confidence_interval_by_defense: dict | None = None,
+    significance_by_defense: dict | None = None,
 ) -> str:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense. direction says which attacker goal these results are
     for - a report with no direction noted is ambiguous once both exist,
     since technique names alone don't say which one they belong to at a
-    glance. severity_weighted_by_defense and confidence_interval_by_defense
-    are optional: see _render_defense_sections for what each maps."""
+    glance. severity_weighted_by_defense, confidence_interval_by_defense,
+    and significance_by_defense are optional: see _render_defense_sections
+    for what each maps."""
     lines = [f"# injection results - client: {client_name}, direction: {direction}", ""]
     if len(per_defense) > 1:
         lines.extend(_render_summary_table(rate_by_defense(per_defense), "## summary: overall hijack rate by defense"))
@@ -164,6 +174,7 @@ def render_markdown_report(
         per_defense,
         severity_weighted_by_defense=severity_weighted_by_defense,
         confidence_interval_by_defense=confidence_interval_by_defense,
+        significance_by_defense=significance_by_defense,
     ))
     return "\n".join(lines)
 
@@ -174,6 +185,7 @@ def render_json_report(
     direction: str = "dismiss",
     severity_weighted_by_defense: dict | None = None,
     confidence_interval_by_defense: dict | None = None,
+    significance_by_defense: dict | None = None,
 ) -> str:
     """Same data as render_markdown_report, as JSON instead of a document -
     meant for a plotting script rather than a person, so the numbers don't
@@ -184,6 +196,7 @@ def render_json_report(
         "summary_by_defense": rate_by_defense(per_defense),
         "severity_weighted_by_defense": severity_weighted_by_defense,
         "confidence_interval_by_defense": confidence_interval_by_defense,
+        "significance_vs_none_by_defense": significance_by_defense,
         "per_defense": per_defense,
     }
     return json.dumps(payload, indent=2)
@@ -212,14 +225,16 @@ def render_combined_report(
     by_direction: dict,
     severity_weighted_by_direction: dict | None = None,
     confidence_interval_by_direction: dict | None = None,
+    significance_by_direction: dict | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
     document. by_direction maps direction name -> per_defense dict (the
     same shape render_markdown_report takes), e.g.
     {"dismiss": {"none": {...}, ...}, "escalate": {"none": {...}, ...}}.
-    severity_weighted_by_direction and confidence_interval_by_direction are
-    optional: each maps direction name -> (defense name -> its stat), same
-    shape as by_direction, shown alongside the flat rate in each section."""
+    severity_weighted_by_direction, confidence_interval_by_direction, and
+    significance_by_direction are optional: each maps direction name ->
+    (defense name -> its stat), same shape as by_direction, shown
+    alongside the flat rate in each section."""
     lines = [f"# injection results - client: {client_name} (all directions, all defenses)", ""]
 
     lines.extend(_render_summary_table(
@@ -232,10 +247,12 @@ def render_combined_report(
         lines.append("")
         severity_weighted = severity_weighted_by_direction[direction] if severity_weighted_by_direction else None
         confidence_interval = confidence_interval_by_direction[direction] if confidence_interval_by_direction else None
+        significance = significance_by_direction[direction] if significance_by_direction else None
         lines.extend(_render_defense_sections(
             per_defense,
             severity_weighted_by_defense=severity_weighted,
             confidence_interval_by_defense=confidence_interval,
+            significance_by_defense=significance,
             heading_level="##",
         ))
     return "\n".join(lines)
@@ -246,6 +263,7 @@ def render_combined_json_report(
     by_direction: dict,
     severity_weighted_by_direction: dict | None = None,
     confidence_interval_by_direction: dict | None = None,
+    significance_by_direction: dict | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
     payload = {
@@ -253,6 +271,7 @@ def render_combined_json_report(
         "summary_by_defense": combined_rate_by_defense(by_direction),
         "severity_weighted_by_direction": severity_weighted_by_direction,
         "confidence_interval_by_direction": confidence_interval_by_direction,
+        "significance_vs_none_by_direction": significance_by_direction,
         "by_direction": by_direction,
     }
     return json.dumps(payload, indent=2)

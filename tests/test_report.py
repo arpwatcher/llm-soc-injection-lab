@@ -247,6 +247,47 @@ def test_render_json_report_includes_confidence_interval_when_given():
     assert json.loads(report)["confidence_interval_by_defense"] == {"none": [0.4, 0.6]}
 
 
+def test_render_markdown_report_includes_significance_when_given():
+    # "none" itself never gets an entry - nothing to compare it against itself.
+    report = render_markdown_report(
+        "fake-vulnerable", {"none": _sample_aggregate(), "sandwich": _sample_aggregate()},
+        significance_by_defense={"sandwich": (2.5, 0.0124)},
+    )
+    assert "## defense: none" in report
+    none_section = report.split("## defense: none")[1].split("## defense: sandwich")[0]
+    assert "significance vs none" not in none_section
+    sandwich_section = report.split("## defense: sandwich")[1]
+    assert "significance vs none (two-proportion z-test): p=0.0124 (significant at p<0.05)" in sandwich_section
+
+
+def test_render_markdown_report_omits_significance_when_not_given():
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "significance" not in report
+
+
+def test_render_json_report_includes_significance_when_given():
+    report = render_json_report(
+        "fake-vulnerable", {"none": _sample_aggregate()}, significance_by_defense={"sandwich": (2.5, 0.0124)},
+    )
+    assert json.loads(report)["significance_vs_none_by_defense"] == {"sandwich": [2.5, 0.0124]}
+
+
+def test_render_combined_report_includes_significance_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate(), "sandwich": _sample_aggregate()}}
+    significance_by_direction = {"dismiss": {"sandwich": (2.5, 0.0124)}}
+    report = render_combined_report("fake-stubborn", by_direction, significance_by_direction=significance_by_direction)
+    assert "significance vs none (two-proportion z-test): p=0.0124 (significant at p<0.05)" in report
+
+
+def test_render_combined_json_report_includes_significance_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    significance_by_direction = {"dismiss": {"sandwich": (2.5, 0.0124)}}
+    report = render_combined_json_report(
+        "fake-stubborn", by_direction, significance_by_direction=significance_by_direction,
+    )
+    assert json.loads(report)["significance_vs_none_by_direction"] == {"dismiss": {"sandwich": [2.5, 0.0124]}}
+
+
 def test_render_combined_report_includes_confidence_interval_when_given():
     by_direction = {"dismiss": {"none": _sample_aggregate()}}
     confidence_interval_by_direction = {"dismiss": {"none": (0.2, 0.8)}}
