@@ -385,7 +385,11 @@ def cmd_leaderboard(args):
 
     pairwise_significance = None
     if len(client_names) == 2:
-        client_a, client_b = client_names
+        # use the sorted table's order, not the --clients input order - the
+        # two can disagree (e.g. --clients fake-vulnerable,fake-robust sorts
+        # fake-robust to the top), and the line below should read the same
+        # direction as the table it follows.
+        client_a, client_b = rows[0]["client"], rows[1]["client"]
         hijacked_a, total_a = _hijacked_and_total(results_by_client[client_a])
         hijacked_b, total_b = _hijacked_and_total(results_by_client[client_b])
         z, p_value = two_proportion_z_test(hijacked_a, total_a, hijacked_b, total_b)

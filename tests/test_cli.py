@@ -540,6 +540,17 @@ def test_leaderboard_two_clients_prints_pairwise_significance(capsys):
     assert "not significant" not in out
 
 
+def test_leaderboard_pairwise_significance_matches_table_order_not_input_order(capsys):
+    """--clients fake-vulnerable,fake-robust (vulnerable first) sorts to
+    fake-robust first in the table (0% hijack rate ranks more robust) -
+    the pairwise line below it should read the same direction as the
+    table, not just echo back the --clients input order."""
+    exit_code = main(["leaderboard", "--clients", "fake-vulnerable,fake-robust"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-robust vs fake-vulnerable (two-proportion z-test):" in out
+
+
 def test_leaderboard_more_than_two_clients_has_no_pairwise_significance(capsys):
     """with three or more clients there's no single unambiguous pair to
     compare - every pair would need its own line, which is a different,
