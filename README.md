@@ -184,7 +184,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   four subcommands' `--report` handling shares one `_write_report` helper (pick the
   pre-rendered content matching the inferred format, write it, print the confirmation) rather
   than four separate copies of the same open/write/print steps around their own
-  if-json-elif-csv-else branch.
+  if-json-elif-csv-else branch; `--transcript` (always json, no format to infer) shares the
+  smaller `_write_file` underneath it for the same open/write/print step.
 
 Current status: the harness is fully built and tested against the fake clients. Still
 hasn't run against a real model - this development environment's network policy blocks

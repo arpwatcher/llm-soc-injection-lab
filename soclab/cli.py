@@ -127,6 +127,16 @@ def _print_significance_vs_baseline(significance: dict, baseline: str):
     print()
 
 
+def _write_file(path: str, content: str, message: str):
+    """Writes content to path and prints the confirmation message - the
+    open/write/print steps every --report and --transcript call site
+    shares (transcript output is always json regardless of the path's
+    extension, so it needs no format branching, just this)."""
+    with open(path, "w") as f:
+        f.write(content)
+    print(message)
+
+
 def _write_report(path: str, *, markdown_content: str, json_content: str, csv_content: str, message: str):
     """Writes whichever of the three pre-rendered contents matches the
     path's inferred format, then prints the confirmation message every
@@ -139,9 +149,7 @@ def _write_report(path: str, *, markdown_content: str, json_content: str, csv_co
     --report call sites, not the rendering itself."""
     report_format = _report_format(path)
     content = {"markdown": markdown_content, "json": json_content, "csv": csv_content}[report_format]
-    with open(path, "w") as f:
-        f.write(content)
-    print(message)
+    _write_file(path, content, message)
 
 
 def _report_format(path: str) -> str:
@@ -198,9 +206,11 @@ def cmd_run(args):
         )
 
     if args.transcript:
-        with open(args.transcript, "w") as f:
-            f.write(render_transcript({args.defense: injected_results}, direction=args.direction))
-        print(f"wrote transcript to {args.transcript}")
+        _write_file(
+            args.transcript,
+            render_transcript({args.defense: injected_results}, direction=args.direction),
+            f"wrote transcript to {args.transcript}",
+        )
 
 
 def cmd_compare(args):
@@ -247,9 +257,11 @@ def cmd_compare(args):
         )
 
     if args.transcript:
-        with open(args.transcript, "w") as f:
-            f.write(render_transcript(results_by_defense, direction=args.direction))
-        print(f"wrote transcript to {args.transcript}")
+        _write_file(
+            args.transcript,
+            render_transcript(results_by_defense, direction=args.direction),
+            f"wrote transcript to {args.transcript}",
+        )
 
 
 def cmd_full_report(args):
@@ -311,9 +323,11 @@ def cmd_full_report(args):
     )
 
     if args.transcript:
-        with open(args.transcript, "w") as f:
-            f.write(render_combined_transcript(results_by_direction))
-        print(f"wrote combined transcript to {args.transcript}")
+        _write_file(
+            args.transcript,
+            render_combined_transcript(results_by_direction),
+            f"wrote combined transcript to {args.transcript}",
+        )
 
 
 _LEADERBOARD_SORT_ASCENDING = {
@@ -412,9 +426,11 @@ def cmd_leaderboard(args):
         )
 
     if args.transcript:
-        with open(args.transcript, "w") as f:
-            f.write(render_leaderboard_transcript(results_by_client, direction=args.direction, defense=args.defense))
-        print(f"wrote leaderboard transcript to {args.transcript}")
+        _write_file(
+            args.transcript,
+            render_leaderboard_transcript(results_by_client, direction=args.direction, defense=args.defense),
+            f"wrote leaderboard transcript to {args.transcript}",
+        )
 
 
 def _technique_doc(func) -> str:
