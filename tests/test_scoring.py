@@ -5,6 +5,7 @@ from soclab.scoring import (
     ScoredResult,
     aggregate_by_technique,
     classify_outcome,
+    hijacked_and_total,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
     score_batch,
@@ -287,6 +288,19 @@ def test_overall_hijack_rate_confidence_interval_matches_manual_computation():
 def test_overall_hijack_rate_confidence_interval_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), RobustFakeClient())
     assert overall_hijack_rate_confidence_interval(results) == (0.0, 0.0)
+
+
+def test_hijacked_and_total_matches_overall_hijack_rate():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    hijacked, total = hijacked_and_total(results)
+    assert (hijacked, total) == (35, 40)  # every technique but unicode_homoglyph, 5 alerts each
+    assert hijacked / total == overall_hijack_rate(results)
+
+
+def test_hijacked_and_total_ignores_clean_alerts():
+    results = score_batch(generate_clean_alerts(), RobustFakeClient())
+    assert hijacked_and_total(results) == (0, 0)
 
 
 def test_overall_hijack_rate_confidence_interval_forwards_z():
