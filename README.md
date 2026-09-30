@@ -185,7 +185,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   pre-rendered content matching the inferred format, write it, print the confirmation) rather
   than four separate copies of the same open/write/print steps around their own
   if-json-elif-csv-else branch; `--transcript` (always json, no format to infer) shares the
-  smaller `_write_file` underneath it for the same open/write/print step.
+  smaller `_write_file` underneath it for the same open/write/print step. `compare` and
+  `full-report` also share `_run_defense_battery` for the "run every defense, print each
+  one's table" loop itself - `full-report` just calls it once per direction instead of once
+  total, previously the same loop body copied into both.
 
 Current status: the harness is fully built and tested against the fake clients. Still
 hasn't run against a real model - this development environment's network policy blocks
