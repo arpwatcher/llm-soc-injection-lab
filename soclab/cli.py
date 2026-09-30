@@ -127,6 +127,23 @@ def _print_significance_vs_baseline(significance: dict, baseline: str):
     print()
 
 
+def _write_report(path: str, *, markdown_content: str, json_content: str, csv_content: str, message: str):
+    """Writes whichever of the three pre-rendered contents matches the
+    path's inferred format, then prints the confirmation message every
+    report-writing subcommand already prints. All three are pre-rendered
+    by the caller rather than branched into lazily - each format needs
+    its own distinct render_*_report call anyway (csv's excludes
+    severity/confidence-interval/significance, the others don't), so the
+    actual duplication this removes is the open/write/print boilerplate
+    that was copied at every one of run/compare/full-report/leaderboard's
+    --report call sites, not the rendering itself."""
+    report_format = _report_format(path)
+    content = {"markdown": markdown_content, "json": json_content, "csv": csv_content}[report_format]
+    with open(path, "w") as f:
+        f.write(content)
+    print(message)
+
+
 def _report_format(path: str) -> str:
     """The report format inferred from a --report path's extension - case
     insensitively, so results.JSON or results.CSV (not just the lowercase
@@ -164,24 +181,21 @@ def cmd_run(args):
     if args.report:
         severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
         confidence_interval = {args.defense: overall_hijack_rate_confidence_interval(injected_results)}
-        report_format = _report_format(args.report)
-        if report_format == "json":
-            content = render_json_report(
+        _write_report(
+            args.report,
+            markdown_content=render_markdown_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
-            )
-        elif report_format == "csv":
-            content = render_csv_report(args.client, {args.defense: aggregated}, direction=args.direction)
-        else:
-            content = render_markdown_report(
+            ),
+            json_content=render_json_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
-            )
-        with open(args.report, "w") as f:
-            f.write(content)
-        print(f"\nwrote report to {args.report}")
+            ),
+            csv_content=render_csv_report(args.client, {args.defense: aggregated}, direction=args.direction),
+            message=f"\nwrote report to {args.report}",
+        )
 
     if args.transcript:
         with open(args.transcript, "w") as f:
@@ -214,26 +228,23 @@ def cmd_compare(args):
     _print_significance_vs_baseline(significance_by_defense, DEFENSE_NONE)
 
     if args.report:
-        report_format = _report_format(args.report)
-        if report_format == "json":
-            content = render_json_report(
+        _write_report(
+            args.report,
+            markdown_content=render_markdown_report(
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
-            )
-        elif report_format == "csv":
-            content = render_csv_report(args.client, per_defense, direction=args.direction)
-        else:
-            content = render_markdown_report(
+            ),
+            json_content=render_json_report(
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
-            )
-        with open(args.report, "w") as f:
-            f.write(content)
-        print(f"wrote report to {args.report}")
+            ),
+            csv_content=render_csv_report(args.client, per_defense, direction=args.direction),
+            message=f"wrote report to {args.report}",
+        )
 
     if args.transcript:
         with open(args.transcript, "w") as f:
@@ -281,26 +292,23 @@ def cmd_full_report(args):
         "summary: overall hijack rate by defense (both directions combined)",
     )
 
-    report_format = _report_format(args.report)
-    if report_format == "json":
-        content = render_combined_json_report(
+    _write_report(
+        args.report,
+        markdown_content=render_combined_report(
             args.client, by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
-        )
-    elif report_format == "csv":
-        content = render_combined_csv_report(args.client, by_direction)
-    else:
-        content = render_combined_report(
+        ),
+        json_content=render_combined_json_report(
             args.client, by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
-        )
-    with open(args.report, "w") as f:
-        f.write(content)
-    print(f"wrote combined report to {args.report}")
+        ),
+        csv_content=render_combined_csv_report(args.client, by_direction),
+        message=f"wrote combined report to {args.report}",
+    )
 
     if args.transcript:
         with open(args.transcript, "w") as f:
@@ -391,20 +399,17 @@ def cmd_leaderboard(args):
         print(f"\n{client_a} vs {client_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)")
 
     if args.report:
-        report_format = _report_format(args.report)
-        if report_format == "json":
-            content = render_leaderboard_json_report(
+        _write_report(
+            args.report,
+            markdown_content=render_leaderboard_report(
                 rows, direction=args.direction, defense=args.defense, pairwise_significance=pairwise_significance,
-            )
-        elif report_format == "csv":
-            content = render_leaderboard_csv_report(rows, direction=args.direction, defense=args.defense)
-        else:
-            content = render_leaderboard_report(
+            ),
+            json_content=render_leaderboard_json_report(
                 rows, direction=args.direction, defense=args.defense, pairwise_significance=pairwise_significance,
-            )
-        with open(args.report, "w") as f:
-            f.write(content)
-        print(f"\nwrote leaderboard to {args.report}")
+            ),
+            csv_content=render_leaderboard_csv_report(rows, direction=args.direction, defense=args.defense),
+            message=f"\nwrote leaderboard to {args.report}",
+        )
 
     if args.transcript:
         with open(args.transcript, "w") as f:

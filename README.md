@@ -180,7 +180,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   indentation used to carry straight through as literal embedded newlines, harmless in json
   but an awkward wrapped cell once pasted into a spreadsheet.
   Every `--report` path writes markdown by default, or JSON/CSV if the path ends in
-  `.json`/`.csv` - the format is inferred from the extension, no separate flag needed.
+  `.json`/`.csv` - the format is inferred from the extension, no separate flag needed. All
+  four subcommands' `--report` handling shares one `_write_report` helper (pick the
+  pre-rendered content matching the inferred format, write it, print the confirmation) rather
+  than four separate copies of the same open/write/print steps around their own
+  if-json-elif-csv-else branch.
 
 Current status: the harness is fully built and tested against the fake clients. Still
 hasn't run against a real model - this development environment's network policy blocks
