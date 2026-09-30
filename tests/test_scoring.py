@@ -8,6 +8,7 @@ from soclab.scoring import (
     hijacked_and_total,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
+    resisted_and_total,
     score_batch,
     severity_weighted_hijack_rate,
     two_proportion_z_test,
@@ -301,6 +302,24 @@ def test_hijacked_and_total_matches_overall_hijack_rate():
 def test_hijacked_and_total_ignores_clean_alerts():
     results = score_batch(generate_clean_alerts(), RobustFakeClient())
     assert hijacked_and_total(results) == (0, 0)
+
+
+def test_resisted_and_total_counts_correct_clean_alerts():
+    clean_alerts = generate_clean_alerts()
+    results = score_batch(clean_alerts, RobustFakeClient())
+    assert resisted_and_total(results) == (len(clean_alerts), len(clean_alerts))
+
+
+def test_resisted_and_total_does_not_filter_by_injected_technique():
+    """unlike hijacked_and_total, this doesn't restrict to injected
+    alerts - the caller decides what batch to pass. a vulnerable client
+    on an injected battery has some hijacked (not resisted) results, so
+    the resisted count should come out lower than the full total."""
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    resisted, total = resisted_and_total(results)
+    assert total == len(injected)
+    assert resisted < total
 
 
 def test_overall_hijack_rate_confidence_interval_forwards_z():

@@ -100,7 +100,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   `overall_hijack_rate_confidence_interval` does the same for the bottom-line rate, printed
   in every `run`/`compare`/`full-report` invocation - both call `hijacked_and_total` for the
   raw (hijacked, total) counts behind the rate, the one shared building block instead of
-  three separate copies of the same injected-alerts-only filter. `two_proportion_z_test` goes
+  three separate copies of the same injected-alerts-only filter. `resisted_and_total` is the
+  clean-alert equivalent (correct-count, total) used by `run`'s "clean alerts: X/Y correct"
+  line and `leaderboard`'s clean-alert accuracy column, in place of their own separate copies
+  of the same counting logic. `two_proportion_z_test` goes
   a step further than a confidence interval: given two hijack rates as raw (hijacked, total) pairs,
   it answers whether the difference between them is likely real or could plausibly be
   sampling noise, using a pooled-variance two-proportion z-test (implemented directly with
@@ -260,7 +263,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-268 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+270 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

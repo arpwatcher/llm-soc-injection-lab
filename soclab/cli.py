@@ -49,6 +49,7 @@ from soclab.scoring import (
     hijacked_and_total,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
+    resisted_and_total,
     score_batch,
     severity_weighted_hijack_rate,
     two_proportion_z_test,
@@ -204,8 +205,8 @@ def cmd_run(args):
     injected_alerts = _injected_alerts_for(args.direction)
 
     clean_results = score_batch(clean_alerts, client, defense=args.defense)
-    clean_correct = sum(1 for r in clean_results if r.outcome == "resisted")
-    print(f"clean alerts: {clean_correct}/{len(clean_results)} correct action (defense={args.defense})\n")
+    clean_correct, clean_total = resisted_and_total(clean_results)
+    print(f"clean alerts: {clean_correct}/{clean_total} correct action (defense={args.defense})\n")
 
     injected_results = score_batch(injected_alerts, client, defense=args.defense)
     print(f"direction={args.direction}")
@@ -381,7 +382,8 @@ def cmd_leaderboard(args):
     for name in client_names:
         client = CLIENT_FACTORIES[name](args)
         clean_results = score_batch(clean_alerts, client, defense=args.defense)
-        clean_accuracy = sum(1 for r in clean_results if r.outcome == "resisted") / len(clean_results)
+        clean_correct, clean_total = resisted_and_total(clean_results)
+        clean_accuracy = clean_correct / clean_total
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
