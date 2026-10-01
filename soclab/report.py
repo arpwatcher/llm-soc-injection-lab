@@ -405,3 +405,69 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
             "clean_accuracy": row["clean_accuracy"],
         })
     return output.getvalue()
+
+
+_TECHNIQUE_LEADERBOARD_CSV_FIELDS = [
+    "technique", "direction", "defense", "hijacked", "resisted", "other", "total", "hijack_rate", "ci_low", "ci_high",
+]
+
+
+def render_technique_leaderboard_report(
+    rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
+) -> str:
+    """rows: list of (technique, bucket) pairs from aggregate_by_technique's
+    output over every compared client's results concatenated together -
+    already sorted by the caller (most dangerous first). The
+    technique-axis complement to render_leaderboard_report's client axis:
+    that ranks clients against one fixed battery, this ranks techniques
+    by how often they succeed across a fixed set of clients instead."""
+    lines = [
+        f"# technique leaderboard - direction: {direction}, defense: {defense}, across {client_count} client(s)",
+        "",
+        "| technique | hijacked | resisted | other | hijack rate | 95% ci |",
+        "|---|---|---|---|---|---|",
+    ]
+    for technique, bucket in rows:
+        lines.append(
+            f"| {technique} | {bucket['hijacked']} | {bucket['resisted']} | {bucket['other']} | "
+            f"{bucket['hijack_rate']:.0%} | {bucket['ci_low']:.0%}-{bucket['ci_high']:.0%} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_technique_leaderboard_json_report(
+    rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
+) -> str:
+    """Same data as render_technique_leaderboard_report, as JSON instead of a document."""
+    payload = {
+        "direction": direction,
+        "defense": defense,
+        "client_count": client_count,
+        "techniques": [{"technique": technique, **bucket} for technique, bucket in rows],
+    }
+    return json.dumps(payload, indent=2)
+
+
+def render_technique_leaderboard_csv_report(rows: list[tuple[str, dict]], direction: str, defense: str) -> str:
+    """Same data as render_technique_leaderboard_report, as CSV - one row
+    per technique, each tagged with the direction/defense the whole
+    comparison ran under so exports from different runs can still be
+    told apart if concatenated."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=_TECHNIQUE_LEADERBOARD_CSV_FIELDS)
+    writer.writeheader()
+    for technique, bucket in rows:
+        writer.writerow({
+            "technique": technique,
+            "direction": direction,
+            "defense": defense,
+            "hijacked": bucket["hijacked"],
+            "resisted": bucket["resisted"],
+            "other": bucket["other"],
+            "total": bucket["total"],
+            "hijack_rate": bucket["hijack_rate"],
+            "ci_low": bucket["ci_low"],
+            "ci_high": bucket["ci_high"],
+        })
+    return output.getvalue()

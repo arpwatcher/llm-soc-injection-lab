@@ -18,6 +18,9 @@ from soclab.report import (
     render_leaderboard_report,
     render_leaderboard_transcript,
     render_markdown_report,
+    render_technique_leaderboard_csv_report,
+    render_technique_leaderboard_json_report,
+    render_technique_leaderboard_report,
     render_transcript,
 )
 from soclab.scoring import ScoredResult
@@ -449,3 +452,46 @@ def test_render_leaderboard_transcript_defaults_to_dismiss_and_none():
 
 def test_render_leaderboard_transcript_empty_by_client():
     assert render_leaderboard_transcript({}) == "[]"
+
+
+def _sample_technique_leaderboard_rows():
+    return [
+        ("direct_override", {"total": 10, "hijacked": 8, "resisted": 2, "other": 0,
+                              "hijack_rate": 0.8, "ci_low": 0.49, "ci_high": 0.94}),
+        ("unicode_homoglyph", {"total": 10, "hijacked": 1, "resisted": 9, "other": 0,
+                                "hijack_rate": 0.1, "ci_low": 0.02, "ci_high": 0.40}),
+    ]
+
+
+def test_render_technique_leaderboard_report_lists_every_technique_in_order():
+    report = render_technique_leaderboard_report(
+        _sample_technique_leaderboard_rows(), direction="dismiss", defense="none", client_count=5,
+    )
+    assert "direction: dismiss, defense: none, across 5 client(s)" in report
+    assert report.index("direct_override") < report.index("unicode_homoglyph")
+    assert "80%" in report
+    assert "10%" in report
+
+
+def test_render_technique_leaderboard_json_report_is_valid_json_with_expected_shape():
+    report = render_technique_leaderboard_json_report(
+        _sample_technique_leaderboard_rows(), direction="escalate", defense="strict", client_count=3,
+    )
+    parsed = json.loads(report)
+    assert parsed["direction"] == "escalate"
+    assert parsed["defense"] == "strict"
+    assert parsed["client_count"] == 3
+    assert [row["technique"] for row in parsed["techniques"]] == ["direct_override", "unicode_homoglyph"]
+    assert parsed["techniques"][0]["hijack_rate"] == 0.8
+
+
+def test_render_technique_leaderboard_csv_report_is_valid_csv_with_expected_shape():
+    report = render_technique_leaderboard_csv_report(
+        _sample_technique_leaderboard_rows(), direction="dismiss", defense="both",
+    )
+    rows = list(csv.DictReader(io.StringIO(report)))
+    assert len(rows) == 2
+    assert rows[0]["technique"] == "direct_override"
+    assert rows[0]["direction"] == "dismiss"
+    assert rows[0]["defense"] == "both"
+    assert rows[1]["hijack_rate"] == "0.1"

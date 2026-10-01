@@ -42,6 +42,9 @@ from soclab.report import (
     render_leaderboard_report,
     render_leaderboard_transcript,
     render_markdown_report,
+    render_technique_leaderboard_csv_report,
+    render_technique_leaderboard_json_report,
+    render_technique_leaderboard_report,
     render_transcript,
 )
 from soclab.scoring import (
@@ -342,6 +345,24 @@ _LEADERBOARD_SORT_ASCENDING = {
 }
 
 
+def _resolve_client_names(clients_arg: str | None, command_label: str) -> list:
+    """Parses a comma-separated --clients value into a validated list of
+    fake-* client names, or FAKE_CLIENT_NAMES (all of them) if not given.
+    command_label is only used in the error message, so "unknown
+    client(s) for leaderboard" vs "... for technique-leaderboard" stays
+    accurate to whichever subcommand actually failed - both narrow their
+    comparison to a chosen client subset the same way."""
+    if not clients_arg:
+        return FAKE_CLIENT_NAMES
+    client_names = [name.strip() for name in clients_arg.split(",") if name.strip()]
+    if not client_names:
+        raise ValueError("--clients was given but contained no client names")
+    unknown = [name for name in client_names if name not in FAKE_CLIENT_NAMES]
+    if unknown:
+        raise ValueError(f"unknown client(s) for {command_label}: {', '.join(unknown)}")
+    return client_names
+
+
 def cmd_leaderboard(args):
     """Runs every fake-* client against the same battery under one fixed
     direction/defense and ranks them, most robust first by default -
@@ -365,15 +386,7 @@ def cmd_leaderboard(args):
     is exactly the case where "is this difference real" has a single,
     unambiguous answer to give, unlike the general N-client leaderboard
     where every pair would need its own comparison."""
-    if args.clients:
-        client_names = [name.strip() for name in args.clients.split(",") if name.strip()]
-        if not client_names:
-            raise ValueError("--clients was given but contained no client names")
-        unknown = [name for name in client_names if name not in FAKE_CLIENT_NAMES]
-        if unknown:
-            raise ValueError(f"unknown client(s) for leaderboard: {', '.join(unknown)}")
-    else:
-        client_names = FAKE_CLIENT_NAMES
+    client_names = _resolve_client_names(args.clients, "leaderboard")
 
     injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
@@ -436,6 +449,46 @@ def cmd_leaderboard(args):
             args.transcript,
             render_leaderboard_transcript(results_by_client, direction=args.direction, defense=args.defense),
             f"wrote leaderboard transcript to {args.transcript}",
+        )
+
+
+def cmd_technique_leaderboard(args):
+    """The technique-axis complement to leaderboard: that ranks clients
+    against one fixed battery (most robust first); this ranks techniques
+    by how often they succeed across a fixed set of clients instead (most
+    dangerous first) - which technique actually works best in general,
+    rather than which client resists best in general. Concatenates every
+    compared client's scored results for the same injected battery and
+    feeds the combined list straight into aggregate_by_technique, which
+    already buckets by technique regardless of which client produced
+    each result - no new scoring logic needed, just a different batch."""
+    client_names = _resolve_client_names(args.clients, "technique-leaderboard")
+    injected_alerts = _injected_alerts_for(args.direction)
+    combined_results = []
+    for name in client_names:
+        client = CLIENT_FACTORIES[name](args)
+        combined_results.extend(score_batch(injected_alerts, client, defense=args.defense))
+    aggregated = aggregate_by_technique(combined_results)
+    rows = sorted(aggregated.items(), key=lambda item: item[1]["hijack_rate"], reverse=True)
+
+    print(f"direction={args.direction} defense={args.defense} across {len(client_names)} client(s)\n")
+    print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15}")
+    for technique, bucket in rows:
+        ci = f"{bucket['ci_low']:.0%}-{bucket['ci_high']:.0%}"
+        print(f"{technique:<40} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
+              f"{bucket['hijack_rate']:>11.0%} {ci:>15}")
+
+    if args.report:
+        _write_report(
+            args.report,
+            markdown_content=render_technique_leaderboard_report(
+                rows, args.direction, args.defense, len(client_names),
+            ),
+            json_content=render_technique_leaderboard_json_report(
+                rows, args.direction, args.defense, len(client_names),
+            ),
+            csv_content=render_technique_leaderboard_csv_report(rows, args.direction, args.defense),
+            message=f"\nwrote technique leaderboard to {args.report}",
         )
 
 
@@ -561,6 +614,28 @@ def build_parser():
         help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
     leaderboard_parser.set_defaults(func=cmd_leaderboard)
+
+    technique_leaderboard_parser = sub.add_parser(
+        "technique-leaderboard",
+        help="rank techniques by hijack rate across every compared fake-* client (most dangerous first)",
+    )
+    technique_leaderboard_parser.add_argument(
+        "--direction", choices=list(DIRECTIONS), default="dismiss",
+        help="which attacker goal to test: hide a real incident, or waste analyst time",
+    )
+    technique_leaderboard_parser.add_argument(
+        "--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP,
+    )
+    technique_leaderboard_parser.add_argument(
+        "--clients",
+        help="comma-separated subset of fake-* clients to aggregate across (default: all of them) - "
+             "see CLIENT_FACTORIES in cli.py or the readme for the available names",
+    )
+    technique_leaderboard_parser.add_argument(
+        "--report",
+        help="write the technique leaderboard to this path - markdown, or json/csv if the path ends in .json/.csv",
+    )
+    technique_leaderboard_parser.set_defaults(func=cmd_technique_leaderboard)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_format_group = list_parser.add_mutually_exclusive_group()

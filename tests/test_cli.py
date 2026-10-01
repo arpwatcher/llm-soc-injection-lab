@@ -689,6 +689,71 @@ def test_leaderboard_writes_markdown_report_by_default(tmp_path, capsys):
     assert f"wrote leaderboard to {report_path}" in out
 
 
+def test_technique_leaderboard_ranks_techniques_most_dangerous_first(capsys):
+    """unicode_homoglyph is the one technique none of the default
+    fake-* clients fall for via literal keyword matching (only the two
+    semantic-vulnerable ones do) - across all eleven clients combined it
+    should land with a visibly lower hijack rate than the others, and
+    last in the most-dangerous-first ranking."""
+    exit_code = main(["technique-leaderboard", "--direction", "dismiss"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direction=dismiss defense=none across 11 client(s)" in out
+    lines = [line for line in out.splitlines() if line.strip().startswith(("direct_override", "unicode_homoglyph"))]
+    direct_override_line = next(line for line in lines if line.startswith("direct_override"))
+    homoglyph_line = next(line for line in lines if line.startswith("unicode_homoglyph"))
+    assert out.index(direct_override_line) < out.index(homoglyph_line)
+
+
+def test_technique_leaderboard_clients_restricts_the_aggregate(capsys):
+    exit_code = main(["technique-leaderboard", "--clients", "fake-robust"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "across 1 client(s)" in out
+    # fake-robust never caves to anything - every technique should show 0%.
+    assert "100%" not in out
+
+
+def test_technique_leaderboard_rejects_unknown_client(capsys):
+    exit_code = main(["technique-leaderboard", "--clients", "fake-nonexistent"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown client(s) for technique-leaderboard" in err
+    assert "fake-nonexistent" in err
+
+
+def test_technique_leaderboard_writes_markdown_report(tmp_path, capsys):
+    report_path = tmp_path / "technique-leaderboard.md"
+    exit_code = main(["technique-leaderboard", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    content = report_path.read_text()
+    assert "direction: dismiss, defense: none, across 11 client(s)" in content
+    assert "direct_override" in content
+    assert f"wrote technique leaderboard to {report_path}" in out
+
+
+def test_technique_leaderboard_writes_json_report(tmp_path, capsys):
+    report_path = tmp_path / "technique-leaderboard.json"
+    main(["technique-leaderboard", "--direction", "escalate", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["direction"] == "escalate"
+    assert parsed["defense"] == "none"
+    assert parsed["client_count"] == 11
+    technique_names = {row["technique"] for row in parsed["techniques"]}
+    assert "false_urgency" in technique_names
+
+
+def test_technique_leaderboard_writes_csv_report(tmp_path, capsys):
+    report_path = tmp_path / "technique-leaderboard.csv"
+    main(["technique-leaderboard", "--report", str(report_path)])
+    capsys.readouterr()
+    rows = list(csv.DictReader(report_path.read_text().splitlines()))
+    assert len(rows) == 8  # 8 dismiss-direction techniques
+    assert all(row["direction"] == "dismiss" and row["defense"] == "none" for row in rows)
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out
