@@ -48,8 +48,10 @@ from soclab.report import (
     render_transcript,
 )
 from soclab.scoring import (
+    SIGNIFICANCE_ALPHA,
     aggregate_by_technique,
     hijacked_and_total,
+    is_significant,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
     resisted_and_total,
@@ -126,8 +128,8 @@ def _print_significance_vs_baseline(significance: dict, baseline: str):
     the rates off and eyeballing the difference."""
     print(f"significance vs defense={baseline} (two-proportion z-test):")
     for defense, (_, p_value) in significance.items():
-        verdict = "significant" if p_value < 0.05 else "not significant"
-        print(f"  {baseline} vs {defense}: p={p_value:.4f} ({verdict} at p<0.05)")
+        verdict = "significant" if is_significant(p_value) else "not significant"
+        print(f"  {baseline} vs {defense}: p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})")
     print()
 
 
@@ -428,8 +430,8 @@ def cmd_leaderboard(args):
         hijacked_b, total_b = hijacked_and_total(results_by_client[client_b])
         z, p_value = two_proportion_z_test(hijacked_a, total_a, hijacked_b, total_b)
         pairwise_significance = {"client_a": client_a, "client_b": client_b, "z": z, "p_value": p_value}
-        verdict = "significant" if p_value < 0.05 else "not significant"
-        print(f"\n{client_a} vs {client_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)")
+        verdict = "significant" if is_significant(p_value) else "not significant"
+        print(f"\n{client_a} vs {client_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})")
 
     if args.report:
         _write_report(
@@ -503,8 +505,8 @@ def cmd_technique_leaderboard(args):
             bucket_a["hijacked"], bucket_a["total"], bucket_b["hijacked"], bucket_b["total"],
         )
         pairwise_significance = {"technique_a": technique_a, "technique_b": technique_b, "z": z, "p_value": p_value}
-        verdict = "significant" if p_value < 0.05 else "not significant"
-        print(f"\n{technique_a} vs {technique_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)")
+        verdict = "significant" if is_significant(p_value) else "not significant"
+        print(f"\n{technique_a} vs {technique_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})")
 
     if args.report:
         _write_report(

@@ -2,10 +2,12 @@ from soclab.alerts import Alert, generate_clean_alerts
 from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_all_escalation_techniques, apply_all_techniques
 from soclab.llm_client import EscalationVulnerableFakeClient, RobustFakeClient, VulnerableFakeClient
 from soclab.scoring import (
+    SIGNIFICANCE_ALPHA,
     ScoredResult,
     aggregate_by_technique,
     classify_outcome,
     hijacked_and_total,
+    is_significant,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
     resisted_and_total,
@@ -371,3 +373,17 @@ def test_two_proportion_z_test_p_value_is_a_valid_probability():
     for hijacked_a, total_a, hijacked_b, total_b in [(3, 8, 5, 8), (0, 5, 5, 5), (1, 20, 1, 20)]:
         _, p = two_proportion_z_test(hijacked_a, total_a, hijacked_b, total_b)
         assert 0.0 <= p <= 1.0
+
+
+def test_is_significant_uses_the_default_alpha():
+    assert is_significant(0.049) is True
+    assert is_significant(0.05) is False
+    assert is_significant(0.051) is False
+    assert is_significant(SIGNIFICANCE_ALPHA) is False
+
+
+def test_is_significant_accepts_a_custom_alpha():
+    """the default (0.05) is what every caller in this codebase uses, but
+    the threshold itself is a parameter, not a hardcoded assumption."""
+    assert is_significant(0.02, alpha=0.01) is False
+    assert is_significant(0.02, alpha=0.05) is True

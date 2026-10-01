@@ -7,6 +7,8 @@ import csv
 import io
 import json
 
+from soclab.scoring import SIGNIFICANCE_ALPHA, is_significant
+
 
 def render_transcript(per_defense: dict, direction: str = "dismiss") -> str:
     """A per-alert record of what the analyst actually decided and why,
@@ -146,8 +148,10 @@ def _render_defense_sections(
             lines.append(f"severity-weighted hijack rate: {severity_weighted_by_defense[defense]:.0%}")
         if significance_by_defense is not None and defense in significance_by_defense:
             _, p_value = significance_by_defense[defense]
-            verdict = "significant" if p_value < 0.05 else "not significant"
-            lines.append(f"significance vs none (two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)")
+            verdict = "significant" if is_significant(p_value) else "not significant"
+            lines.append(
+                f"significance vs none (two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})"
+            )
         lines.append("")
     return lines
 
@@ -364,10 +368,10 @@ def render_leaderboard_report(
     lines.append("")
     if pairwise_significance is not None:
         p_value = pairwise_significance["p_value"]
-        verdict = "significant" if p_value < 0.05 else "not significant"
+        verdict = "significant" if is_significant(p_value) else "not significant"
         lines.append(
             f"{pairwise_significance['client_a']} vs {pairwise_significance['client_b']} "
-            f"(two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)"
+            f"(two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})"
         )
         lines.append("")
     return "\n".join(lines)
@@ -441,10 +445,10 @@ def render_technique_leaderboard_report(
     lines.append("")
     if pairwise_significance is not None:
         p_value = pairwise_significance["p_value"]
-        verdict = "significant" if p_value < 0.05 else "not significant"
+        verdict = "significant" if is_significant(p_value) else "not significant"
         lines.append(
             f"{pairwise_significance['technique_a']} vs {pairwise_significance['technique_b']} "
-            f"(two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)"
+            f"(two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})"
         )
         lines.append("")
     return "\n".join(lines)

@@ -169,3 +169,18 @@ def two_proportion_z_test(hijacked_a: int, total_a: int, hijacked_b: int, total_
     z = (p_a - p_b) / math.sqrt(variance)
     p_value = 2 * (1 - _standard_normal_cdf(abs(z)))
     return (z, p_value)
+
+
+SIGNIFICANCE_ALPHA = 0.05
+
+
+def is_significant(p_value: float, alpha: float = SIGNIFICANCE_ALPHA) -> bool:
+    """Whether a two_proportion_z_test p-value clears the significance
+    threshold - the one place that threshold is defined, instead of every
+    terminal printout and report renderer that calls a comparison
+    "significant" hardcoding its own copy of the same 0.05 cutoff (which
+    this harness runs a lot of: compare/full-report test every defense
+    against the none baseline, leaderboard/technique-leaderboard test
+    pairwise comparisons - six separate copies before this, all of which
+    would need to change together if the threshold ever did)."""
+    return p_value < alpha

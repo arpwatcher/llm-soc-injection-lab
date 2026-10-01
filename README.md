@@ -113,7 +113,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   interval, it's an overall-rate-level stat, not a per-technique one, so it doesn't fit that
   file's per-technique row shape) - a percentage-point gap between two small samples can look
   big without actually being significant, which a bare rate or even a confidence interval
-  doesn't make explicit the way a p-value does.
+  doesn't make explicit the way a p-value does. `SIGNIFICANCE_ALPHA` (0.05) and
+  `is_significant(p_value)` are the one place that threshold is defined - every terminal
+  printout and report renderer that calls a comparison "significant" (there are six of them:
+  `compare`, `full-report`, and the pairwise checks in `leaderboard` and
+  `technique-leaderboard`, each printing to the terminal and rendering into the report) reads
+  it from here instead of each hardcoding its own copy of the same cutoff.
 - `report.py` - renders a per-defense hijack rate table (plus the overall rate) as
   markdown, so results can go straight into a writeup. Both `render_markdown_report` (once
   more than one defense is present) and `render_combined_report` lead with a summary table
@@ -285,7 +290,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-290 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+292 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
