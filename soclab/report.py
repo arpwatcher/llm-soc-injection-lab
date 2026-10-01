@@ -414,13 +414,19 @@ _TECHNIQUE_LEADERBOARD_CSV_FIELDS = [
 
 def render_technique_leaderboard_report(
     rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
+    pairwise_significance: dict | None = None,
 ) -> str:
     """rows: list of (technique, bucket) pairs from aggregate_by_technique's
     output over every compared client's results concatenated together -
     already sorted by the caller (most dangerous first). The
     technique-axis complement to render_leaderboard_report's client axis:
     that ranks clients against one fixed battery, this ranks techniques
-    by how often they succeed across a fixed set of clients instead."""
+    by how often they succeed across a fixed set of clients instead.
+    pairwise_significance, when given (only meaningful with exactly two
+    techniques ranked), is {"technique_a", "technique_b", "z", "p_value"}
+    from a two-proportion z-test between them, appended as one line below
+    the table - the technique-axis mirror of leaderboard's own
+    exactly-two-clients pairwise check."""
     lines = [
         f"# technique leaderboard - direction: {direction}, defense: {defense}, across {client_count} client(s)",
         "",
@@ -433,11 +439,20 @@ def render_technique_leaderboard_report(
             f"{bucket['hijack_rate']:.0%} | {bucket['ci_low']:.0%}-{bucket['ci_high']:.0%} |"
         )
     lines.append("")
+    if pairwise_significance is not None:
+        p_value = pairwise_significance["p_value"]
+        verdict = "significant" if p_value < 0.05 else "not significant"
+        lines.append(
+            f"{pairwise_significance['technique_a']} vs {pairwise_significance['technique_b']} "
+            f"(two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)"
+        )
+        lines.append("")
     return "\n".join(lines)
 
 
 def render_technique_leaderboard_json_report(
     rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
+    pairwise_significance: dict | None = None,
 ) -> str:
     """Same data as render_technique_leaderboard_report, as JSON instead of a document."""
     payload = {
@@ -445,6 +460,7 @@ def render_technique_leaderboard_json_report(
         "defense": defense,
         "client_count": client_count,
         "techniques": [{"technique": technique, **bucket} for technique, bucket in rows],
+        "pairwise_significance": pairwise_significance,
     }
     return json.dumps(payload, indent=2)
 

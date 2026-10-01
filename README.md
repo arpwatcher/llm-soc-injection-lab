@@ -188,9 +188,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   per-client tables by hand; `--techniques name,name` narrows the ranking to a chosen subset
   the same way `--clients` does, validated against whichever technique set the chosen
   `--direction` actually uses (asking for a dismiss-direction name under `--direction
-  escalate` is rejected the same as an unrecognized one, not silently dropped); same
-  `--clients` narrowing and `--transcript` (client- and technique-tagged, reuses
-  `render_leaderboard_transcript` directly since every entry already carries both) as
+  escalate` is rejected the same as an unrecognized one, not silently dropped). With exactly
+  two techniques ranked (via `--techniques` or because the battery itself only has two), also
+  runs a two-proportion z-test between them, the technique-axis mirror of `leaderboard`'s own
+  exactly-two-clients pairwise check. Same `--clients` narrowing and `--transcript` (client-
+  and technique-tagged, reuses `render_leaderboard_transcript` directly since every entry
+  already carries both) as
   `leaderboard`; `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
   technique, description) for pulling into a thesis appendix table or spreadsheet. The
@@ -282,7 +285,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-284 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+290 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

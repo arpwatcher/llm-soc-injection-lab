@@ -803,6 +803,36 @@ def test_technique_leaderboard_writes_transcript(tmp_path, capsys):
     assert f"wrote technique leaderboard transcript to {transcript_path}" in out
 
 
+def test_technique_leaderboard_two_techniques_prints_pairwise_significance(capsys):
+    exit_code = main(["technique-leaderboard", "--techniques", "direct_override,unicode_homoglyph"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override vs unicode_homoglyph (two-proportion z-test):" in out
+    assert "not significant" not in out
+
+
+def test_technique_leaderboard_more_than_two_techniques_has_no_pairwise_significance(capsys):
+    exit_code = main([
+        "technique-leaderboard", "--techniques", "direct_override,unicode_homoglyph,fake_system_tag",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "two-proportion z-test" not in out
+
+
+def test_technique_leaderboard_writes_pairwise_significance_to_json_report(tmp_path, capsys):
+    report_path = tmp_path / "technique-leaderboard.json"
+    main([
+        "technique-leaderboard", "--techniques", "direct_override,unicode_homoglyph",
+        "--report", str(report_path),
+    ])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["pairwise_significance"]["technique_a"] == "direct_override"
+    assert parsed["pairwise_significance"]["technique_b"] == "unicode_homoglyph"
+    assert parsed["pairwise_significance"]["p_value"] < 0.05
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out

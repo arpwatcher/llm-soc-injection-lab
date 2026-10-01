@@ -495,3 +495,28 @@ def test_render_technique_leaderboard_csv_report_is_valid_csv_with_expected_shap
     assert rows[0]["direction"] == "dismiss"
     assert rows[0]["defense"] == "both"
     assert rows[1]["hijack_rate"] == "0.1"
+
+
+def test_render_technique_leaderboard_report_includes_pairwise_significance_when_given():
+    pairwise = {"technique_a": "direct_override", "technique_b": "unicode_homoglyph", "z": 4.3, "p_value": 0.0001}
+    report = render_technique_leaderboard_report(
+        _sample_technique_leaderboard_rows(), direction="dismiss", defense="none", client_count=5,
+        pairwise_significance=pairwise,
+    )
+    assert "direct_override vs unicode_homoglyph (two-proportion z-test): p=0.0001 (significant at p<0.05)" in report
+
+
+def test_render_technique_leaderboard_report_omits_pairwise_significance_when_not_given():
+    report = render_technique_leaderboard_report(
+        _sample_technique_leaderboard_rows(), direction="dismiss", defense="none", client_count=5,
+    )
+    assert "two-proportion z-test" not in report
+
+
+def test_render_technique_leaderboard_json_report_includes_pairwise_significance_when_given():
+    pairwise = {"technique_a": "direct_override", "technique_b": "unicode_homoglyph", "z": 4.3, "p_value": 0.0001}
+    report = render_technique_leaderboard_json_report(
+        _sample_technique_leaderboard_rows(), direction="dismiss", defense="none", client_count=5,
+        pairwise_significance=pairwise,
+    )
+    assert json.loads(report)["pairwise_significance"] == pairwise

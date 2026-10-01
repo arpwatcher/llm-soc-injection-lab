@@ -493,14 +493,27 @@ def cmd_technique_leaderboard(args):
         print(f"{technique:<40} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
               f"{bucket['hijack_rate']:>11.0%} {ci:>15}")
 
+    pairwise_significance = None
+    if len(rows) == 2:
+        # use the sorted (most-dangerous-first) order, not dict order -
+        # same lesson as leaderboard's own pairwise comparison: the line
+        # below should read the same direction as the table above it.
+        (technique_a, bucket_a), (technique_b, bucket_b) = rows
+        z, p_value = two_proportion_z_test(
+            bucket_a["hijacked"], bucket_a["total"], bucket_b["hijacked"], bucket_b["total"],
+        )
+        pairwise_significance = {"technique_a": technique_a, "technique_b": technique_b, "z": z, "p_value": p_value}
+        verdict = "significant" if p_value < 0.05 else "not significant"
+        print(f"\n{technique_a} vs {technique_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<0.05)")
+
     if args.report:
         _write_report(
             args.report,
             markdown_content=render_technique_leaderboard_report(
-                rows, args.direction, args.defense, len(client_names),
+                rows, args.direction, args.defense, len(client_names), pairwise_significance=pairwise_significance,
             ),
             json_content=render_technique_leaderboard_json_report(
-                rows, args.direction, args.defense, len(client_names),
+                rows, args.direction, args.defense, len(client_names), pairwise_significance=pairwise_significance,
             ),
             csv_content=render_technique_leaderboard_csv_report(rows, args.direction, args.defense),
             message=f"\nwrote technique leaderboard to {args.report}",
