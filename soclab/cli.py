@@ -472,6 +472,18 @@ def cmd_technique_leaderboard(args):
         results_by_client[name] = results
         combined_results.extend(results)
     aggregated = aggregate_by_technique(combined_results)
+
+    if args.techniques:
+        requested = [name.strip() for name in args.techniques.split(",") if name.strip()]
+        if not requested:
+            raise ValueError("--techniques was given but contained no technique names")
+        unknown = [name for name in requested if name not in aggregated]
+        if unknown:
+            raise ValueError(
+                f"unknown technique(s) for direction={args.direction}: {', '.join(unknown)}"
+            )
+        aggregated = {name: aggregated[name] for name in requested}
+
     rows = sorted(aggregated.items(), key=lambda item: item[1]["hijack_rate"], reverse=True)
 
     print(f"direction={args.direction} defense={args.defense} across {len(client_names)} client(s)\n")
@@ -640,6 +652,11 @@ def build_parser():
         "--clients",
         help="comma-separated subset of fake-* clients to aggregate across (default: all of them) - "
              "see CLIENT_FACTORIES in cli.py or the readme for the available names",
+    )
+    technique_leaderboard_parser.add_argument(
+        "--techniques",
+        help="comma-separated subset of techniques to rank (default: all of them for the chosen "
+             "--direction) - see list-techniques for the available names",
     )
     technique_leaderboard_parser.add_argument(
         "--report",

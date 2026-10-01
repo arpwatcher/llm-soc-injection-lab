@@ -722,6 +722,42 @@ def test_technique_leaderboard_rejects_unknown_client(capsys):
     assert "fake-nonexistent" in err
 
 
+def test_technique_leaderboard_techniques_restricts_to_the_requested_subset(capsys):
+    exit_code = main(["technique-leaderboard", "--techniques", "direct_override,unicode_homoglyph"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override" in out
+    assert "unicode_homoglyph" in out
+    assert "fake_system_tag" not in out
+    assert "roleplay_authority" not in out
+
+
+def test_technique_leaderboard_techniques_rejects_unknown_name(capsys):
+    exit_code = main(["technique-leaderboard", "--techniques", "not_a_real_technique"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown technique(s) for direction=dismiss" in err
+    assert "not_a_real_technique" in err
+
+
+def test_technique_leaderboard_techniques_all_commas_is_a_clear_error(capsys):
+    exit_code = main(["technique-leaderboard", "--techniques", ",,"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "no technique names" in err
+
+
+def test_technique_leaderboard_techniques_rejects_wrong_direction_name(capsys):
+    """direct_override is a dismiss-direction technique - asking for it
+    while --direction escalate should fail the same way an unknown name
+    would, not silently return nothing."""
+    exit_code = main(["technique-leaderboard", "--direction", "escalate", "--techniques", "direct_override"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown technique(s) for direction=escalate" in err
+    assert "direct_override" in err
+
+
 def test_technique_leaderboard_writes_markdown_report(tmp_path, capsys):
     report_path = tmp_path / "technique-leaderboard.md"
     exit_code = main(["technique-leaderboard", "--report", str(report_path)])
