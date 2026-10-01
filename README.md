@@ -179,13 +179,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   unambiguous pair to test, so this only kicks in for the two-client case). Also
   accepts `--transcript FILE`, same per-alert JSON idea as the other subcommands but keyed
   by client instead of defense. `soclab technique-leaderboard --direction ... --defense ...
-  [--clients ...] [--report FILE]` is the technique-axis complement: `leaderboard` ranks
-  clients against one fixed battery, this ranks techniques by how often they succeed across
-  every compared client instead (most dangerous first) - concatenates every client's scored
-  results for the same battery and feeds the combined list straight into
-  `aggregate_by_technique`, so the answer to "which technique actually works best across
+  [--clients ...] [--report FILE] [--transcript FILE]` is the technique-axis complement:
+  `leaderboard` ranks clients against one fixed battery, this ranks techniques by how often
+  they succeed across every compared client instead (most dangerous first) - concatenates
+  every client's scored results for the same battery and feeds the combined list straight
+  into `aggregate_by_technique`, so the answer to "which technique actually works best across
   clients in general" doesn't require reading N separate per-client tables by hand; same
-  `--clients` narrowing as `leaderboard`; `soclab list-techniques [--json] [--csv]`
+  `--clients` narrowing and `--transcript` (client- and technique-tagged, reuses
+  `render_leaderboard_transcript` directly since every entry already carries both) as
+  `leaderboard`; `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
   technique, description) for pulling into a thesis appendix table or spreadsheet. The
   plain-text listing prints each docstring as-is (multi-line is fine on a terminal), but
@@ -237,6 +239,7 @@ python -m soclab.cli leaderboard --clients fake-robust,fake-vulnerable  # a chos
 python -m soclab.cli leaderboard --sort-by clean_accuracy  # rank by a different column
 python -m soclab.cli leaderboard --transcript leaderboard-transcript.json  # per-alert reasoning, per client
 python -m soclab.cli technique-leaderboard --direction dismiss  # which technique works best across every client
+python -m soclab.cli technique-leaderboard --transcript tl-transcript.json  # per-alert reasoning, per client+technique
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -274,7 +277,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-279 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+280 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

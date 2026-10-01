@@ -754,6 +754,19 @@ def test_technique_leaderboard_writes_csv_report(tmp_path, capsys):
     assert all(row["direction"] == "dismiss" and row["defense"] == "none" for row in rows)
 
 
+def test_technique_leaderboard_writes_transcript(tmp_path, capsys):
+    transcript_path = tmp_path / "technique-leaderboard-transcript.json"
+    main([
+        "technique-leaderboard", "--clients", "fake-robust,fake-vulnerable",
+        "--transcript", str(transcript_path),
+    ])
+    out = capsys.readouterr().out
+    entries = json.loads(transcript_path.read_text())
+    assert {e["client"] for e in entries} == {"fake-robust", "fake-vulnerable"}
+    assert "direct_override" in {e["technique"] for e in entries}
+    assert f"wrote technique leaderboard transcript to {transcript_path}" in out
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out

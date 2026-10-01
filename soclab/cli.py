@@ -464,10 +464,13 @@ def cmd_technique_leaderboard(args):
     each result - no new scoring logic needed, just a different batch."""
     client_names = _resolve_client_names(args.clients, "technique-leaderboard")
     injected_alerts = _injected_alerts_for(args.direction)
+    results_by_client = {}
     combined_results = []
     for name in client_names:
         client = CLIENT_FACTORIES[name](args)
-        combined_results.extend(score_batch(injected_alerts, client, defense=args.defense))
+        results = score_batch(injected_alerts, client, defense=args.defense)
+        results_by_client[name] = results
+        combined_results.extend(results)
     aggregated = aggregate_by_technique(combined_results)
     rows = sorted(aggregated.items(), key=lambda item: item[1]["hijack_rate"], reverse=True)
 
@@ -489,6 +492,13 @@ def cmd_technique_leaderboard(args):
             ),
             csv_content=render_technique_leaderboard_csv_report(rows, args.direction, args.defense),
             message=f"\nwrote technique leaderboard to {args.report}",
+        )
+
+    if args.transcript:
+        _write_file(
+            args.transcript,
+            render_leaderboard_transcript(results_by_client, direction=args.direction, defense=args.defense),
+            f"wrote technique leaderboard transcript to {args.transcript}",
         )
 
 
@@ -634,6 +644,10 @@ def build_parser():
     technique_leaderboard_parser.add_argument(
         "--report",
         help="write the technique leaderboard to this path - markdown, or json/csv if the path ends in .json/.csv",
+    )
+    technique_leaderboard_parser.add_argument(
+        "--transcript",
+        help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
     technique_leaderboard_parser.set_defaults(func=cmd_technique_leaderboard)
 
