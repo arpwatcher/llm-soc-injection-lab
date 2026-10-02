@@ -343,3 +343,15 @@ At 100% line and branch coverage now - the one remaining gap was the
 code (it only runs when the module is executed directly, which the subprocess test above
 does cover, just not in a way `coverage` can see from inside the parent process), so it
 carries a `# pragma: no cover` rather than a workaround that would test nothing new.
+
+Checked a broader ruff rule set (`B`, `SIM`, `PERF`, `RUF`, `A`, `C4`, `PIE`, `RET`) the same
+way the earlier line-length audit checked an expanded one, to see if any of it was worth
+adopting beyond the default set `make check` already runs. Mostly the same answer as before
+- style preference, not real bugs (a for-loop-append `ruff` would rather see as
+`list.extend`, a generator inside `set(...)` it would rather see as a set comprehension,
+both equally correct and equally clear either way) plus 30-some flags on the cyrillic
+look-alike characters in `unicode_homoglyph`/`escalation_homoglyph` and their tests, which
+are the deliberate point of those techniques, not a mistake to fix. One genuine small finding
+did survive: an unpacked `z` in a `two_proportion_z_test` test that was never actually used
+(only `p` was asserted), unlike every other call site of that helper - a real, if minor,
+leftover inconsistency, fixed by naming it `_` like the one call site that already did.

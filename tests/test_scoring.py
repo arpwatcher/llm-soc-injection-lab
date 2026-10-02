@@ -347,7 +347,7 @@ def test_two_proportion_z_test_same_percentage_gap_but_tiny_sample_is_not_signif
     side instead of n=10 - too little data to call it real, the same
     "small sample, wide uncertainty" point wilson_confidence_interval's
     tests make about the interval, here made about a hypothesis test."""
-    z, p = two_proportion_z_test(3, 5, 2, 5)
+    _, p = two_proportion_z_test(3, 5, 2, 5)
     assert p > 0.05
 
 
