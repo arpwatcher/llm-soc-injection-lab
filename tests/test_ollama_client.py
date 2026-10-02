@@ -12,15 +12,20 @@ from soclab.llm_client import OllamaClient
 
 
 class _FakeResponse:
-    def __init__(self, payload, status_code=200):
+    def __init__(self, payload, status_code=200, text=None):
         self._payload = payload
         self.status_code = status_code
+        # only meaningful for the not-valid-json test below - a real
+        # response's .text is what response.json() parses from.
+        self.text = text
 
     def raise_for_status(self):
         if self.status_code >= 400:
             raise requests.HTTPError(f"status {self.status_code}")
 
     def json(self):
+        if self._payload is None:
+            raise requests.exceptions.JSONDecodeError("bad json", self.text or "", 0)
         return self._payload
 
 
@@ -135,4 +140,19 @@ def test_raises_clean_error_when_message_is_not_a_dict(monkeypatch):
     monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse({"message": "not a dict"}))
     client = OllamaClient(model="m")
     with pytest.raises(ValueError, match="unexpected response shape"):
+        client.complete("s", "u")
+
+
+def test_raises_clean_error_on_a_200_that_is_not_valid_json(monkeypatch):
+    """a 200 response that isn't even valid json at all (e.g. a reverse
+    proxy's own HTML error page, served with a 200 instead of an error
+    status) used to surface as a bare, technical JSONDecodeError instead
+    of the same clean "error: ..." message every other failure here
+    gets - response.json() raises before there's a body to inspect, so
+    the message has to fall back to response.text instead."""
+    monkeypatch.setattr(
+        requests, "post", lambda *a, **k: _FakeResponse(None, text="<html>upstream error</html>"),
+    )
+    client = OllamaClient(model="m")
+    with pytest.raises(ValueError, match="unexpected response from ollama"):
         client.complete("s", "u")
