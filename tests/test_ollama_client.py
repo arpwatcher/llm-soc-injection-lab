@@ -69,6 +69,26 @@ def test_uses_explicit_host_over_default(monkeypatch):
     assert captured["url"] == "http://10.0.0.5:11434/api/chat"
 
 
+def test_strips_a_trailing_slash_from_an_explicit_host(monkeypatch):
+    """$OLLAMA_HOST or --host is often set with a trailing slash - without
+    stripping it, the url below would come out as a double slash in
+    front of /api/chat instead of a single one."""
+    captured = {}
+    monkeypatch.setattr(requests, "post", _capture_url_post(captured))
+    client = OllamaClient(model="m", host="http://10.0.0.5:11434/")
+    client.complete("s", "u")
+    assert captured["url"] == "http://10.0.0.5:11434/api/chat"
+
+
+def test_strips_a_trailing_slash_from_the_ollama_host_env_var(monkeypatch):
+    monkeypatch.setenv("OLLAMA_HOST", "http://custom-host:9999/")
+    captured = {}
+    monkeypatch.setattr(requests, "post", _capture_url_post(captured))
+    client = OllamaClient(model="m")
+    client.complete("s", "u")
+    assert captured["url"] == "http://custom-host:9999/api/chat"
+
+
 def test_uses_ollama_host_env_var_when_no_host_given(monkeypatch):
     monkeypatch.setenv("OLLAMA_HOST", "http://custom-host:9999")
     captured = {}

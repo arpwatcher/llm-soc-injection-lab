@@ -67,7 +67,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   server - requests it as `format: json` so a compliant model returns valid JSON directly
   instead of relying on `parse_response`'s prose/code-fence fallback, and raises a clean
   error (instead of a bare KeyError) if a 200 response ever comes back in an unexpected
-  shape. Its request building and response parsing are unit tested against a mocked
+  shape. Strips a trailing slash from `--host`/`$OLLAMA_HOST` (both are often set with one),
+  which would otherwise turn into a double slash in front of `/api/chat`. Its request
+  building and response parsing are unit tested against a mocked
   `requests.post`. Eleven fake clients model different failure modes without needing a real
   model running: `RobustFakeClient` always reads the alert honestly by keyword;
   `VulnerableFakeClient` caves the moment it sees a known injection marker phrase, but does
@@ -298,7 +300,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-295 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+297 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
