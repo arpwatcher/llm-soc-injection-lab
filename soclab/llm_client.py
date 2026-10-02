@@ -278,10 +278,11 @@ class OllamaClient:
 
     def __init__(self, model: str, host: str | None = None, timeout: float = 120.0):
         self.model = model
+        default_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
         # strip a trailing slash - $OLLAMA_HOST or --host is often set with
         # one (e.g. "http://localhost:11434/"), which would otherwise turn
         # into a double slash in front of /api/chat below.
-        self.host = (host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")).rstrip("/")
+        self.host = (host or default_host).rstrip("/")
         self.timeout = timeout
 
     def complete(self, system_prompt: str, user_message: str) -> str:

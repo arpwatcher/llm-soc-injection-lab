@@ -316,10 +316,16 @@ Runs automatically on every push via GitHub Actions (`.github/workflows/tests.ym
 `make install && make check`) - since the whole suite is deterministic and network-free,
 there's nothing CI can't reproduce exactly the same way locally with the same two
 commands. `make check` lints with `ruff check .` (default rule set - real issues like
-unused imports, not style nitpicks the codebase would need reformatting to satisfy) and
-runs the suite under `coverage`, printing the per-file report so the number stays visible
-without anyone needing to run it by hand. `make clean` removes the `__pycache__`,
-`.pytest_cache`, `.ruff_cache`, `.coverage`, and `htmlcov` artifacts those two leave behind.
+unused imports, not style nitpicks the codebase would need reformatting to satisfy),
+type-checks with `mypy .` (default mode, `types-requests` installed for `OllamaClient`'s
+`requests` calls), and runs the suite under `coverage`, printing the per-file report so the
+number stays visible without anyone needing to run it by hand. Adding `mypy` surfaced one
+real finding on the first run: `(host or os.environ.get("OLLAMA_HOST", default)).rstrip("/")`
+type-checked as possibly `None` even though `os.environ.get` with a string default can never
+return one - a known mypy quirk in overload resolution for a function call used directly as
+the right operand of `or` (assigning the lookup to a variable first resolves it correctly,
+and reads more clearly besides). `make clean` removes the `__pycache__`, `.pytest_cache`,
+`.ruff_cache`, `.mypy_cache`, `.coverage`, and `htmlcov` artifacts those leave behind.
 
 Ran a `coverage.py` audit (99% line coverage going in) and closed the two real gaps it
 found rather than chasing the number: `parse_response`'s JSONDecodeError branch had never
