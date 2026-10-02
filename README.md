@@ -53,7 +53,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   dismiss-direction ones (targets a model that's told what to watch for); `both` layers
   them together. Parses the model's response back into a structured decision - pulls the
   JSON out even if the model wraps it in a sentence, and rejects anything outside the known
-  action set instead of guessing.
+  action set instead of guessing. Finds that JSON object by counting brace depth
+  (`_extract_json_object`), not a regex: a greedy `\{.*\}` (the original implementation)
+  spans from the first `{` to the LAST `}` in the whole response, so any trailing content
+  after the real object that happened to contain another brace got wrongly swallowed into
+  the match and failed to parse, even though a valid decision was sitting right there
+  earlier in the text - a real bug, not just a theoretical one, found by testing exactly that
+  shape of response. A non-greedy regex would have the opposite problem (truncating early if
+  the object's own reasoning text contains a brace before it actually closes); counting
+  depth handles both correctly.
 - `llm_client.py` - one small interface (`complete(system_prompt, user_message) -> str`)
   behind everything. `OllamaClient` is the real implementation, talking to a local Ollama
   server - requests it as `format: json` so a compliant model returns valid JSON directly
@@ -290,7 +298,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-292 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+295 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

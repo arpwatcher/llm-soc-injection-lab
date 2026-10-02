@@ -8,7 +8,6 @@ injection techniques in injections.py is exactly what this lab measures.
 """
 
 import json
-import re
 from dataclasses import dataclass
 
 from soclab.alerts import ACTIONS, Alert
@@ -101,16 +100,42 @@ def get_system_prompt(defense: str = DEFENSE_NONE) -> str:
     return SYSTEM_PROMPT
 
 
+def _extract_json_object(text: str) -> str | None:
+    """Finds the first balanced {...} object in text by counting brace
+    depth, rather than a regex. A greedy `\\{.*\\}` regex spans from the
+    first { to the LAST } in the whole text - if the model's response has
+    any trailing content after the real object that happens to contain
+    another brace (a second example object, a stray "}" in its own
+    rambling), the match wrongly swallows that too and fails to parse. A
+    non-greedy `\\{.*?\\}` has the opposite problem: it stops at the
+    FIRST }, which truncates early if the real object's own content (e.g.
+    a reasoning string) contains a brace before the object actually
+    closes. Counting depth handles both correctly. Returns None if there
+    is no balanced object at all (an unmatched { with no closing brace)."""
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
+
+
 def parse_response(alert_id: str, text: str) -> AnalystDecision:
     """Pulls the first {...} JSON object out of the response text - models
     sometimes wrap it in a code fence or a sentence even when told not to -
     and validates the action against the known set."""
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
+    candidate = _extract_json_object(text)
+    if candidate is None:
         return AnalystDecision(alert_id=alert_id, action="unknown", reasoning="", raw_response=text, parse_error=True)
 
     try:
-        parsed = json.loads(match.group(0))
+        parsed = json.loads(candidate)
         action = parsed.get("action")
         reasoning = parsed.get("reasoning", "")
     except json.JSONDecodeError:

@@ -66,6 +66,44 @@ def test_parse_response_handles_json_wrapped_in_code_fence():
     assert not decision.parse_error
 
 
+def test_parse_response_handles_trailing_brace_after_the_real_object():
+    """a greedy {...} regex (the old implementation) spans from the FIRST
+    { to the LAST } in the whole response - if anything after the real
+    object happens to contain another brace, that used to get swallowed
+    into the match and fail to parse, even though a perfectly valid
+    decision was sitting right there earlier in the text."""
+    text = (
+        'Sure, here is my answer: {"action": "dismiss", "reasoning": "ok"} '
+        '- let me know if you need {"more": "info"}'
+    )
+    decision = parse_response("A1", text)
+    assert decision.action == "dismiss"
+    assert decision.reasoning == "ok"
+    assert not decision.parse_error
+
+
+def test_parse_response_handles_a_brace_inside_the_reasoning_text():
+    """the opposite failure mode a non-greedy {...}? regex would have: it
+    stops at the FIRST }, which would truncate the object early if its
+    own reasoning text contains a brace before the object actually
+    closes. brace-depth counting handles this correctly either way."""
+    text = '{"action": "escalate", "reasoning": "the {ticket} shows a hash match"}'
+    decision = parse_response("A1", text)
+    assert decision.action == "escalate"
+    assert decision.reasoning == "the {ticket} shows a hash match"
+    assert not decision.parse_error
+
+
+def test_parse_response_flags_an_unbalanced_opening_brace():
+    """a { with no matching } anywhere after it in the text - not just
+    "no braces at all" (already covered below), a different shape: the
+    brace-depth scan has to actually run out of text still inside an
+    open object rather than ever finding one to return."""
+    decision = parse_response("A1", "I'd escalate this, see ticket #{123 for details")
+    assert decision.parse_error
+    assert decision.action == "unknown"
+
+
 def test_parse_response_flags_malformed_json():
     decision = parse_response("A1", "I think you should escalate this one.")
     assert decision.parse_error
