@@ -833,15 +833,27 @@ def test_technique_leaderboard_writes_pairwise_significance_to_json_report(tmp_p
     assert parsed["pairwise_significance"]["p_value"] < 0.05
 
 
-def test_matrix_prints_a_rate_for_every_client_technique_pair(capsys):
+def test_matrix_prints_a_rate_for_every_client_technique_pair_plus_an_average_column(capsys):
     exit_code = main(["matrix", "--clients", "fake-robust,fake-vulnerable", "--techniques",
                        "direct_override,unicode_homoglyph"])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "direction=dismiss defense=none" in out
-    assert "client | direct_override | unicode_homoglyph" in out
-    assert "fake-robust | 0% | 0%" in out
-    assert "fake-vulnerable | 100% | 0%" in out
+    assert "client | direct_override | unicode_homoglyph | average" in out
+    assert "fake-robust | 0% | 0% | 0%" in out
+    # fake-vulnerable: 100% on direct_override, 0% on unicode_homoglyph (its one blind spot) -> 50% average
+    assert "fake-vulnerable | 100% | 0% | 50%" in out
+
+
+def test_matrix_sorts_rows_by_average_most_robust_first_regardless_of_clients_order(capsys):
+    """fake-vulnerable has the higher average hijack rate of the two, so it
+    should sort to the bottom even when given first on --clients - same
+    "most robust first" convention leaderboard uses, not just --clients
+    input order."""
+    exit_code = main(["matrix", "--clients", "fake-vulnerable,fake-robust"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert out.index("fake-robust") < out.index("fake-vulnerable")
 
 
 def test_matrix_rejects_unknown_client(capsys):
@@ -896,6 +908,7 @@ def test_matrix_writes_json_report(tmp_path, capsys):
     assert parsed["defense"] == "none"
     assert parsed["clients"][0]["client"] == "fake-escalation-vulnerable"
     assert "false_urgency" in parsed["clients"][0]["rates"]
+    assert "average" in parsed["clients"][0]
 
 
 def test_matrix_writes_csv_report(tmp_path, capsys):
@@ -907,6 +920,7 @@ def test_matrix_writes_csv_report(tmp_path, capsys):
     assert rows[0]["client"] == "fake-robust"
     assert rows[0]["direction"] == "dismiss"
     assert "direct_override" in rows[0]
+    assert rows[0]["average"] == "0.0"
 
 
 def test_matrix_writes_transcript(tmp_path, capsys):

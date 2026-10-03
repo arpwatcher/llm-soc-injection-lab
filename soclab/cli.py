@@ -570,16 +570,15 @@ def cmd_matrix(args):
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         aggregated = aggregate_by_technique(results)
-        rows.append({
-            "client": name,
-            "rates": {technique: aggregated[technique]["hijack_rate"] for technique in technique_names},
-        })
+        rates = {technique: aggregated[technique]["hijack_rate"] for technique in technique_names}
+        rows.append({"client": name, "rates": rates, "average": sum(rates.values()) / len(technique_names)})
+    rows.sort(key=lambda row: row["average"])
 
     print(f"direction={args.direction} defense={args.defense}\n")
-    print("client | " + " | ".join(technique_names))
+    print("client | " + " | ".join(technique_names) + " | average")
     for row in rows:
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
-        print(f"{row['client']} | {cells}")
+        print(f"{row['client']} | {cells} | {row['average']:.0%}")
 
     if args.report:
         _write_report(

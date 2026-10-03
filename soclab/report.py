@@ -497,7 +497,8 @@ def render_matrix_report(
     rows: list[dict], technique_names: list[str], direction: str, defense: str,
 ) -> str:
     """rows: one entry per client - {"client", "rates": {technique: hijack
-    rate, ...}} - covering every technique in technique_names. The full
+    rate, ...}, "average"} - covering every technique in technique_names,
+    already sorted by the caller (most robust first by average). The full
     cross-tab neither leaderboard nor technique-leaderboard keeps: that
     one collapses techniques into a single rate per client, this one
     collapses clients into a single rate per technique; here both axes
@@ -505,9 +506,11 @@ def render_matrix_report(
     appendix. Cells are just the flat hijack rate (not severity-weighted
     or confidence-interval'd) to keep a grid this wide readable - those
     are already available per-client via `leaderboard` and per-technique
-    via `technique-leaderboard`."""
-    header = "| client | " + " | ".join(technique_names) + " |"
-    separator = "|---|" + "|".join("---" for _ in technique_names) + "|"
+    via `technique-leaderboard`. average is the plain mean of a row's own
+    cells, shown as a trailing column so a reader doesn't have to eyeball
+    a wide row to see which client comes out ahead overall."""
+    header = "| client | " + " | ".join(technique_names) + " | average |"
+    separator = "|---|" + "|".join("---" for _ in technique_names) + "|---|"
     lines = [
         f"# matrix - direction: {direction}, defense: {defense}",
         "",
@@ -516,7 +519,7 @@ def render_matrix_report(
     ]
     for row in rows:
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
-        lines.append(f"| {row['client']} | {cells} |")
+        lines.append(f"| {row['client']} | {cells} | {row['average']:.0%} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -538,7 +541,7 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
     other CSV exports here use), since a wide grid is the natural shape
     for a spreadsheet heatmap built directly from this file."""
     output = io.StringIO()
-    fieldnames = ["client", "direction", "defense", *technique_names]
+    fieldnames = ["client", "direction", "defense", *technique_names, "average"]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for row in rows:
@@ -547,5 +550,6 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
             "direction": direction,
             "defense": defense,
             **row["rates"],
+            "average": row["average"],
         })
     return output.getvalue()

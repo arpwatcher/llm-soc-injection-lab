@@ -155,7 +155,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   technique (or vice versa) that either leaderboard's own averaging hides. Cells are the
   flat hijack rate only, deliberately not severity-weighted or interval'd - those stay
   available per-client via `leaderboard` and per-technique via `technique-leaderboard`, and a
-  grid this wide needs each cell to be one simple number to stay readable. The CSV export is
+  grid this wide needs each cell to be one simple number to stay readable. Each row also
+  carries its own plain average across the shown techniques, as a trailing column, and rows
+  are sorted by it (most robust first, same convention `leaderboard` uses) rather than left
+  in whatever order `--clients` happened to list them. The CSV export is
   the one deliberate exception to this file's usual "long" shape (one row per
   defense/technique/client pair) - one row per client, one column per technique, wide on
   purpose, since a matrix is exactly the shape a spreadsheet's conditional formatting wants
@@ -226,7 +229,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   ...] [--report FILE] [--transcript FILE]` is the view neither leaderboard collapses away:
   a full client-by-technique grid of hijack rates, kept per-client (scored separately, not
   concatenated the way `technique-leaderboard` does) so each client's own per-technique
-  breakdown stays intact instead of being merged into one combined rate. Same `--clients`/
+  breakdown stays intact instead of being merged into one combined rate. Each row also gets
+  a trailing average column (the plain mean of its own cells) and rows sort by it, most
+  robust first - without it there'd be no way to tell which client comes out ahead overall
+  without eyeballing a row that can run to eight columns wide. Same `--clients`/
   `--techniques` narrowing (via the shared `_resolve_client_names`/`_resolve_technique_names`
   helpers `technique-leaderboard` also uses) and `--transcript`; no pairwise significance
   check here, since a grid has no single pair to compare the way exactly-two-clients or
@@ -324,7 +330,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-310 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+311 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
