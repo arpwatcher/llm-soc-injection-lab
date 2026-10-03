@@ -95,6 +95,53 @@ def test_run_prints_severity_breakdown(capsys):
     assert "critical" in out
 
 
+def test_run_severity_filter_restricts_clean_and_injected_alerts_to_that_severity(capsys):
+    exit_code = main(["run", "--client", "fake-vulnerable", "--severity", "critical"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    # only A001 and A006 (the two critical escalate alerts) remain clean-side,
+    # and only their 2 injected copies per technique remain on the injected side.
+    assert "clean alerts: 2/2 correct action" in out
+    assert "direct_override                 2        0      0        100%" in out
+    assert "high" not in out
+    assert "medium" not in out
+
+
+def test_run_severity_filter_accepts_a_comma_separated_subset(capsys):
+    exit_code = main(["run", "--client", "fake-vulnerable", "--severity", "critical,high"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "clean alerts: 3/3 correct action" in out  # A001, A006 (critical) + A002 (high)
+    assert "medium" not in out
+
+
+def test_run_severity_filter_rejects_unknown_name(capsys):
+    exit_code = main(["run", "--severity", "catastrophic"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown severity/severities for run" in err
+    assert "catastrophic" in err
+
+
+def test_run_severity_filter_all_commas_is_a_clear_error(capsys):
+    exit_code = main(["run", "--severity", ",,"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "no severity names" in err
+
+
+def test_run_severity_filter_with_nothing_present_is_empty_not_a_crash(capsys):
+    """dismiss-direction injected alerts only ever come from escalate/
+    investigate ground truth alerts, none of which are severity=low -
+    asking for --severity low should produce an empty (not erroring)
+    injected battery, same as an injected-alerts-only filter in scoring.py
+    gracefully returning 0.0/empty rather than raising on an empty batch."""
+    exit_code = main(["run", "--client", "fake-vulnerable", "--severity", "low"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "overall hijack rate: 0%" in out
+
+
 def test_run_writes_markdown_report(tmp_path, capsys):
     """compare and full-report could both save their results to a file,
     but a plain run - the most common invocation - couldn't, even though

@@ -191,12 +191,18 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   parse_error=True entry, where reasoning comes back empty - it's the only place to see
   what the model actually said.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
-  dismiss|escalate [--report FILE] [--transcript FILE]` runs one battery and can optionally
-  save the aggregate report and/or the per-alert transcript. Besides the per-technique table,
-  it (and `compare`/`full-report` below) always also prints a per-severity breakdown
-  (`aggregate_by_severity`) right below it - which severity level is actually driving the
-  severity-weighted rate, not just the technique that's driving the flat one - and threads it
-  into the markdown/json `--report` the same way;
+  dismiss|escalate [--severity critical,high,...] [--report FILE] [--transcript FILE]` runs
+  one battery and can optionally save the aggregate report and/or the per-alert transcript.
+  Besides the per-technique table, it (and `compare`/`full-report` below) always also prints a
+  per-severity breakdown (`aggregate_by_severity`) right below it - which severity level is
+  actually driving the severity-weighted rate, not just the technique that's driving the flat
+  one - and threads it into the markdown/json `--report` the same way. `--severity` restricts
+  both the clean and injected alerts to a chosen subset of severities (comma-separated, same
+  parsing/validation shape `_resolve_client_names`/`_resolve_technique_names` already use, via
+  `_resolve_severities`) - for zooming into just the highest-impact alerts instead of the
+  whole battery; a subset with nothing present for the chosen `--direction` (e.g.
+  `--severity low` under the default dismiss direction, where no escalate/investigate alert is
+  low-severity) comes back as an empty, 0%, non-erroring result rather than crashing;
   `soclab compare --client ... [--direction ...] [--report FILE] [--transcript FILE]` runs
   it under all four defenses back to back, prints the same defense-summary table straight
   to the terminal, followed by a two-proportion z-test comparing each defense's hijack rate
@@ -296,6 +302,7 @@ python -m soclab.cli run --client fake-strict-sensitive --defense strict
 python -m soclab.cli run --client fake-stubborn --defense both
 python -m soclab.cli run --client fake-escalation-vulnerable --direction escalate
 python -m soclab.cli run --client fake-vulnerable --transcript transcript.json  # per-alert reasoning, for review
+python -m soclab.cli run --client fake-vulnerable --severity critical,high  # just the highest-impact alerts
 python -m soclab.cli compare --client fake-stubborn --report results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.md
 python -m soclab.cli full-report --client fake-stubborn --report full-results.json  # same data, for plotting
@@ -347,7 +354,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-322 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+327 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

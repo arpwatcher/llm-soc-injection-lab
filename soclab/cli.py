@@ -6,7 +6,7 @@ import csv
 import json
 import sys
 
-from soclab.alerts import generate_clean_alerts
+from soclab.alerts import SEVERITIES, generate_clean_alerts
 from soclab.analyst import DEFENSES, DEFENSE_NONE
 from soclab.injections import (
     ESCALATION_TECHNIQUES,
@@ -219,11 +219,34 @@ def _run_defense_battery(injected_alerts: list, client, heading_prefix: str = ""
     )
 
 
+def _resolve_severities(severity_arg: str | None, command_label: str) -> list | None:
+    """Parses a comma-separated --severity value into a validated list, or
+    None if not given (the caller then doesn't filter at all). Same
+    comma-parsing/validation shape as _resolve_client_names and
+    _resolve_technique_names, against the fixed SEVERITIES tuple - unlike
+    technique names, severities aren't direction-dependent, so there's no
+    per-direction valid set to check against here."""
+    if not severity_arg:
+        return None
+    requested = [name.strip() for name in severity_arg.split(",") if name.strip()]
+    if not requested:
+        raise ValueError("--severity was given but contained no severity names")
+    unknown = [name for name in requested if name not in SEVERITIES]
+    if unknown:
+        raise ValueError(f"unknown severity/severities for {command_label}: {', '.join(unknown)}")
+    return requested
+
+
 def cmd_run(args):
     client = build_client(args)
 
     clean_alerts = generate_clean_alerts()
     injected_alerts = _injected_alerts_for(args.direction)
+
+    requested_severities = _resolve_severities(args.severity, "run")
+    if requested_severities is not None:
+        clean_alerts = [a for a in clean_alerts if a.severity in requested_severities]
+        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
 
     clean_results = score_batch(clean_alerts, client, defense=args.defense)
     clean_correct, clean_total = resisted_and_total(clean_results)
@@ -678,6 +701,11 @@ def build_parser():
     run_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
     run_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                              help="which attacker goal to test: hide a real incident, or waste analyst time")
+    run_parser.add_argument(
+        "--severity",
+        help="comma-separated subset of severities to test (default: all of them present for the "
+             "chosen --direction) - e.g. --severity critical,high to focus on the highest-impact alerts",
+    )
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     run_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
