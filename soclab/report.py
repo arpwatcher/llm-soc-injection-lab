@@ -491,3 +491,61 @@ def render_technique_leaderboard_csv_report(rows: list[tuple[str, dict]], direct
             "ci_high": bucket["ci_high"],
         })
     return output.getvalue()
+
+
+def render_matrix_report(
+    rows: list[dict], technique_names: list[str], direction: str, defense: str,
+) -> str:
+    """rows: one entry per client - {"client", "rates": {technique: hijack
+    rate, ...}} - covering every technique in technique_names. The full
+    cross-tab neither leaderboard nor technique-leaderboard keeps: that
+    one collapses techniques into a single rate per client, this one
+    collapses clients into a single rate per technique; here both axes
+    stay, a client-by-technique heatmap-style table for a thesis
+    appendix. Cells are just the flat hijack rate (not severity-weighted
+    or confidence-interval'd) to keep a grid this wide readable - those
+    are already available per-client via `leaderboard` and per-technique
+    via `technique-leaderboard`."""
+    header = "| client | " + " | ".join(technique_names) + " |"
+    separator = "|---|" + "|".join("---" for _ in technique_names) + "|"
+    lines = [
+        f"# matrix - direction: {direction}, defense: {defense}",
+        "",
+        header,
+        separator,
+    ]
+    for row in rows:
+        cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
+        lines.append(f"| {row['client']} | {cells} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_matrix_json_report(rows: list[dict], technique_names: list[str], direction: str, defense: str) -> str:
+    """Same data as render_matrix_report, as JSON instead of a document."""
+    payload = {
+        "direction": direction,
+        "defense": defense,
+        "techniques": technique_names,
+        "clients": rows,
+    }
+    return json.dumps(payload, indent=2)
+
+
+def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direction: str, defense: str) -> str:
+    """Same data as render_matrix_report, as CSV - one row per client, one
+    column per technique (wide, not the long one-row-per-pair shape the
+    other CSV exports here use), since a wide grid is the natural shape
+    for a spreadsheet heatmap built directly from this file."""
+    output = io.StringIO()
+    fieldnames = ["client", "direction", "defense", *technique_names]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({
+            "client": row["client"],
+            "direction": direction,
+            "defense": defense,
+            **row["rates"],
+        })
+    return output.getvalue()

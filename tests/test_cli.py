@@ -833,6 +833,91 @@ def test_technique_leaderboard_writes_pairwise_significance_to_json_report(tmp_p
     assert parsed["pairwise_significance"]["p_value"] < 0.05
 
 
+def test_matrix_prints_a_rate_for_every_client_technique_pair(capsys):
+    exit_code = main(["matrix", "--clients", "fake-robust,fake-vulnerable", "--techniques",
+                       "direct_override,unicode_homoglyph"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direction=dismiss defense=none" in out
+    assert "client | direct_override | unicode_homoglyph" in out
+    assert "fake-robust | 0% | 0%" in out
+    assert "fake-vulnerable | 100% | 0%" in out
+
+
+def test_matrix_rejects_unknown_client(capsys):
+    exit_code = main(["matrix", "--clients", "fake-nonexistent"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown client(s) for matrix" in err
+    assert "fake-nonexistent" in err
+
+
+def test_matrix_rejects_unknown_technique(capsys):
+    exit_code = main(["matrix", "--techniques", "not_a_real_technique"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown technique(s) for direction=dismiss" in err
+    assert "not_a_real_technique" in err
+
+
+def test_matrix_techniques_rejects_wrong_direction_name(capsys):
+    exit_code = main(["matrix", "--direction", "escalate", "--techniques", "direct_override"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown technique(s) for direction=escalate" in err
+
+
+def test_matrix_defaults_to_every_technique_for_the_direction(capsys):
+    exit_code = main(["matrix", "--clients", "fake-robust"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override" in out
+    assert "conversational_drift" in out
+
+
+def test_matrix_writes_markdown_report(tmp_path, capsys):
+    report_path = tmp_path / "matrix.md"
+    exit_code = main(["matrix", "--clients", "fake-robust,fake-vulnerable", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    content = report_path.read_text()
+    assert "direction: dismiss, defense: none" in content
+    assert "fake-vulnerable" in content
+    assert f"wrote matrix to {report_path}" in out
+
+
+def test_matrix_writes_json_report(tmp_path, capsys):
+    report_path = tmp_path / "matrix.json"
+    main(["matrix", "--direction", "escalate", "--clients", "fake-escalation-vulnerable",
+          "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["direction"] == "escalate"
+    assert parsed["defense"] == "none"
+    assert parsed["clients"][0]["client"] == "fake-escalation-vulnerable"
+    assert "false_urgency" in parsed["clients"][0]["rates"]
+
+
+def test_matrix_writes_csv_report(tmp_path, capsys):
+    report_path = tmp_path / "matrix.csv"
+    main(["matrix", "--clients", "fake-robust,fake-vulnerable", "--report", str(report_path)])
+    capsys.readouterr()
+    rows = list(csv.DictReader(report_path.read_text().splitlines()))
+    assert len(rows) == 2  # one row per client
+    assert rows[0]["client"] == "fake-robust"
+    assert rows[0]["direction"] == "dismiss"
+    assert "direct_override" in rows[0]
+
+
+def test_matrix_writes_transcript(tmp_path, capsys):
+    transcript_path = tmp_path / "matrix-transcript.json"
+    main(["matrix", "--clients", "fake-robust,fake-vulnerable", "--transcript", str(transcript_path)])
+    out = capsys.readouterr().out
+    entries = json.loads(transcript_path.read_text())
+    assert {e["client"] for e in entries} == {"fake-robust", "fake-vulnerable"}
+    assert f"wrote matrix transcript to {transcript_path}" in out
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out

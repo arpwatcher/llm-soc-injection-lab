@@ -42,6 +42,9 @@ from soclab.report import (
     render_leaderboard_report,
     render_leaderboard_transcript,
     render_markdown_report,
+    render_matrix_csv_report,
+    render_matrix_json_report,
+    render_matrix_report,
     render_technique_leaderboard_csv_report,
     render_technique_leaderboard_json_report,
     render_technique_leaderboard_report,
@@ -365,6 +368,25 @@ def _resolve_client_names(clients_arg: str | None, command_label: str) -> list:
     return client_names
 
 
+def _resolve_technique_names(techniques_arg: str | None, valid_names, context: str) -> list | None:
+    """Parses a comma-separated --techniques value into a validated list,
+    or None if not given (the caller then falls back to "all of them").
+    valid_names just needs to support 'in' - the aggregated-results dict
+    technique-leaderboard already has on hand works as-is, same as the
+    plain technique-name list matrix uses. context is folded straight
+    into the error message (e.g. "direction=dismiss"), matching the
+    wording this replaces exactly."""
+    if not techniques_arg:
+        return None
+    requested = [name.strip() for name in techniques_arg.split(",") if name.strip()]
+    if not requested:
+        raise ValueError("--techniques was given but contained no technique names")
+    unknown = [name for name in requested if name not in valid_names]
+    if unknown:
+        raise ValueError(f"unknown technique(s) for {context}: {', '.join(unknown)}")
+    return requested
+
+
 def cmd_leaderboard(args):
     """Runs every fake-* client against the same battery under one fixed
     direction/defense and ranks them, most robust first by default -
@@ -475,15 +497,8 @@ def cmd_technique_leaderboard(args):
         combined_results.extend(results)
     aggregated = aggregate_by_technique(combined_results)
 
-    if args.techniques:
-        requested = [name.strip() for name in args.techniques.split(",") if name.strip()]
-        if not requested:
-            raise ValueError("--techniques was given but contained no technique names")
-        unknown = [name for name in requested if name not in aggregated]
-        if unknown:
-            raise ValueError(
-                f"unknown technique(s) for direction={args.direction}: {', '.join(unknown)}"
-            )
+    requested = _resolve_technique_names(args.techniques, aggregated, f"direction={args.direction}")
+    if requested is not None:
         aggregated = {name: aggregated[name] for name in requested}
 
     rows = sorted(aggregated.items(), key=lambda item: item[1]["hijack_rate"], reverse=True)
@@ -526,6 +541,60 @@ def cmd_technique_leaderboard(args):
             args.transcript,
             render_leaderboard_transcript(results_by_client, direction=args.direction, defense=args.defense),
             f"wrote technique leaderboard transcript to {args.transcript}",
+        )
+
+
+def cmd_matrix(args):
+    """The full client x technique cross-tab, the one view neither
+    leaderboard nor technique-leaderboard gives on its own: leaderboard
+    collapses every technique into one hijack rate per client, and
+    technique-leaderboard collapses every client into one hijack rate
+    per technique. This keeps both axes - a heatmap-style grid of hijack
+    rate per (client, technique) pair, for spotting a client that's fine
+    on average but wide open to one specific technique (or a technique
+    that's fine on average but devastating against one specific client)
+    that an average in either direction alone would hide. Unlike
+    technique-leaderboard, each client's results are scored separately
+    rather than concatenated - the per-technique breakdown needs to stay
+    attributed to its own client, not merged into one combined rate."""
+    client_names = _resolve_client_names(args.clients, "matrix")
+    injected_alerts = _injected_alerts_for(args.direction)
+    technique_source = ESCALATION_TECHNIQUES if args.direction == "escalate" else TECHNIQUES
+    requested = _resolve_technique_names(args.techniques, technique_source, f"direction={args.direction}")
+    technique_names = requested if requested is not None else list(technique_source)
+
+    rows = []
+    results_by_client = {}
+    for name in client_names:
+        client = CLIENT_FACTORIES[name](args)
+        results = score_batch(injected_alerts, client, defense=args.defense)
+        results_by_client[name] = results
+        aggregated = aggregate_by_technique(results)
+        rows.append({
+            "client": name,
+            "rates": {technique: aggregated[technique]["hijack_rate"] for technique in technique_names},
+        })
+
+    print(f"direction={args.direction} defense={args.defense}\n")
+    print("client | " + " | ".join(technique_names))
+    for row in rows:
+        cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
+        print(f"{row['client']} | {cells}")
+
+    if args.report:
+        _write_report(
+            args.report,
+            markdown_content=render_matrix_report(rows, technique_names, args.direction, args.defense),
+            json_content=render_matrix_json_report(rows, technique_names, args.direction, args.defense),
+            csv_content=render_matrix_csv_report(rows, technique_names, args.direction, args.defense),
+            message=f"\nwrote matrix to {args.report}",
+        )
+
+    if args.transcript:
+        _write_file(
+            args.transcript,
+            render_leaderboard_transcript(results_by_client, direction=args.direction, defense=args.defense),
+            f"wrote matrix transcript to {args.transcript}",
         )
 
 
@@ -682,6 +751,34 @@ def build_parser():
         help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
     technique_leaderboard_parser.set_defaults(func=cmd_technique_leaderboard)
+
+    matrix_parser = sub.add_parser(
+        "matrix", help="client x technique cross-tab of hijack rates - the heatmap view leaderboard and "
+                       "technique-leaderboard each collapse away on one axis"
+    )
+    matrix_parser.add_argument(
+        "--direction", choices=list(DIRECTIONS), default="dismiss",
+        help="which attacker goal to test: hide a real incident, or waste analyst time",
+    )
+    matrix_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
+    matrix_parser.add_argument(
+        "--clients",
+        help="comma-separated subset of fake-* clients to compare (default: all of them) - "
+             "see CLIENT_FACTORIES in cli.py or the readme for the available names",
+    )
+    matrix_parser.add_argument(
+        "--techniques",
+        help="comma-separated subset of techniques to show as columns (default: all of them for the "
+             "chosen --direction) - see list-techniques for the available names",
+    )
+    matrix_parser.add_argument(
+        "--report", help="write the matrix to this path - markdown, or json/csv if the path ends in .json/.csv"
+    )
+    matrix_parser.add_argument(
+        "--transcript",
+        help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
+    )
+    matrix_parser.set_defaults(func=cmd_matrix)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_format_group = list_parser.add_mutually_exclusive_group()

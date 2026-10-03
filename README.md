@@ -148,8 +148,18 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   `leaderboard` subcommand needs and nothing else here produces.
   `render_technique_leaderboard_report`/`_json_report`/`_csv_report` are the technique-axis
   mirror of those three, for `technique-leaderboard`'s "most dangerous technique across every
-  compared client" ranking instead of "most robust client". Each defense section also
-  shows the
+  compared client" ranking instead of "most robust client".
+  `render_matrix_report`/`_json_report`/`_csv_report` keep both axes instead of collapsing
+  either one: a client-by-technique grid of hijack rates for the `matrix` subcommand, the
+  heatmap view for spotting a client that's fine on average but wide open to one specific
+  technique (or vice versa) that either leaderboard's own averaging hides. Cells are the
+  flat hijack rate only, deliberately not severity-weighted or interval'd - those stay
+  available per-client via `leaderboard` and per-technique via `technique-leaderboard`, and a
+  grid this wide needs each cell to be one simple number to stay readable. The CSV export is
+  the one deliberate exception to this file's usual "long" shape (one row per
+  defense/technique/client pair) - one row per client, one column per technique, wide on
+  purpose, since a matrix is exactly the shape a spreadsheet's conditional formatting wants
+  to turn into a heatmap directly. Each defense section also shows the
   severity-weighted hijack rate, the 95% confidence interval, and (for every defense but the
   `none` baseline itself) the two-proportion z-test p-value against it, alongside the flat
   rate - none of the three derivable from the per-technique buckets alone (severity isn't
@@ -212,7 +222,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   exactly-two-clients pairwise check. Same `--clients` narrowing and `--transcript` (client-
   and technique-tagged, reuses `render_leaderboard_transcript` directly since every entry
   already carries both) as
-  `leaderboard`; `soclab list-techniques [--json] [--csv]`
+  `leaderboard`. `soclab matrix --direction ... --defense ... [--clients ...] [--techniques
+  ...] [--report FILE] [--transcript FILE]` is the view neither leaderboard collapses away:
+  a full client-by-technique grid of hijack rates, kept per-client (scored separately, not
+  concatenated the way `technique-leaderboard` does) so each client's own per-technique
+  breakdown stays intact instead of being merged into one combined rate. Same `--clients`/
+  `--techniques` narrowing (via the shared `_resolve_client_names`/`_resolve_technique_names`
+  helpers `technique-leaderboard` also uses) and `--transcript`; no pairwise significance
+  check here, since a grid has no single pair to compare the way exactly-two-clients or
+  exactly-two-techniques does on the other two. `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
   technique, description) for pulling into a thesis appendix table or spreadsheet. The
   plain-text listing prints each docstring as-is (multi-line is fine on a terminal), but
@@ -220,11 +238,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   indentation used to carry straight through as literal embedded newlines, harmless in json
   but an awkward wrapped cell once pasted into a spreadsheet.
   Every `--report` path writes markdown by default, or JSON/CSV if the path ends in
-  `.json`/`.csv` - the format is inferred from the extension, no separate flag needed. All
-  four subcommands' `--report` handling shares one `_write_report` helper (pick the
+  `.json`/`.csv` - the format is inferred from the extension, no separate flag needed. Every
+  subcommand's `--report` handling shares one `_write_report` helper (pick the
   pre-rendered content matching the inferred format, write it, print the confirmation) rather
-  than four separate copies of the same open/write/print steps around their own
-  if-json-elif-csv-else branch; `--transcript` (always json, no format to infer) shares the
+  than a separate copy of the same open/write/print steps around its own
+  if-json-elif-csv-else branch at each call site; `--transcript` (always json, no format to infer) shares the
   smaller `_write_file` underneath it for the same open/write/print step. `compare` and
   `full-report` also share `_run_defense_battery` for the "run every defense, print each
   one's table" loop itself - `full-report` just calls it once per direction instead of once
@@ -266,6 +284,9 @@ python -m soclab.cli leaderboard --transcript leaderboard-transcript.json  # per
 python -m soclab.cli technique-leaderboard --direction dismiss  # which technique works best across every client
 python -m soclab.cli technique-leaderboard --transcript tl-transcript.json  # per-alert reasoning, per client+technique
 python -m soclab.cli technique-leaderboard --techniques direct_override,unicode_homoglyph  # just a chosen subset
+python -m soclab.cli matrix --direction dismiss --report matrix.md  # client x technique heatmap grid
+python -m soclab.cli matrix --clients fake-robust,fake-vulnerable --techniques direct_override,unicode_homoglyph
+python -m soclab.cli matrix --report matrix.csv  # wide csv, one row per client, one column per technique
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -303,7 +324,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-298 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+310 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
