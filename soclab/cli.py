@@ -52,6 +52,7 @@ from soclab.report import (
 )
 from soclab.scoring import (
     SIGNIFICANCE_ALPHA,
+    aggregate_by_severity,
     aggregate_by_technique,
     hijacked_and_total,
     is_significant,
@@ -89,11 +90,16 @@ def build_client(args):
     return CLIENT_FACTORIES[args.client](args)
 
 
-def _print_report(aggregated, results):
+def _print_report(aggregated, results, severity_breakdown=None):
     print(f"{'technique':<24} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
     for technique, bucket in aggregated.items():
         print(f"{technique:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
               f"{bucket['hijack_rate']:>11.0%}")
+    if severity_breakdown:
+        print(f"\n{'severity':<24} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
+        for severity, bucket in severity_breakdown.items():
+            print(f"{severity:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
+                  f"{bucket['hijack_rate']:>11.0%}")
     print(f"\noverall hijack rate: {overall_hijack_rate(results):.0%}")
     ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
     print(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
@@ -219,22 +225,26 @@ def cmd_run(args):
     injected_results = score_batch(injected_alerts, client, defense=args.defense)
     print(f"direction={args.direction}")
     aggregated = aggregate_by_technique(injected_results)
-    _print_report(aggregated, injected_results)
+    severity_breakdown = aggregate_by_severity(injected_results)
+    _print_report(aggregated, injected_results, severity_breakdown)
 
     if args.report:
         severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
         confidence_interval = {args.defense: overall_hijack_rate_confidence_interval(injected_results)}
+        severity_breakdown_by_defense = {args.defense: severity_breakdown}
         _write_report(
             args.report,
             markdown_content=render_markdown_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
+                severity_breakdown_by_defense=severity_breakdown_by_defense,
             ),
             json_content=render_json_report(
                 args.client, {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
+                severity_breakdown_by_defense=severity_breakdown_by_defense,
             ),
             csv_content=render_csv_report(args.client, {args.defense: aggregated}, direction=args.direction),
             message=f"\nwrote report to {args.report}",

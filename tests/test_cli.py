@@ -82,6 +82,19 @@ def test_run_prints_confidence_interval(capsys):
     assert "95% confidence interval:" in out
 
 
+def test_run_prints_severity_breakdown(capsys):
+    """overall and severity-weighted hijack rate each collapse severity
+    into one number - this breaks it back out per severity, same
+    technique/severity relationship aggregate_by_technique has to
+    aggregate_by_severity, so a reader can see which severity level is
+    actually driving the weighted number instead of just trusting it."""
+    exit_code = main(["run", "--client", "fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "severity" in out
+    assert "critical" in out
+
+
 def test_run_writes_markdown_report(tmp_path, capsys):
     """compare and full-report could both save their results to a file,
     but a plain run - the most common invocation - couldn't, even though
@@ -96,6 +109,7 @@ def test_run_writes_markdown_report(tmp_path, capsys):
     assert "defense: none" in content
     assert "direction: dismiss" in content
     assert "| technique |" in content
+    assert "| severity | hijacked | resisted | other | hijack rate |" in content
     assert "severity-weighted hijack rate:" in content
     assert "95% confidence interval:" in content
 
@@ -113,6 +127,7 @@ def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert "direct_override" in parsed["per_defense"]["none"]
     assert parsed["severity_weighted_by_defense"] == {"none": 0.875}
     assert "none" in parsed["confidence_interval_by_defense"]
+    assert "critical" in parsed["severity_breakdown_by_defense"]["none"]
 
 
 def test_run_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):

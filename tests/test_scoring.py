@@ -4,6 +4,7 @@ from soclab.llm_client import EscalationVulnerableFakeClient, RobustFakeClient, 
 from soclab.scoring import (
     SIGNIFICANCE_ALPHA,
     ScoredResult,
+    aggregate_by_severity,
     aggregate_by_technique,
     classify_outcome,
     hijacked_and_total,
@@ -121,6 +122,43 @@ def test_aggregate_by_technique_includes_confidence_interval():
     bucket = aggregated["direct_override"]  # 5/5 hijacked
     assert bucket["ci_low"] < bucket["hijack_rate"] <= bucket["ci_high"]
     assert 0.5 < bucket["ci_low"] < 0.6  # wilson interval for 5/5, not naive [1.0, 1.0]
+
+
+def test_aggregate_by_severity_covers_every_severity_present():
+    # dismiss-direction injected alerts only ever come from escalate/investigate
+    # ground truth alerts, none of which are severity=low here, so "low"
+    # should be absent rather than showing up as an empty/zero bucket.
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    aggregated = aggregate_by_severity(results)
+    assert set(aggregated) == {"critical", "high", "medium"}
+    assert "low" not in aggregated
+
+
+def test_aggregate_by_severity_is_in_canonical_critical_to_low_order():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    aggregated = aggregate_by_severity(results)
+    assert list(aggregated) == ["critical", "high", "medium"]
+
+
+def test_aggregate_by_severity_hijack_rate_for_robust_client_is_zero():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, RobustFakeClient())
+    aggregated = aggregate_by_severity(results)
+    assert all(bucket["hijack_rate"] == 0.0 for bucket in aggregated.values())
+
+
+def test_aggregate_by_severity_ignores_clean_alerts():
+    results = score_batch(generate_clean_alerts(), RobustFakeClient())
+    assert aggregate_by_severity(results) == {}
+
+
+def test_aggregate_by_severity_bucket_shape_matches_aggregate_by_technique():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    bucket = aggregate_by_severity(results)["critical"]
+    assert set(bucket) == {"total", "hijacked", "resisted", "other", "hijack_rate", "ci_low", "ci_high"}
 
 
 def test_overall_hijack_rate_zero_for_robust_client():

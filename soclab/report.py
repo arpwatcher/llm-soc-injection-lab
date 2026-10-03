@@ -112,6 +112,7 @@ def _render_defense_sections(
     confidence_interval_by_defense: dict | None = None,
     significance_by_defense: dict | None = None,
     heading_level: str = "##",
+    severity_breakdown_by_defense: dict | None = None,
 ) -> list[str]:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense, e.g. {"none": {...}, "sandwich": {...}}. Shared by both
@@ -126,7 +127,12 @@ def _render_defense_sections(
     isn't tracked there, the CI needs the pooled total/hijacked count
     rather than an average of the per-technique CIs, and significance
     needs the baseline's counts too), so all three have to be computed
-    separately by the caller and threaded through."""
+    separately by the caller and threaded through. severity_breakdown_by_defense,
+    when given, maps defense name -> aggregate_by_severity() output - the
+    severity-axis complement to the per-technique table above: that
+    answers "which technique works best", this answers "does severity
+    actually matter", which severity_weighted_hijack_rate's single
+    collapsed number can't show on its own."""
     lines = []
     for defense, aggregated in per_defense.items():
         lines.append(f"{heading_level} defense: {defense}")
@@ -138,8 +144,18 @@ def _render_defense_sections(
                 f"| {technique} | {bucket['hijacked']} | {bucket['resisted']} | "
                 f"{bucket['other']} | {bucket['hijack_rate']:.0%} |"
             )
-
         lines.append("")
+
+        if severity_breakdown_by_defense is not None and defense in severity_breakdown_by_defense:
+            lines.append("| severity | hijacked | resisted | other | hijack rate |")
+            lines.append("|---|---|---|---|---|")
+            for severity, bucket in severity_breakdown_by_defense[defense].items():
+                lines.append(
+                    f"| {severity} | {bucket['hijacked']} | {bucket['resisted']} | "
+                    f"{bucket['other']} | {bucket['hijack_rate']:.0%} |"
+                )
+            lines.append("")
+
         lines.append(f"overall hijack rate: {_overall_rate(aggregated):.0%}")
         if confidence_interval_by_defense is not None:
             ci_low, ci_high = confidence_interval_by_defense[defense]
@@ -163,14 +179,15 @@ def render_markdown_report(
     severity_weighted_by_defense: dict | None = None,
     confidence_interval_by_defense: dict | None = None,
     significance_by_defense: dict | None = None,
+    severity_breakdown_by_defense: dict | None = None,
 ) -> str:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense. direction says which attacker goal these results are
     for - a report with no direction noted is ambiguous once both exist,
     since technique names alone don't say which one they belong to at a
     glance. severity_weighted_by_defense, confidence_interval_by_defense,
-    and significance_by_defense are optional: see _render_defense_sections
-    for what each maps."""
+    significance_by_defense, and severity_breakdown_by_defense are
+    optional: see _render_defense_sections for what each maps."""
     lines = [f"# injection results - client: {client_name}, direction: {direction}", ""]
     if len(per_defense) > 1:
         lines.extend(_render_summary_table(rate_by_defense(per_defense), "## summary: overall hijack rate by defense"))
@@ -179,6 +196,7 @@ def render_markdown_report(
         severity_weighted_by_defense=severity_weighted_by_defense,
         confidence_interval_by_defense=confidence_interval_by_defense,
         significance_by_defense=significance_by_defense,
+        severity_breakdown_by_defense=severity_breakdown_by_defense,
     ))
     return "\n".join(lines)
 
@@ -190,6 +208,7 @@ def render_json_report(
     severity_weighted_by_defense: dict | None = None,
     confidence_interval_by_defense: dict | None = None,
     significance_by_defense: dict | None = None,
+    severity_breakdown_by_defense: dict | None = None,
 ) -> str:
     """Same data as render_markdown_report, as JSON instead of a document -
     meant for a plotting script rather than a person, so the numbers don't
@@ -201,6 +220,7 @@ def render_json_report(
         "severity_weighted_by_defense": severity_weighted_by_defense,
         "confidence_interval_by_defense": confidence_interval_by_defense,
         "significance_vs_none_by_defense": significance_by_defense,
+        "severity_breakdown_by_defense": severity_breakdown_by_defense,
         "per_defense": per_defense,
     }
     return json.dumps(payload, indent=2)

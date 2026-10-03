@@ -110,6 +110,16 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   Every per-technique bucket also carries a 95% Wilson confidence interval (ci_low, ci_high)
   on its hijack rate - each technique only ever gets 3-5 alerts in this harness, so a bare
   point estimate like "100%" is easy to over-read without seeing how little data backs it.
+  `aggregate_by_severity` is the severity-axis analog of `aggregate_by_technique` - same
+  bucket shape, grouped by the injected alert's severity instead of its technique, returned
+  in canonical critical/high/medium/low order (skipping any severity not present) regardless
+  of what order alerts happen to appear in the batch. severity_weighted_hijack_rate already
+  collapses severity into one weighted scalar; this keeps the full breakdown instead, the same
+  "keep the axis instead of collapsing it" relationship `aggregate_by_technique` already has
+  to `overall_hijack_rate` - without it there was no way to see which severity level was
+  actually driving the weighted number, only trust that it was computed correctly. `run`
+  always computes and prints it, right after the per-technique table, and threads it into the
+  markdown/json `--report` output the same way the per-technique table is.
   `overall_hijack_rate_confidence_interval` does the same for the bottom-line rate, printed
   in every `run`/`compare`/`full-report` invocation - both call `hijacked_and_total` for the
   raw (hijacked, total) counts behind the rate, the one shared building block instead of
@@ -179,7 +189,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   what the model actually said.
 - `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
   dismiss|escalate [--report FILE] [--transcript FILE]` runs one battery and can optionally
-  save the aggregate report and/or the per-alert transcript;
+  save the aggregate report and/or the per-alert transcript. Besides the per-technique table,
+  it always also prints a per-severity breakdown (`aggregate_by_severity`) right below it -
+  which severity level is actually driving the severity-weighted rate, not just the technique
+  that's driving the flat one - and threads it into the markdown/json `--report` the same way;
   `soclab compare --client ... [--direction ...] [--report FILE] [--transcript FILE]` runs
   it under all four defenses back to back, prints the same defense-summary table straight
   to the terminal, followed by a two-proportion z-test comparing each defense's hijack rate
@@ -330,7 +343,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-311 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+320 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

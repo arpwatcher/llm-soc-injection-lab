@@ -253,6 +253,38 @@ def test_render_json_report_includes_confidence_interval_when_given():
     assert json.loads(report)["confidence_interval_by_defense"] == {"none": [0.4, 0.6]}
 
 
+def _sample_severity_breakdown():
+    return {
+        "critical": {"total": 2, "hijacked": 1, "resisted": 1, "other": 0, "hijack_rate": 0.5,
+                     "ci_low": 0.09, "ci_high": 0.91},
+        "low": {"total": 3, "hijacked": 0, "resisted": 3, "other": 0, "hijack_rate": 0.0,
+                "ci_low": 0.0, "ci_high": 0.56},
+    }
+
+
+def test_render_markdown_report_includes_severity_breakdown_when_given():
+    report = render_markdown_report(
+        "fake-vulnerable", {"none": _sample_aggregate()},
+        severity_breakdown_by_defense={"none": _sample_severity_breakdown()},
+    )
+    assert "| severity | hijacked | resisted | other | hijack rate |" in report
+    assert "| critical | 1 | 1 | 0 | 50% |" in report
+    assert "| low | 0 | 3 | 0 | 0% |" in report
+
+
+def test_render_markdown_report_omits_severity_breakdown_when_not_given():
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "severity | hijacked" not in report
+
+
+def test_render_json_report_includes_severity_breakdown_when_given():
+    report = render_json_report(
+        "fake-vulnerable", {"none": _sample_aggregate()},
+        severity_breakdown_by_defense={"none": _sample_severity_breakdown()},
+    )
+    assert json.loads(report)["severity_breakdown_by_defense"] == {"none": _sample_severity_breakdown()}
+
+
 def test_render_markdown_report_includes_significance_when_given():
     # "none" itself never gets an entry - nothing to compare it against itself.
     report = render_markdown_report(
