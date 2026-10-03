@@ -285,6 +285,25 @@ def test_render_json_report_includes_severity_breakdown_when_given():
     assert json.loads(report)["severity_breakdown_by_defense"] == {"none": _sample_severity_breakdown()}
 
 
+def test_render_combined_report_includes_severity_breakdown_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    severity_breakdown_by_direction = {"dismiss": {"none": _sample_severity_breakdown()}}
+    report = render_combined_report(
+        "fake-stubborn", by_direction, severity_breakdown_by_direction=severity_breakdown_by_direction,
+    )
+    assert "| severity | hijacked | resisted | other | hijack rate |" in report
+    assert "| critical | 1 | 1 | 0 | 50% |" in report
+
+
+def test_render_combined_json_report_includes_severity_breakdown_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    severity_breakdown_by_direction = {"dismiss": {"none": _sample_severity_breakdown()}}
+    report = render_combined_json_report(
+        "fake-stubborn", by_direction, severity_breakdown_by_direction=severity_breakdown_by_direction,
+    )
+    assert json.loads(report)["severity_breakdown_by_direction"] == severity_breakdown_by_direction
+
+
 def test_render_markdown_report_includes_significance_when_given():
     # "none" itself never gets an entry - nothing to compare it against itself.
     report = render_markdown_report(

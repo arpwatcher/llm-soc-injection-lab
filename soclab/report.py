@@ -250,15 +250,17 @@ def render_combined_report(
     severity_weighted_by_direction: dict | None = None,
     confidence_interval_by_direction: dict | None = None,
     significance_by_direction: dict | None = None,
+    severity_breakdown_by_direction: dict | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
     document. by_direction maps direction name -> per_defense dict (the
     same shape render_markdown_report takes), e.g.
     {"dismiss": {"none": {...}, ...}, "escalate": {"none": {...}, ...}}.
-    severity_weighted_by_direction, confidence_interval_by_direction, and
-    significance_by_direction are optional: each maps direction name ->
-    (defense name -> its stat), same shape as by_direction, shown
-    alongside the flat rate in each section."""
+    severity_weighted_by_direction, confidence_interval_by_direction,
+    significance_by_direction, and severity_breakdown_by_direction are
+    optional: each maps direction name -> (defense name -> its stat),
+    same shape as by_direction, shown alongside the flat rate in each
+    section."""
     lines = [f"# injection results - client: {client_name} (all directions, all defenses)", ""]
 
     lines.extend(_render_summary_table(
@@ -272,12 +274,14 @@ def render_combined_report(
         severity_weighted = severity_weighted_by_direction[direction] if severity_weighted_by_direction else None
         confidence_interval = confidence_interval_by_direction[direction] if confidence_interval_by_direction else None
         significance = significance_by_direction[direction] if significance_by_direction else None
+        severity_breakdown = severity_breakdown_by_direction[direction] if severity_breakdown_by_direction else None
         lines.extend(_render_defense_sections(
             per_defense,
             severity_weighted_by_defense=severity_weighted,
             confidence_interval_by_defense=confidence_interval,
             significance_by_defense=significance,
             heading_level="##",
+            severity_breakdown_by_defense=severity_breakdown,
         ))
     return "\n".join(lines)
 
@@ -288,6 +292,7 @@ def render_combined_json_report(
     severity_weighted_by_direction: dict | None = None,
     confidence_interval_by_direction: dict | None = None,
     significance_by_direction: dict | None = None,
+    severity_breakdown_by_direction: dict | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
     payload = {
@@ -296,6 +301,7 @@ def render_combined_json_report(
         "severity_weighted_by_direction": severity_weighted_by_direction,
         "confidence_interval_by_direction": confidence_interval_by_direction,
         "significance_vs_none_by_direction": significance_by_direction,
+        "severity_breakdown_by_direction": severity_breakdown_by_direction,
         "by_direction": by_direction,
     }
     return json.dumps(payload, indent=2)

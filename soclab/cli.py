@@ -188,28 +188,35 @@ def _injected_alerts_for(direction: str) -> list:
 
 def _run_defense_battery(injected_alerts: list, client, heading_prefix: str = "") -> tuple:
     """Runs the injection battery under every defense, printing each
-    defense's per-technique table as it goes. compare runs this once;
-    full-report runs it once per direction (heading_prefix distinguishes
-    "--- defense=none ---" from "--- direction=dismiss defense=none ---"
-    in the two cases) - same loop body either way, previously duplicated
-    between them. Returns (per_defense, results_by_defense,
-    severity_weighted_by_defense, confidence_interval_by_defense), each
+    defense's per-technique and per-severity tables as it goes. compare
+    runs this once; full-report runs it once per direction (heading_prefix
+    distinguishes "--- defense=none ---" from "--- direction=dismiss
+    defense=none ---" in the two cases) - same loop body either way,
+    previously duplicated between them. Returns (per_defense,
+    results_by_defense, severity_weighted_by_defense,
+    confidence_interval_by_defense, severity_breakdown_by_defense), each
     keyed by defense name."""
     per_defense = {}
     results_by_defense = {}
     severity_weighted_by_defense = {}
     confidence_interval_by_defense = {}
+    severity_breakdown_by_defense = {}
     for defense in DEFENSES:
         print(f"--- {heading_prefix}defense={defense} ---")
         results = score_batch(injected_alerts, client, defense=defense)
         aggregated = aggregate_by_technique(results)
-        _print_report(aggregated, results)
+        severity_breakdown = aggregate_by_severity(results)
+        _print_report(aggregated, results, severity_breakdown)
         per_defense[defense] = aggregated
         results_by_defense[defense] = results
         severity_weighted_by_defense[defense] = severity_weighted_hijack_rate(results)
         confidence_interval_by_defense[defense] = overall_hijack_rate_confidence_interval(results)
+        severity_breakdown_by_defense[defense] = severity_breakdown
         print()
-    return per_defense, results_by_defense, severity_weighted_by_defense, confidence_interval_by_defense
+    return (
+        per_defense, results_by_defense, severity_weighted_by_defense,
+        confidence_interval_by_defense, severity_breakdown_by_defense,
+    )
 
 
 def cmd_run(args):
@@ -263,9 +270,10 @@ def cmd_compare(args):
     injected_alerts = _injected_alerts_for(args.direction)
 
     print(f"direction={args.direction}\n")
-    per_defense, results_by_defense, severity_weighted_by_defense, confidence_interval_by_defense = (
-        _run_defense_battery(injected_alerts, client)
-    )
+    (
+        per_defense, results_by_defense, severity_weighted_by_defense,
+        confidence_interval_by_defense, severity_breakdown_by_defense,
+    ) = _run_defense_battery(injected_alerts, client)
 
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
     significance_by_defense = _significance_vs_baseline(results_by_defense, DEFENSE_NONE)
@@ -279,12 +287,14 @@ def cmd_compare(args):
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
+                severity_breakdown_by_defense=severity_breakdown_by_defense,
             ),
             json_content=render_json_report(
                 args.client, per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
+                severity_breakdown_by_defense=severity_breakdown_by_defense,
             ),
             csv_content=render_csv_report(args.client, per_defense, direction=args.direction),
             message=f"wrote report to {args.report}",
@@ -310,15 +320,18 @@ def cmd_full_report(args):
     severity_weighted_by_direction = {}
     confidence_interval_by_direction = {}
     significance_by_direction = {}
+    severity_breakdown_by_direction = {}
     for direction in DIRECTIONS:
         injected_alerts = _injected_alerts_for(direction)
-        per_defense, results_by_defense, severity_weighted_by_defense, confidence_interval_by_defense = (
-            _run_defense_battery(injected_alerts, client, heading_prefix=f"direction={direction} ")
-        )
+        (
+            per_defense, results_by_defense, severity_weighted_by_defense,
+            confidence_interval_by_defense, severity_breakdown_by_defense,
+        ) = _run_defense_battery(injected_alerts, client, heading_prefix=f"direction={direction} ")
         by_direction[direction] = per_defense
         results_by_direction[direction] = results_by_defense
         severity_weighted_by_direction[direction] = severity_weighted_by_defense
         confidence_interval_by_direction[direction] = confidence_interval_by_defense
+        severity_breakdown_by_direction[direction] = severity_breakdown_by_defense
         significance_by_direction[direction] = _significance_vs_baseline(results_by_defense, DEFENSE_NONE)
         _print_significance_vs_baseline(significance_by_direction[direction], DEFENSE_NONE)
 
@@ -334,12 +347,14 @@ def cmd_full_report(args):
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
+            severity_breakdown_by_direction=severity_breakdown_by_direction,
         ),
         json_content=render_combined_json_report(
             args.client, by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
+            severity_breakdown_by_direction=severity_breakdown_by_direction,
         ),
         csv_content=render_combined_csv_report(args.client, by_direction),
         message=f"wrote combined report to {args.report}",
