@@ -447,6 +447,21 @@ def test_compare_bad_report_path_fails_cleanly(capsys):
     assert "No such file or directory" in err
 
 
+def test_compare_severity_filter_restricts_the_battery(capsys):
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive", "--severity", "critical"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override                 2        0      0        100%" in out
+    assert "medium" not in out
+
+
+def test_compare_severity_filter_rejects_unknown_name(capsys):
+    exit_code = main(["compare", "--severity", "catastrophic"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown severity/severities for compare" in err
+
+
 def test_full_report_bad_report_path_fails_cleanly(capsys):
     exit_code = main(["full-report", "--client", "fake-robust", "--report", "/no/such/directory/report.md"])
     err = capsys.readouterr().err
@@ -556,6 +571,30 @@ def test_full_report_prints_summary_to_terminal(tmp_path, capsys):
 def test_full_report_requires_report_path():
     with pytest.raises(SystemExit):
         main(["full-report", "--client", "fake-stubborn"])
+
+
+def test_full_report_severity_filter_restricts_both_directions(tmp_path, capsys):
+    """escalation-direction techniques only ever target dismiss-worthy
+    alerts, none of which are severity=critical/high - so filtering to
+    --severity critical,high should leave the dismiss direction's battery
+    intact but make the escalate direction's come back empty, not erroring."""
+    report_path = tmp_path / "full.md"
+    exit_code = main([
+        "full-report", "--client", "fake-stubborn", "--severity", "critical,high", "--report", str(report_path),
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direction=escalate defense=none ---\ntechnique" in out
+    escalate_section = out.split("direction=escalate defense=none ---")[1].split("direction=escalate defense=sandwich")[0]
+    assert "overall hijack rate: 0%" in escalate_section
+
+
+def test_full_report_severity_filter_rejects_unknown_name(tmp_path, capsys):
+    report_path = tmp_path / "full.md"
+    exit_code = main(["full-report", "--client", "fake-robust", "--report", str(report_path), "--severity", "huge"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown severity/severities for full-report" in err
 
 
 def test_leaderboard_ranks_fake_clients_by_hijack_rate(capsys):

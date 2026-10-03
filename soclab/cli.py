@@ -292,6 +292,10 @@ def cmd_compare(args):
     client = build_client(args)
     injected_alerts = _injected_alerts_for(args.direction)
 
+    requested_severities = _resolve_severities(args.severity, "compare")
+    if requested_severities is not None:
+        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
+
     print(f"direction={args.direction}\n")
     (
         per_defense, results_by_defense, severity_weighted_by_defense,
@@ -338,6 +342,8 @@ def cmd_full_report(args):
     like once a real model is reachable."""
     client = build_client(args)
 
+    requested_severities = _resolve_severities(args.severity, "full-report")
+
     by_direction = {}
     results_by_direction = {}
     severity_weighted_by_direction = {}
@@ -346,6 +352,8 @@ def cmd_full_report(args):
     severity_breakdown_by_direction = {}
     for direction in DIRECTIONS:
         injected_alerts = _injected_alerts_for(direction)
+        if requested_severities is not None:
+            injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
         (
             per_defense, results_by_defense, severity_weighted_by_defense,
             confidence_interval_by_defense, severity_breakdown_by_defense,
@@ -690,6 +698,10 @@ _DEFENSE_HELP = (
     "strict (name attack patterns up front in the system prompt), or both together"
 )
 _TIMEOUT_HELP = "request timeout in seconds for --client ollama, default 120 (ignored by every fake-* client)"
+_SEVERITY_HELP = (
+    "comma-separated subset of severities to test (default: all of them present in the "
+    "battery) - e.g. --severity critical,high to focus on the highest-impact alerts"
+)
 
 
 def build_parser():
@@ -701,11 +713,7 @@ def build_parser():
     run_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
     run_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                              help="which attacker goal to test: hide a real incident, or waste analyst time")
-    run_parser.add_argument(
-        "--severity",
-        help="comma-separated subset of severities to test (default: all of them present for the "
-             "chosen --direction) - e.g. --severity critical,high to focus on the highest-impact alerts",
-    )
+    run_parser.add_argument("--severity", help=_SEVERITY_HELP)
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     run_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
@@ -720,6 +728,7 @@ def build_parser():
     compare_parser.add_argument("--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP)
     compare_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                                  help="which attacker goal to test: hide a real incident, or waste analyst time")
+    compare_parser.add_argument("--severity", help=_SEVERITY_HELP)
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
@@ -736,6 +745,7 @@ def build_parser():
     full_report_parser.add_argument(
         "--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP
     )
+    full_report_parser.add_argument("--severity", help=_SEVERITY_HELP)
     full_report_parser.add_argument("--model", help="model name, required for --client ollama")
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     full_report_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
