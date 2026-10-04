@@ -642,7 +642,13 @@ def cmd_matrix(args):
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         aggregated = aggregate_by_technique(results)
-        rates = {technique: aggregated[technique]["hijack_rate"] for technique in technique_names}
+        # a technique can be entirely absent from aggregated if --severity
+        # filtered out every alert it would otherwise have applied to (e.g.
+        # --severity low under the default dismiss direction, where no
+        # escalate/investigate alert is low-severity) - 0% there, same
+        # "empty battery" convention every other subcommand's hijack rate
+        # falls back to, rather than a bare KeyError.
+        rates = {technique: aggregated.get(technique, {}).get("hijack_rate", 0.0) for technique in technique_names}
         rows.append({"client": name, "rates": rates, "average": sum(rates.values()) / len(technique_names)})
     rows.sort(key=lambda row: row["average"])
 

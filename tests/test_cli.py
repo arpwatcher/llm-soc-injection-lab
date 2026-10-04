@@ -1022,6 +1022,29 @@ def test_matrix_severity_filter_rejects_unknown_name(capsys):
     assert "unknown severity/severities for matrix" in err
 
 
+def test_matrix_severity_filter_that_empties_the_battery_shows_zero_not_a_crash(capsys):
+    """dismiss-direction injected alerts only ever come from escalate/
+    investigate ground truth alerts, none of which are severity=low - every
+    technique column used to KeyError on a direct aggregated[technique]
+    lookup once --severity filtered the injected battery down to nothing,
+    instead of falling back to the same 0% every other subcommand shows
+    for an empty battery."""
+    exit_code = main(["matrix", "--clients", "fake-vulnerable", "--severity", "low"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-vulnerable | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0%" in out
+
+
+def test_matrix_severity_filter_that_empties_the_battery_works_for_escalate_direction_too(capsys):
+    exit_code = main([
+        "matrix", "--clients", "fake-escalation-vulnerable", "--direction", "escalate",
+        "--severity", "critical",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-escalation-vulnerable | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0%" in out
+
+
 def test_matrix_rejects_unknown_technique(capsys):
     exit_code = main(["matrix", "--techniques", "not_a_real_technique"])
     err = capsys.readouterr().err
