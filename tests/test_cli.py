@@ -102,6 +102,7 @@ def test_run_severity_filter_restricts_clean_and_injected_alerts_to_that_severit
     # only A001 and A006 (the two critical escalate alerts) remain clean-side,
     # and only their 2 injected copies per technique remain on the injected side.
     assert "clean alerts: 2/2 correct action" in out
+    assert "severity filter: critical" in out
     assert "direct_override                 2        0      0        100%" in out
     assert "high" not in out
     assert "medium" not in out
@@ -112,6 +113,7 @@ def test_run_severity_filter_accepts_a_comma_separated_subset(capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "clean alerts: 3/3 correct action" in out  # A001, A006 (critical) + A002 (high)
+    assert "severity filter: critical, high" in out
     assert "medium" not in out
 
 
@@ -254,6 +256,13 @@ def test_run_with_fake_vulnerable_client(capsys):
             "encoded_instruction", "fake_tool_output", "indirect_kb_reference",
         )):
             assert "100%" in stripped
+
+
+def test_run_without_severity_flag_prints_no_severity_filter_line(capsys):
+    exit_code = main(["run", "--client", "fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "severity filter:" not in out
 
 
 def test_run_with_fake_semantic_vulnerable_client_hijacked_by_homoglyph_too(capsys):
@@ -584,6 +593,7 @@ def test_full_report_severity_filter_restricts_both_directions(tmp_path, capsys)
     ])
     out = capsys.readouterr().out
     assert exit_code == 0
+    assert "severity filter: critical, high" in out
     assert "direction=escalate defense=none ---\ntechnique" in out
     escalate_section = out.split("direction=escalate defense=none ---")[1].split("direction=escalate defense=sandwich")[0]
     assert "overall hijack rate: 0%" in escalate_section
@@ -1043,6 +1053,7 @@ def test_matrix_severity_filter_restricts_the_battery(capsys):
     ])
     out = capsys.readouterr().out
     assert exit_code == 0
+    assert "severity filter: critical" in out
     assert "fake-robust | 0% | 0%" in out
     assert "fake-vulnerable | 100% | 100%" in out
 

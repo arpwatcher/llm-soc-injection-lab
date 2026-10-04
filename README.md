@@ -204,7 +204,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   highest-impact alerts instead of the whole battery; a subset with nothing present for the
   chosen direction (e.g. `--severity low` under the default dismiss direction, where no
   escalate/investigate alert is low-severity) comes back as an empty, 0%, non-erroring result
-  rather than crashing;
+  rather than crashing (`matrix`'s own per-technique columns used to raise a bare `KeyError`
+  on exactly this case - a technique can be entirely absent from `aggregate_by_technique`'s
+  output once `--severity` filters its alerts down to zero, and the column lookup assumed
+  it would always be there; fixed to fall back to 0% the same way every other subcommand
+  already does for an empty battery). Every `--severity`-aware subcommand also prints a
+  `severity filter: critical, high` line right under its usual header whenever a filter is
+  active (via the shared `_print_severity_filter`, silent when none was given) - without it,
+  a saved terminal transcript or screenshot of a filtered run gave no way to tell afterward
+  which severities were actually tested, so the numbers could be misread as the full battery's;
   `soclab compare --client ... [--direction ...] [--severity ...] [--report FILE]
   [--transcript FILE]` runs it under all four defenses back to back, prints the same
   defense-summary table straight to the terminal, followed by a two-proportion z-test
@@ -367,7 +375,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-342 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+343 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

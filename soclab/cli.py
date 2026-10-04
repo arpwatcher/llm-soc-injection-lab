@@ -237,6 +237,18 @@ def _resolve_severities(severity_arg: str | None, command_label: str) -> list | 
     return requested
 
 
+def _print_severity_filter(requested_severities: list | None) -> None:
+    """Prints which --severity subset is in effect, right under the
+    direction/defense header line every --severity-aware subcommand
+    already prints - silent when no filter was given (the default,
+    whole-battery case needs no extra line). Without this, a saved
+    terminal screenshot or transcript of a filtered run gives no way to
+    tell afterward which severities were actually tested; the numbers
+    could silently be misread as the full battery's."""
+    if requested_severities is not None:
+        print(f"severity filter: {', '.join(requested_severities)}")
+
+
 def _filter_by_severity(alerts: list, requested_severities: list | None) -> list:
     """alerts unchanged if requested_severities is None (no --severity given
     - every subcommand that supports it treats that as "don't filter"),
@@ -266,6 +278,7 @@ def cmd_run(args):
 
     injected_results = score_batch(injected_alerts, client, defense=args.defense)
     print(f"direction={args.direction}")
+    _print_severity_filter(requested_severities)
     aggregated = aggregate_by_technique(injected_results)
     severity_breakdown = aggregate_by_severity(injected_results)
     _print_report(aggregated, injected_results, severity_breakdown)
@@ -308,6 +321,7 @@ def cmd_compare(args):
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
 
     print(f"direction={args.direction}\n")
+    _print_severity_filter(requested_severities)
     (
         per_defense, results_by_defense, severity_weighted_by_defense,
         confidence_interval_by_defense, severity_breakdown_by_defense,
@@ -354,6 +368,7 @@ def cmd_full_report(args):
     client = build_client(args)
 
     requested_severities = _resolve_severities(args.severity, "full-report")
+    _print_severity_filter(requested_severities)
 
     by_direction = {}
     results_by_direction = {}
@@ -503,6 +518,7 @@ def cmd_leaderboard(args):
     rows.sort(key=lambda row: row[args.sort_by], reverse=not _LEADERBOARD_SORT_ASCENDING[args.sort_by])
 
     print(f"direction={args.direction} defense={args.defense}\n")
+    _print_severity_filter(requested_severities)
     print(f"{'client':<38} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18} {'clean_accuracy':>15}")
     for row in rows:
         ci = f"{row['ci_low']:.0%}-{row['ci_high']:.0%}"
@@ -576,6 +592,7 @@ def cmd_technique_leaderboard(args):
         rows = [(technique, bucket) for technique, bucket in rows if bucket["hijack_rate"] >= args.min_rate]
 
     print(f"direction={args.direction} defense={args.defense} across {len(client_names)} client(s)\n")
+    _print_severity_filter(requested_severities)
     print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15}")
     for technique, bucket in rows:
         ci = f"{bucket['ci_low']:.0%}-{bucket['ci_high']:.0%}"
@@ -655,6 +672,7 @@ def cmd_matrix(args):
     rows.sort(key=lambda row: row["average"])
 
     print(f"direction={args.direction} defense={args.defense}\n")
+    _print_severity_filter(requested_severities)
     print("client | " + " | ".join(technique_names) + " | average")
     for row in rows:
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
