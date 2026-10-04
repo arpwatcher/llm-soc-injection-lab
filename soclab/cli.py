@@ -237,6 +237,19 @@ def _resolve_severities(severity_arg: str | None, command_label: str) -> list | 
     return requested
 
 
+def _filter_by_severity(alerts: list, requested_severities: list | None) -> list:
+    """alerts unchanged if requested_severities is None (no --severity given
+    - every subcommand that supports it treats that as "don't filter"),
+    otherwise only the alerts whose severity is in the requested set.
+    Shared by every subcommand that supports --severity, replacing six
+    near-identical copies of the same "if requested is not None: filter"
+    check (run and leaderboard each ran it twice, once for injected alerts
+    and once for the clean-alert baseline)."""
+    if requested_severities is None:
+        return alerts
+    return [a for a in alerts if a.severity in requested_severities]
+
+
 def cmd_run(args):
     client = build_client(args)
 
@@ -244,9 +257,8 @@ def cmd_run(args):
     injected_alerts = _injected_alerts_for(args.direction)
 
     requested_severities = _resolve_severities(args.severity, "run")
-    if requested_severities is not None:
-        clean_alerts = [a for a in clean_alerts if a.severity in requested_severities]
-        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
+    clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
+    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
 
     clean_results = score_batch(clean_alerts, client, defense=args.defense)
     clean_correct, clean_total = resisted_and_total(clean_results)
@@ -293,8 +305,7 @@ def cmd_compare(args):
     injected_alerts = _injected_alerts_for(args.direction)
 
     requested_severities = _resolve_severities(args.severity, "compare")
-    if requested_severities is not None:
-        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
+    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
 
     print(f"direction={args.direction}\n")
     (
@@ -351,9 +362,7 @@ def cmd_full_report(args):
     significance_by_direction = {}
     severity_breakdown_by_direction = {}
     for direction in DIRECTIONS:
-        injected_alerts = _injected_alerts_for(direction)
-        if requested_severities is not None:
-            injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
+        injected_alerts = _filter_by_severity(_injected_alerts_for(direction), requested_severities)
         (
             per_defense, results_by_defense, severity_weighted_by_defense,
             confidence_interval_by_defense, severity_breakdown_by_defense,
@@ -471,9 +480,8 @@ def cmd_leaderboard(args):
     injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
     requested_severities = _resolve_severities(args.severity, "leaderboard")
-    if requested_severities is not None:
-        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
-        clean_alerts = [a for a in clean_alerts if a.severity in requested_severities]
+    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
     rows = []
     results_by_client = {}
     for name in client_names:
@@ -549,8 +557,7 @@ def cmd_technique_leaderboard(args):
     client_names = _resolve_client_names(args.clients, "technique-leaderboard")
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "technique-leaderboard")
-    if requested_severities is not None:
-        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
+    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
     results_by_client = {}
     combined_results = []
     for name in client_names:
@@ -623,8 +630,7 @@ def cmd_matrix(args):
     client_names = _resolve_client_names(args.clients, "matrix")
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "matrix")
-    if requested_severities is not None:
-        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
+    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
     technique_source = ESCALATION_TECHNIQUES if args.direction == "escalate" else TECHNIQUES
     requested = _resolve_technique_names(args.techniques, technique_source, f"direction={args.direction}")
     technique_names = requested if requested is not None else list(technique_source)
