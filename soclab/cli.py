@@ -470,6 +470,10 @@ def cmd_leaderboard(args):
 
     injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
+    requested_severities = _resolve_severities(args.severity, "leaderboard")
+    if requested_severities is not None:
+        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
+        clean_alerts = [a for a in clean_alerts if a.severity in requested_severities]
     rows = []
     results_by_client = {}
     for name in client_names:
@@ -544,6 +548,9 @@ def cmd_technique_leaderboard(args):
     each result - no new scoring logic needed, just a different batch."""
     client_names = _resolve_client_names(args.clients, "technique-leaderboard")
     injected_alerts = _injected_alerts_for(args.direction)
+    requested_severities = _resolve_severities(args.severity, "technique-leaderboard")
+    if requested_severities is not None:
+        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
     results_by_client = {}
     combined_results = []
     for name in client_names:
@@ -615,6 +622,9 @@ def cmd_matrix(args):
     attributed to its own client, not merged into one combined rate."""
     client_names = _resolve_client_names(args.clients, "matrix")
     injected_alerts = _injected_alerts_for(args.direction)
+    requested_severities = _resolve_severities(args.severity, "matrix")
+    if requested_severities is not None:
+        injected_alerts = [a for a in injected_alerts if a.severity in requested_severities]
     technique_source = ESCALATION_TECHNIQUES if args.direction == "escalate" else TECHNIQUES
     requested = _resolve_technique_names(args.techniques, technique_source, f"direction={args.direction}")
     technique_names = requested if requested is not None else list(technique_source)
@@ -765,6 +775,7 @@ def build_parser():
     leaderboard_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                                      help="which attacker goal to test: hide a real incident, or waste analyst time")
     leaderboard_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
+    leaderboard_parser.add_argument("--severity", help=_SEVERITY_HELP)
     leaderboard_parser.add_argument(
         "--clients",
         help="comma-separated subset of fake-* clients to compare (default: all of them) - "
@@ -794,6 +805,7 @@ def build_parser():
     technique_leaderboard_parser.add_argument(
         "--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP,
     )
+    technique_leaderboard_parser.add_argument("--severity", help=_SEVERITY_HELP)
     technique_leaderboard_parser.add_argument(
         "--clients",
         help="comma-separated subset of fake-* clients to aggregate across (default: all of them) - "
@@ -823,6 +835,7 @@ def build_parser():
         help="which attacker goal to test: hide a real incident, or waste analyst time",
     )
     matrix_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
+    matrix_parser.add_argument("--severity", help=_SEVERITY_HELP)
     matrix_parser.add_argument(
         "--clients",
         help="comma-separated subset of fake-* clients to compare (default: all of them) - "

@@ -736,6 +736,24 @@ def test_leaderboard_clients_all_commas_is_a_clear_error(capsys):
     assert "no client names" in err
 
 
+def test_leaderboard_severity_filter_restricts_the_battery(capsys):
+    """fake-vulnerable caves to every literal marker except unicode_homoglyph -
+    filtering to just the 2 critical alerts should still show that same
+    pattern (88% hijack rate), not the unfiltered 8-alert rate."""
+    exit_code = main(["leaderboard", "--clients", "fake-robust,fake-vulnerable", "--severity", "critical"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-robust" in out and "0%" in out
+    assert "fake-vulnerable" in out and "88%" in out
+
+
+def test_leaderboard_severity_filter_rejects_unknown_name(capsys):
+    exit_code = main(["leaderboard", "--severity", "catastrophic"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown severity/severities for leaderboard" in err
+
+
 def test_leaderboard_writes_json_report(tmp_path, capsys):
     report_path = tmp_path / "leaderboard.json"
     main(["leaderboard", "--direction", "escalate", "--report", str(report_path)])
@@ -825,6 +843,23 @@ def test_technique_leaderboard_rejects_unknown_client(capsys):
     assert exit_code == 1
     assert "unknown client(s) for technique-leaderboard" in err
     assert "fake-nonexistent" in err
+
+
+def test_technique_leaderboard_severity_filter_restricts_the_battery(capsys):
+    exit_code = main([
+        "technique-leaderboard", "--clients", "fake-vulnerable", "--severity", "critical",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "across 1 client(s)" in out
+    assert "direct_override                                 2 " in out
+
+
+def test_technique_leaderboard_severity_filter_rejects_unknown_name(capsys):
+    exit_code = main(["technique-leaderboard", "--severity", "catastrophic"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown severity/severities for technique-leaderboard" in err
 
 
 def test_technique_leaderboard_techniques_restricts_to_the_requested_subset(capsys):
@@ -967,6 +1002,24 @@ def test_matrix_rejects_unknown_client(capsys):
     assert exit_code == 1
     assert "unknown client(s) for matrix" in err
     assert "fake-nonexistent" in err
+
+
+def test_matrix_severity_filter_restricts_the_battery(capsys):
+    exit_code = main([
+        "matrix", "--clients", "fake-robust,fake-vulnerable", "--techniques", "direct_override",
+        "--severity", "critical",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-robust | 0% | 0%" in out
+    assert "fake-vulnerable | 100% | 100%" in out
+
+
+def test_matrix_severity_filter_rejects_unknown_name(capsys):
+    exit_code = main(["matrix", "--severity", "catastrophic"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown severity/severities for matrix" in err
 
 
 def test_matrix_rejects_unknown_technique(capsys):

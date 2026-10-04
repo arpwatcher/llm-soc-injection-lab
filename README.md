@@ -197,10 +197,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   per-severity breakdown (`aggregate_by_severity`) right below it - which severity level is
   actually driving the severity-weighted rate, not just the technique that's driving the flat
   one - and threads it into the markdown/json `--report` the same way. `--severity` restricts
-  the alerts tested (clean and injected for `run`, injected for `compare`/`full-report`) to a
-  chosen subset of severities (comma-separated, same parsing/validation shape
+  the alerts tested (clean and injected for `run`/`leaderboard`, injected only for the rest) to
+  a chosen subset of severities (comma-separated, same parsing/validation shape
   `_resolve_client_names`/`_resolve_technique_names` already use, via `_resolve_severities`,
-  shared across all three subcommands via `_SEVERITY_HELP`) - for zooming into just the
+  shared across every subcommand below via `_SEVERITY_HELP`) - for zooming into just the
   highest-impact alerts instead of the whole battery; a subset with nothing present for the
   chosen direction (e.g. `--severity low` under the default dismiss direction, where no
   escalate/investigate alert is low-severity) comes back as an empty, 0%, non-erroring result
@@ -216,7 +216,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   client, one combined document, with the same per-direction significance check `compare`
   does and its combined summary table also printed to the terminal before the file is
   written, plus an optional combined transcript across every direction and defense;
-  `soclab leaderboard --direction ... --defense ... [--report FILE]`
+  `soclab leaderboard --direction ... --defense ... [--severity ...] [--report FILE]`
   runs every fake-* client (ollama excluded - it needs a real, reachable server) against the
   same battery under one fixed direction/defense and ranks them by hijack rate, most robust
   first - every other subcommand compares defenses or directions for one client, this
@@ -236,7 +236,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   unambiguous pair to test, so this only kicks in for the two-client case). Also
   accepts `--transcript FILE`, same per-alert JSON idea as the other subcommands but keyed
   by client instead of defense. `soclab technique-leaderboard --direction ... --defense ...
-  [--clients ...] [--techniques ...] [--report FILE] [--transcript FILE]` is the
+  [--severity ...] [--clients ...] [--techniques ...] [--report FILE] [--transcript FILE]` is the
   technique-axis complement: `leaderboard` ranks clients against one fixed battery, this
   ranks techniques by how often they succeed across every compared client instead (most
   dangerous first) - concatenates every client's scored results for the same battery and
@@ -251,8 +251,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   exactly-two-clients pairwise check. Same `--clients` narrowing and `--transcript` (client-
   and technique-tagged, reuses `render_leaderboard_transcript` directly since every entry
   already carries both) as
-  `leaderboard`. `soclab matrix --direction ... --defense ... [--clients ...] [--techniques
-  ...] [--report FILE] [--transcript FILE]` is the view neither leaderboard collapses away:
+  `leaderboard`. `soclab matrix --direction ... --defense ... [--severity ...] [--clients ...]
+  [--techniques ...] [--report FILE] [--transcript FILE]` is the view neither leaderboard collapses away:
   a full client-by-technique grid of hijack rates, kept per-client (scored separately, not
   concatenated the way `technique-leaderboard` does) so each client's own per-technique
   breakdown stays intact instead of being merged into one combined rate. Each row also gets
@@ -315,12 +315,14 @@ python -m soclab.cli leaderboard --direction dismiss --report leaderboard.md  # 
 python -m soclab.cli leaderboard --clients fake-robust,fake-vulnerable  # a chosen subset - exactly 2 also runs a z-test between them
 python -m soclab.cli leaderboard --sort-by clean_accuracy  # rank by a different column
 python -m soclab.cli leaderboard --transcript leaderboard-transcript.json  # per-alert reasoning, per client
+python -m soclab.cli leaderboard --severity critical,high  # just the highest-impact alerts
 python -m soclab.cli technique-leaderboard --direction dismiss  # which technique works best across every client
 python -m soclab.cli technique-leaderboard --transcript tl-transcript.json  # per-alert reasoning, per client+technique
 python -m soclab.cli technique-leaderboard --techniques direct_override,unicode_homoglyph  # just a chosen subset
 python -m soclab.cli matrix --direction dismiss --report matrix.md  # client x technique heatmap grid
 python -m soclab.cli matrix --clients fake-robust,fake-vulnerable --techniques direct_override,unicode_homoglyph
 python -m soclab.cli matrix --report matrix.csv  # wide csv, one row per client, one column per technique
+python -m soclab.cli matrix --severity critical --techniques direct_override  # zoom into one severity/technique
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -358,7 +360,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-331 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+337 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
