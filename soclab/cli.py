@@ -572,6 +572,8 @@ def cmd_technique_leaderboard(args):
         aggregated = {name: aggregated[name] for name in requested}
 
     rows = sorted(aggregated.items(), key=lambda item: item[1]["hijack_rate"], reverse=True)
+    if args.min_rate is not None:
+        rows = [(technique, bucket) for technique, bucket in rows if bucket["hijack_rate"] >= args.min_rate]
 
     print(f"direction={args.direction} defense={args.defense} across {len(client_names)} client(s)\n")
     print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15}")
@@ -827,6 +829,11 @@ def build_parser():
         "--techniques",
         help="comma-separated subset of techniques to rank (default: all of them for the chosen "
              "--direction) - see list-techniques for the available names",
+    )
+    technique_leaderboard_parser.add_argument(
+        "--min-rate", type=float, dest="min_rate",
+        help="only show techniques with hijack_rate >= this threshold (0.0-1.0, e.g. 0.5 for 50%%) - "
+             "for isolating just the techniques that actually work, instead of reading past the safe ones",
     )
     technique_leaderboard_parser.add_argument(
         "--report",

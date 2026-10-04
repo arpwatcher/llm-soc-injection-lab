@@ -236,7 +236,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   unambiguous pair to test, so this only kicks in for the two-client case). Also
   accepts `--transcript FILE`, same per-alert JSON idea as the other subcommands but keyed
   by client instead of defense. `soclab technique-leaderboard --direction ... --defense ...
-  [--severity ...] [--clients ...] [--techniques ...] [--report FILE] [--transcript FILE]` is the
+  [--severity ...] [--clients ...] [--techniques ...] [--min-rate ...] [--report FILE]
+  [--transcript FILE]` is the
   technique-axis complement: `leaderboard` ranks clients against one fixed battery, this
   ranks techniques by how often they succeed across every compared client instead (most
   dangerous first) - concatenates every client's scored results for the same battery and
@@ -245,8 +246,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   per-client tables by hand; `--techniques name,name` narrows the ranking to a chosen subset
   the same way `--clients` does, validated against whichever technique set the chosen
   `--direction` actually uses (asking for a dismiss-direction name under `--direction
-  escalate` is rejected the same as an unrecognized one, not silently dropped). With exactly
-  two techniques ranked (via `--techniques` or because the battery itself only has two), also
+  escalate` is rejected the same as an unrecognized one, not silently dropped). `--min-rate`
+  drops every technique below that hijack-rate threshold from the (already most-dangerous-
+  first sorted) table entirely, rather than leaving a reader to eyeball where the interesting
+  ones stop and the safe ones begin - useful for a thesis table that should only list the
+  techniques that actually work. With exactly
+  two techniques ranked (via `--techniques`, `--min-rate`, or because the battery itself only
+  has two), also
   runs a two-proportion z-test between them, the technique-axis mirror of `leaderboard`'s own
   exactly-two-clients pairwise check. Same `--clients` narrowing and `--transcript` (client-
   and technique-tagged, reuses `render_leaderboard_transcript` directly since every entry
@@ -319,6 +325,7 @@ python -m soclab.cli leaderboard --severity critical,high  # just the highest-im
 python -m soclab.cli technique-leaderboard --direction dismiss  # which technique works best across every client
 python -m soclab.cli technique-leaderboard --transcript tl-transcript.json  # per-alert reasoning, per client+technique
 python -m soclab.cli technique-leaderboard --techniques direct_override,unicode_homoglyph  # just a chosen subset
+python -m soclab.cli technique-leaderboard --min-rate 0.5  # only the techniques that actually work
 python -m soclab.cli matrix --direction dismiss --report matrix.md  # client x technique heatmap grid
 python -m soclab.cli matrix --clients fake-robust,fake-vulnerable --techniques direct_override,unicode_homoglyph
 python -m soclab.cli matrix --report matrix.csv  # wide csv, one row per client, one column per technique
@@ -360,7 +367,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-339 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+342 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

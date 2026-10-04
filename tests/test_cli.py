@@ -872,6 +872,38 @@ def test_technique_leaderboard_techniques_restricts_to_the_requested_subset(caps
     assert "roleplay_authority" not in out
 
 
+def test_technique_leaderboard_min_rate_filters_out_techniques_below_the_threshold(capsys):
+    """fake-vulnerable hijacks on every technique except unicode_homoglyph
+    (its one blind spot, 0%) - a 50% threshold should drop just that one."""
+    exit_code = main(["technique-leaderboard", "--clients", "fake-vulnerable", "--min-rate", "0.5"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override" in out
+    assert "unicode_homoglyph" not in out
+
+
+def test_technique_leaderboard_min_rate_above_every_rate_is_an_empty_table_not_a_crash(capsys):
+    exit_code = main(["technique-leaderboard", "--clients", "fake-vulnerable", "--min-rate", "2"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override" not in out
+
+
+def test_technique_leaderboard_min_rate_combines_with_techniques_filter(capsys):
+    """narrowing to exactly 2 techniques normally triggers the pairwise
+    z-test line - once --min-rate narrows that down to 1, the z-test
+    should no longer print (nothing left to compare pairwise)."""
+    exit_code = main([
+        "technique-leaderboard", "--clients", "fake-vulnerable",
+        "--techniques", "direct_override,unicode_homoglyph", "--min-rate", "0.5",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override" in out
+    assert "unicode_homoglyph" not in out
+    assert "two-proportion z-test" not in out
+
+
 def test_technique_leaderboard_techniques_rejects_unknown_name(capsys):
     exit_code = main(["technique-leaderboard", "--techniques", "not_a_real_technique"])
     err = capsys.readouterr().err
