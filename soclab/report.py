@@ -180,6 +180,7 @@ def render_markdown_report(
     confidence_interval_by_defense: dict | None = None,
     significance_by_defense: dict | None = None,
     severity_breakdown_by_defense: dict | None = None,
+    severity_filter: list | None = None,
 ) -> str:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense. direction says which attacker goal these results are
@@ -187,8 +188,15 @@ def render_markdown_report(
     since technique names alone don't say which one they belong to at a
     glance. severity_weighted_by_defense, confidence_interval_by_defense,
     significance_by_defense, and severity_breakdown_by_defense are
-    optional: see _render_defense_sections for what each maps."""
+    optional: see _render_defense_sections for what each maps.
+    severity_filter, when given, is the list of severities --severity
+    restricted this run to - recorded here so a saved report file still
+    shows which subset of alerts it covers without the reader having to
+    remember or dig up the exact command that produced it."""
     lines = [f"# injection results - client: {client_name}, direction: {direction}", ""]
+    if severity_filter is not None:
+        lines.append(f"severity filter: {', '.join(severity_filter)}")
+        lines.append("")
     if len(per_defense) > 1:
         lines.extend(_render_summary_table(rate_by_defense(per_defense), "## summary: overall hijack rate by defense"))
     lines.extend(_render_defense_sections(
@@ -209,6 +217,7 @@ def render_json_report(
     confidence_interval_by_defense: dict | None = None,
     significance_by_defense: dict | None = None,
     severity_breakdown_by_defense: dict | None = None,
+    severity_filter: list | None = None,
 ) -> str:
     """Same data as render_markdown_report, as JSON instead of a document -
     meant for a plotting script rather than a person, so the numbers don't
@@ -216,6 +225,7 @@ def render_json_report(
     payload = {
         "client": client_name,
         "direction": direction,
+        "severity_filter": severity_filter,
         "summary_by_defense": rate_by_defense(per_defense),
         "severity_weighted_by_defense": severity_weighted_by_defense,
         "confidence_interval_by_defense": confidence_interval_by_defense,
@@ -251,6 +261,7 @@ def render_combined_report(
     confidence_interval_by_direction: dict | None = None,
     significance_by_direction: dict | None = None,
     severity_breakdown_by_direction: dict | None = None,
+    severity_filter: list | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
     document. by_direction maps direction name -> per_defense dict (the
@@ -260,8 +271,13 @@ def render_combined_report(
     significance_by_direction, and severity_breakdown_by_direction are
     optional: each maps direction name -> (defense name -> its stat),
     same shape as by_direction, shown alongside the flat rate in each
-    section."""
+    section. severity_filter, when given, is the single --severity
+    subset applied to both directions (full-report takes one global
+    filter, not one per direction)."""
     lines = [f"# injection results - client: {client_name} (all directions, all defenses)", ""]
+    if severity_filter is not None:
+        lines.append(f"severity filter: {', '.join(severity_filter)}")
+        lines.append("")
 
     lines.extend(_render_summary_table(
         combined_rate_by_defense(by_direction),
@@ -293,10 +309,12 @@ def render_combined_json_report(
     confidence_interval_by_direction: dict | None = None,
     significance_by_direction: dict | None = None,
     severity_breakdown_by_direction: dict | None = None,
+    severity_filter: list | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
     payload = {
         "client": client_name,
+        "severity_filter": severity_filter,
         "summary_by_defense": combined_rate_by_defense(by_direction),
         "severity_weighted_by_direction": severity_weighted_by_direction,
         "confidence_interval_by_direction": confidence_interval_by_direction,

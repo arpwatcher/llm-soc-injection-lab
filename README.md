@@ -212,7 +212,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   `severity filter: critical, high` line right under its usual header whenever a filter is
   active (via the shared `_print_severity_filter`, silent when none was given) - without it,
   a saved terminal transcript or screenshot of a filtered run gave no way to tell afterward
-  which severities were actually tested, so the numbers could be misread as the full battery's;
+  which severities were actually tested, so the numbers could be misread as the full battery's.
+  `run`, `compare`, and `full-report` thread the same information into their markdown/json
+  `--report` output too (a `severity_filter` key in json, a matching line near the top of the
+  markdown) - the terminal print alone only helps in the moment; the saved file is what
+  actually gets read later, so it needs the same record (left out of csv, consistent with
+  every other run-level, not per-row, stat already excluded from that format);
   `soclab compare --client ... [--direction ...] [--severity ...] [--report FILE]
   [--transcript FILE]` runs it under all four defenses back to back, prints the same
   defense-summary table straight to the terminal, followed by a two-proportion z-test
@@ -375,7 +380,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-343 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+353 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

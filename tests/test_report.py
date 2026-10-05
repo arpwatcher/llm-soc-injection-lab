@@ -304,6 +304,42 @@ def test_render_combined_json_report_includes_severity_breakdown_when_given():
     assert json.loads(report)["severity_breakdown_by_direction"] == severity_breakdown_by_direction
 
 
+def test_render_markdown_report_includes_severity_filter_when_given():
+    report = render_markdown_report(
+        "fake-vulnerable", {"none": _sample_aggregate()}, severity_filter=["critical", "high"],
+    )
+    assert "severity filter: critical, high" in report
+
+
+def test_render_markdown_report_omits_severity_filter_when_not_given():
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "severity filter" not in report
+
+
+def test_render_json_report_includes_severity_filter_when_given():
+    report = render_json_report(
+        "fake-vulnerable", {"none": _sample_aggregate()}, severity_filter=["critical", "high"],
+    )
+    assert json.loads(report)["severity_filter"] == ["critical", "high"]
+
+
+def test_render_json_report_severity_filter_defaults_to_none():
+    report = render_json_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert json.loads(report)["severity_filter"] is None
+
+
+def test_render_combined_report_includes_severity_filter_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    report = render_combined_report("fake-stubborn", by_direction, severity_filter=["low"])
+    assert "severity filter: low" in report
+
+
+def test_render_combined_json_report_includes_severity_filter_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    report = render_combined_json_report("fake-stubborn", by_direction, severity_filter=["low"])
+    assert json.loads(report)["severity_filter"] == ["low"]
+
+
 def test_render_markdown_report_includes_significance_when_given():
     # "none" itself never gets an entry - nothing to compare it against itself.
     report = render_markdown_report(

@@ -161,6 +161,7 @@ def test_run_writes_markdown_report(tmp_path, capsys):
     assert "| severity | hijacked | resisted | other | hijack rate |" in content
     assert "severity-weighted hijack rate:" in content
     assert "95% confidence interval:" in content
+    assert "severity filter:" not in content
 
 
 def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
@@ -173,10 +174,30 @@ def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     parsed = json.loads(report_path.read_text())
     assert parsed["client"] == "fake-vulnerable"
     assert parsed["direction"] == "dismiss"
+    assert parsed["severity_filter"] is None
     assert "direct_override" in parsed["per_defense"]["none"]
     assert parsed["severity_weighted_by_defense"] == {"none": 0.875}
     assert "none" in parsed["confidence_interval_by_defense"]
     assert "critical" in parsed["severity_breakdown_by_defense"]["none"]
+
+
+def test_run_severity_filter_is_recorded_in_markdown_report(tmp_path, capsys):
+    """a saved report file is what actually goes into the thesis - without
+    this, there was no way to tell afterward, from the file alone, that a
+    run only covered a --severity subset rather than the full battery."""
+    report_path = tmp_path / "report.md"
+    main(["run", "--client", "fake-vulnerable", "--severity", "critical,high", "--report", str(report_path)])
+    capsys.readouterr()
+    content = report_path.read_text()
+    assert "severity filter: critical, high" in content
+
+
+def test_run_severity_filter_is_recorded_in_json_report(tmp_path, capsys):
+    report_path = tmp_path / "report.json"
+    main(["run", "--client", "fake-vulnerable", "--severity", "critical,high", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["severity_filter"] == ["critical", "high"]
 
 
 def test_run_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
@@ -406,8 +427,18 @@ def test_compare_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert set(parsed["severity_weighted_by_defense"]) == {"none", "sandwich", "strict", "both"}
     assert set(parsed["confidence_interval_by_defense"]) == {"none", "sandwich", "strict", "both"}
     assert set(parsed["severity_breakdown_by_defense"]) == {"none", "sandwich", "strict", "both"}
+    assert parsed["severity_filter"] is None
     # none itself never gets an entry - nothing to compare it against itself.
     assert set(parsed["significance_vs_none_by_defense"]) == {"sandwich", "strict", "both"}
+
+
+def test_compare_severity_filter_is_recorded_in_reports(tmp_path, capsys):
+    md_path, json_path = tmp_path / "report.md", tmp_path / "report.json"
+    main(["compare", "--client", "fake-sandwich-sensitive", "--severity", "critical", "--report", str(md_path)])
+    main(["compare", "--client", "fake-sandwich-sensitive", "--severity", "critical", "--report", str(json_path)])
+    capsys.readouterr()
+    assert "severity filter: critical" in md_path.read_text()
+    assert json.loads(json_path.read_text())["severity_filter"] == ["critical"]
 
 
 def test_compare_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
@@ -509,6 +540,17 @@ def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
     assert high == pytest.approx(0.0876, abs=0.01)
     assert set(parsed["significance_vs_none_by_direction"]["dismiss"]) == {"sandwich", "strict", "both"}
     assert set(parsed["severity_breakdown_by_direction"]) == {"dismiss", "escalate"}
+    assert parsed["severity_filter"] is None
+
+
+def test_full_report_severity_filter_is_recorded_in_reports(tmp_path, capsys):
+    md_path = tmp_path / "full.md"
+    json_path = tmp_path / "full.json"
+    main(["full-report", "--client", "fake-stubborn", "--severity", "low", "--report", str(md_path)])
+    main(["full-report", "--client", "fake-stubborn", "--severity", "low", "--report", str(json_path)])
+    capsys.readouterr()
+    assert "severity filter: low" in md_path.read_text()
+    assert json.loads(json_path.read_text())["severity_filter"] == ["low"]
 
 
 def test_full_report_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
