@@ -428,6 +428,12 @@ At 100% line and branch coverage now - the one remaining gap was the
 code (it only runs when the module is executed directly, which the subprocess test above
 does cover, just not in a way `coverage` can see from inside the parent process), so it
 carries a `# pragma: no cover` rather than a workaround that would test nothing new.
+The branch-coverage half of that claim went unverified by the tooling itself for a while,
+though - `make check`'s `coverage` target only ever ran plain `coverage run` (line coverage
+only), so a future untested branch could have slipped in without `make check` ever catching
+it. Fixed by adding `--branch` to that one `coverage run` call - `coverage report` already
+prints the Branch/BrPart columns automatically once the underlying data has them, no other
+change needed, and the number was (still) genuinely 100% once actually measured.
 
 Checked a broader ruff rule set (`B`, `SIM`, `PERF`, `RUF`, `A`, `C4`, `PIE`, `RET`) the same
 way the earlier line-length audit checked an expanded one, to see if any of it was worth

@@ -13,7 +13,7 @@ test:
 	python -m pytest -q
 
 coverage:
-	python -m coverage run -m pytest -q
+	python -m coverage run --branch -m pytest -q
 	python -m coverage report -m
 
 # checks pinned dependencies against known vulnerability databases - kept
