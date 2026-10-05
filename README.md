@@ -404,6 +404,14 @@ the right operand of `or` (assigning the lookup to a variable first resolves it 
 and reads more clearly besides). `make clean` removes the `__pycache__`, `.pytest_cache`,
 `.ruff_cache`, `.mypy_cache`, `.coverage`, and `htmlcov` artifacts those leave behind.
 
+`make audit` runs `pip-audit` against `requirements.txt`, checking every pinned dependency
+against known vulnerability databases - thematically the least a security-research tool
+should do for its own supply chain, even though it's currently clean. Kept as its own
+target and CI step rather than folded into `check`, since it's the one check here that
+needs network access (it queries PyPI's advisory data) - every other `check` target runs
+fully offline and deterministic, and that property is worth keeping intact rather than
+making the whole local dev loop depend on network reachability for an unrelated reason.
+
 Ran a `coverage.py` audit (99% line coverage going in) and closed the two real gaps it
 found rather than chasing the number: `parse_response`'s JSONDecodeError branch had never
 actually been hit (the existing "malformed json" test used a response with no braces at

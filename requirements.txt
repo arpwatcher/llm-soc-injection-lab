@@ -4,3 +4,4 @@ coverage==7.16.1
 ruff==0.15.8
 mypy==1.14.1
 types-requests==2.33.0.20260906
+pip-audit==2.10.1
