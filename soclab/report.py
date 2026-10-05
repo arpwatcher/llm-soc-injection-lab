@@ -383,6 +383,7 @@ _LEADERBOARD_CSV_FIELDS = [
 
 def render_leaderboard_report(
     rows: list[dict], direction: str, defense: str, pairwise_significance: dict | None = None,
+    severity_filter: list | None = None,
 ) -> str:
     """rows: one entry per client - {"client", "hijack_rate", "ci_low",
     "ci_high", "severity_weighted_hijack_rate", "clean_accuracy"} - already
@@ -396,13 +397,20 @@ def render_leaderboard_report(
     good 0% hijack rate without it. pairwise_significance, when given (only
     meaningful with exactly two clients compared), is
     {"client_a", "client_b", "z", "p_value"} from a two-proportion z-test
-    between them, appended as one line below the table."""
+    between them, appended as one line below the table. severity_filter,
+    when given, is the --severity subset this comparison was restricted
+    to - recorded the same way run/compare/full-report already do."""
     lines = [
         f"# leaderboard - direction: {direction}, defense: {defense}",
         "",
+    ]
+    if severity_filter is not None:
+        lines.append(f"severity filter: {', '.join(severity_filter)}")
+        lines.append("")
+    lines.extend([
         "| client | hijack rate | 95% ci | severity-weighted | clean accuracy |",
         "|---|---|---|---|---|",
-    ]
+    ])
     for row in rows:
         lines.append(
             f"| {row['client']} | {row['hijack_rate']:.0%} | "
@@ -423,11 +431,13 @@ def render_leaderboard_report(
 
 def render_leaderboard_json_report(
     rows: list[dict], direction: str, defense: str, pairwise_significance: dict | None = None,
+    severity_filter: list | None = None,
 ) -> str:
     """Same data as render_leaderboard_report, as JSON instead of a document."""
     payload = {
         "direction": direction,
         "defense": defense,
+        "severity_filter": severity_filter,
         "clients": rows,
         "pairwise_significance": pairwise_significance,
     }
@@ -462,7 +472,7 @@ _TECHNIQUE_LEADERBOARD_CSV_FIELDS = [
 
 def render_technique_leaderboard_report(
     rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
-    pairwise_significance: dict | None = None,
+    pairwise_significance: dict | None = None, severity_filter: list | None = None,
 ) -> str:
     """rows: list of (technique, bucket) pairs from aggregate_by_technique's
     output over every compared client's results concatenated together -
@@ -474,13 +484,19 @@ def render_technique_leaderboard_report(
     techniques ranked), is {"technique_a", "technique_b", "z", "p_value"}
     from a two-proportion z-test between them, appended as one line below
     the table - the technique-axis mirror of leaderboard's own
-    exactly-two-clients pairwise check."""
+    exactly-two-clients pairwise check. severity_filter, when given, is
+    the --severity subset this ranking was restricted to."""
     lines = [
         f"# technique leaderboard - direction: {direction}, defense: {defense}, across {client_count} client(s)",
         "",
+    ]
+    if severity_filter is not None:
+        lines.append(f"severity filter: {', '.join(severity_filter)}")
+        lines.append("")
+    lines.extend([
         "| technique | hijacked | resisted | other | hijack rate | 95% ci |",
         "|---|---|---|---|---|---|",
-    ]
+    ])
     for technique, bucket in rows:
         lines.append(
             f"| {technique} | {bucket['hijacked']} | {bucket['resisted']} | {bucket['other']} | "
@@ -500,13 +516,14 @@ def render_technique_leaderboard_report(
 
 def render_technique_leaderboard_json_report(
     rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
-    pairwise_significance: dict | None = None,
+    pairwise_significance: dict | None = None, severity_filter: list | None = None,
 ) -> str:
     """Same data as render_technique_leaderboard_report, as JSON instead of a document."""
     payload = {
         "direction": direction,
         "defense": defense,
         "client_count": client_count,
+        "severity_filter": severity_filter,
         "techniques": [{"technique": technique, **bucket} for technique, bucket in rows],
         "pairwise_significance": pairwise_significance,
     }
@@ -539,6 +556,7 @@ def render_technique_leaderboard_csv_report(rows: list[tuple[str, dict]], direct
 
 def render_matrix_report(
     rows: list[dict], technique_names: list[str], direction: str, defense: str,
+    severity_filter: list | None = None,
 ) -> str:
     """rows: one entry per client - {"client", "rates": {technique: hijack
     rate, ...}, "average"} - covering every technique in technique_names,
@@ -552,15 +570,18 @@ def render_matrix_report(
     are already available per-client via `leaderboard` and per-technique
     via `technique-leaderboard`. average is the plain mean of a row's own
     cells, shown as a trailing column so a reader doesn't have to eyeball
-    a wide row to see which client comes out ahead overall."""
+    a wide row to see which client comes out ahead overall. severity_filter,
+    when given, is the --severity subset this matrix was restricted to."""
     header = "| client | " + " | ".join(technique_names) + " | average |"
     separator = "|---|" + "|".join("---" for _ in technique_names) + "|---|"
     lines = [
         f"# matrix - direction: {direction}, defense: {defense}",
         "",
-        header,
-        separator,
     ]
+    if severity_filter is not None:
+        lines.append(f"severity filter: {', '.join(severity_filter)}")
+        lines.append("")
+    lines.extend([header, separator])
     for row in rows:
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
         lines.append(f"| {row['client']} | {cells} | {row['average']:.0%} |")
@@ -568,11 +589,15 @@ def render_matrix_report(
     return "\n".join(lines)
 
 
-def render_matrix_json_report(rows: list[dict], technique_names: list[str], direction: str, defense: str) -> str:
+def render_matrix_json_report(
+    rows: list[dict], technique_names: list[str], direction: str, defense: str,
+    severity_filter: list | None = None,
+) -> str:
     """Same data as render_matrix_report, as JSON instead of a document."""
     payload = {
         "direction": direction,
         "defense": defense,
+        "severity_filter": severity_filter,
         "techniques": technique_names,
         "clients": rows,
     }

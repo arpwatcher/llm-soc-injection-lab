@@ -816,6 +816,16 @@ def test_leaderboard_writes_json_report(tmp_path, capsys):
     client_names = {row["client"] for row in parsed["clients"]}
     assert "fake-escalation-vulnerable" in client_names
     assert "ollama" not in client_names
+    assert parsed["severity_filter"] is None
+
+
+def test_leaderboard_severity_filter_is_recorded_in_reports(tmp_path, capsys):
+    md_path, json_path = tmp_path / "leaderboard.md", tmp_path / "leaderboard.json"
+    main(["leaderboard", "--clients", "fake-vulnerable", "--severity", "critical", "--report", str(md_path)])
+    main(["leaderboard", "--clients", "fake-vulnerable", "--severity", "critical", "--report", str(json_path)])
+    capsys.readouterr()
+    assert "severity filter: critical" in md_path.read_text()
+    assert json.loads(json_path.read_text())["severity_filter"] == ["critical"]
 
 
 def test_leaderboard_reports_clean_accuracy_alongside_hijack_rate(tmp_path, capsys):
@@ -1003,6 +1013,17 @@ def test_technique_leaderboard_writes_json_report(tmp_path, capsys):
     assert parsed["client_count"] == 11
     technique_names = {row["technique"] for row in parsed["techniques"]}
     assert "false_urgency" in technique_names
+    assert parsed["severity_filter"] is None
+
+
+def test_technique_leaderboard_severity_filter_is_recorded_in_reports(tmp_path, capsys):
+    md_path = tmp_path / "technique-leaderboard.md"
+    json_path = tmp_path / "technique-leaderboard.json"
+    main(["technique-leaderboard", "--clients", "fake-vulnerable", "--severity", "critical", "--report", str(md_path)])
+    main(["technique-leaderboard", "--clients", "fake-vulnerable", "--severity", "critical", "--report", str(json_path)])
+    capsys.readouterr()
+    assert "severity filter: critical" in md_path.read_text()
+    assert json.loads(json_path.read_text())["severity_filter"] == ["critical"]
 
 
 def test_technique_leaderboard_writes_csv_report(tmp_path, capsys):
@@ -1175,6 +1196,16 @@ def test_matrix_writes_json_report(tmp_path, capsys):
     assert parsed["clients"][0]["client"] == "fake-escalation-vulnerable"
     assert "false_urgency" in parsed["clients"][0]["rates"]
     assert "average" in parsed["clients"][0]
+    assert parsed["severity_filter"] is None
+
+
+def test_matrix_severity_filter_is_recorded_in_reports(tmp_path, capsys):
+    md_path, json_path = tmp_path / "matrix.md", tmp_path / "matrix.json"
+    main(["matrix", "--clients", "fake-vulnerable", "--severity", "critical", "--report", str(md_path)])
+    main(["matrix", "--clients", "fake-vulnerable", "--severity", "critical", "--report", str(json_path)])
+    capsys.readouterr()
+    assert "severity filter: critical" in md_path.read_text()
+    assert json.loads(json_path.read_text())["severity_filter"] == ["critical"]
 
 
 def test_matrix_writes_csv_report(tmp_path, capsys):

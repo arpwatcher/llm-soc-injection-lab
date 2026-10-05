@@ -550,9 +550,11 @@ def cmd_leaderboard(args):
             args.report,
             markdown_content=render_leaderboard_report(
                 rows, direction=args.direction, defense=args.defense, pairwise_significance=pairwise_significance,
+                severity_filter=requested_severities,
             ),
             json_content=render_leaderboard_json_report(
                 rows, direction=args.direction, defense=args.defense, pairwise_significance=pairwise_significance,
+                severity_filter=requested_severities,
             ),
             csv_content=render_leaderboard_csv_report(rows, direction=args.direction, defense=args.defense),
             message=f"\nwrote leaderboard to {args.report}",
@@ -623,9 +625,11 @@ def cmd_technique_leaderboard(args):
             args.report,
             markdown_content=render_technique_leaderboard_report(
                 rows, args.direction, args.defense, len(client_names), pairwise_significance=pairwise_significance,
+                severity_filter=requested_severities,
             ),
             json_content=render_technique_leaderboard_json_report(
                 rows, args.direction, args.defense, len(client_names), pairwise_significance=pairwise_significance,
+                severity_filter=requested_severities,
             ),
             csv_content=render_technique_leaderboard_csv_report(rows, args.direction, args.defense),
             message=f"\nwrote technique leaderboard to {args.report}",
@@ -687,8 +691,12 @@ def cmd_matrix(args):
     if args.report:
         _write_report(
             args.report,
-            markdown_content=render_matrix_report(rows, technique_names, args.direction, args.defense),
-            json_content=render_matrix_json_report(rows, technique_names, args.direction, args.defense),
+            markdown_content=render_matrix_report(
+                rows, technique_names, args.direction, args.defense, severity_filter=requested_severities,
+            ),
+            json_content=render_matrix_json_report(
+                rows, technique_names, args.direction, args.defense, severity_filter=requested_severities,
+            ),
             csv_content=render_matrix_csv_report(rows, technique_names, args.direction, args.defense),
             message=f"\nwrote matrix to {args.report}",
         )

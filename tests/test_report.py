@@ -490,6 +490,21 @@ def test_render_leaderboard_json_report_is_valid_json_with_expected_shape():
     assert parsed["defense"] == "strict"
     assert [row["client"] for row in parsed["clients"]] == ["fake-robust", "fake-vulnerable"]
     assert parsed["pairwise_significance"] is None
+    assert parsed["severity_filter"] is None
+
+
+def test_render_leaderboard_report_includes_severity_filter_when_given():
+    report = render_leaderboard_report(
+        _sample_leaderboard_rows(), direction="dismiss", defense="none", severity_filter=["critical", "high"],
+    )
+    assert "severity filter: critical, high" in report
+
+
+def test_render_leaderboard_json_report_includes_severity_filter_when_given():
+    report = render_leaderboard_json_report(
+        _sample_leaderboard_rows(), direction="dismiss", defense="none", severity_filter=["critical"],
+    )
+    assert json.loads(report)["severity_filter"] == ["critical"]
 
 
 def test_render_leaderboard_report_includes_pairwise_significance_when_given():
@@ -573,6 +588,23 @@ def test_render_technique_leaderboard_json_report_is_valid_json_with_expected_sh
     assert parsed["client_count"] == 3
     assert [row["technique"] for row in parsed["techniques"]] == ["direct_override", "unicode_homoglyph"]
     assert parsed["techniques"][0]["hijack_rate"] == 0.8
+    assert parsed["severity_filter"] is None
+
+
+def test_render_technique_leaderboard_report_includes_severity_filter_when_given():
+    report = render_technique_leaderboard_report(
+        _sample_technique_leaderboard_rows(), direction="dismiss", defense="none", client_count=5,
+        severity_filter=["low"],
+    )
+    assert "severity filter: low" in report
+
+
+def test_render_technique_leaderboard_json_report_includes_severity_filter_when_given():
+    report = render_technique_leaderboard_json_report(
+        _sample_technique_leaderboard_rows(), direction="dismiss", defense="none", client_count=5,
+        severity_filter=["low"],
+    )
+    assert json.loads(report)["severity_filter"] == ["low"]
 
 
 def test_render_technique_leaderboard_csv_report_is_valid_csv_with_expected_shape():
@@ -641,6 +673,23 @@ def test_render_matrix_json_report_is_valid_json_with_expected_shape():
     assert parsed["defense"] == "strict"
     assert parsed["techniques"] == ["direct_override", "unicode_homoglyph"]
     assert parsed["clients"] == _sample_matrix_rows()
+    assert parsed["severity_filter"] is None
+
+
+def test_render_matrix_report_includes_severity_filter_when_given():
+    report = render_matrix_report(
+        _sample_matrix_rows(), ["direct_override", "unicode_homoglyph"], direction="dismiss", defense="none",
+        severity_filter=["critical", "high"],
+    )
+    assert "severity filter: critical, high" in report
+
+
+def test_render_matrix_json_report_includes_severity_filter_when_given():
+    report = render_matrix_json_report(
+        _sample_matrix_rows(), ["direct_override", "unicode_homoglyph"], direction="dismiss", defense="none",
+        severity_filter=["critical"],
+    )
+    assert json.loads(report)["severity_filter"] == ["critical"]
 
 
 def test_render_matrix_csv_report_is_valid_csv_with_one_row_per_client_and_one_column_per_technique():
