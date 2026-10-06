@@ -1229,6 +1229,153 @@ def test_matrix_writes_transcript(tmp_path, capsys):
     assert f"wrote matrix transcript to {transcript_path}" in out
 
 
+def test_severity_matrix_prints_a_rate_for_every_severity_technique_pair_plus_average(capsys):
+    exit_code = main([
+        "severity-matrix", "--client", "fake-vulnerable", "--techniques", "direct_override,unicode_homoglyph",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "client=fake-vulnerable direction=dismiss defense=none" in out
+    assert "severity | direct_override | unicode_homoglyph | average" in out
+    # fake-vulnerable: 100% on direct_override, 0% on unicode_homoglyph -> 50% average, every severity.
+    assert "critical | 100% | 0% | 50%" in out
+    assert "high | 100% | 0% | 50%" in out
+    assert "medium | 100% | 0% | 50%" in out
+
+
+def test_severity_matrix_rows_are_in_canonical_severity_order_not_sorted_by_average(capsys):
+    """unlike matrix's client rows, severity rows should stay in
+    critical/high/medium/low order regardless of which row happens to
+    have the highest average - severity already has a real-world order
+    a reader wants, client/technique names don't."""
+    exit_code = main(["severity-matrix", "--client", "fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert out.index("critical") < out.index("high") < out.index("medium")
+
+
+def test_severity_matrix_severity_filter_restricts_the_battery(capsys):
+    exit_code = main([
+        "severity-matrix", "--client", "fake-vulnerable", "--techniques", "direct_override",
+        "--severity", "critical,high",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "severity filter: critical, high" in out
+    assert "critical | 100% | 100%" in out
+    assert "high | 100% | 100%" in out
+    assert "medium" not in out
+
+
+def test_severity_matrix_severity_filter_rejects_unknown_name(capsys):
+    exit_code = main(["severity-matrix", "--severity", "catastrophic"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown severity/severities for severity-matrix" in err
+
+
+def test_severity_matrix_severity_filter_that_empties_the_battery_shows_zero_not_a_crash(capsys):
+    exit_code = main(["severity-matrix", "--client", "fake-vulnerable", "--severity", "low"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "severity filter: low" in out
+    assert "severity | direct_override" in out  # header printed, no rows, no crash
+
+
+def test_severity_matrix_rejects_unknown_technique(capsys):
+    exit_code = main(["severity-matrix", "--techniques", "not_a_real_technique"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown technique(s) for direction=dismiss" in err
+    assert "not_a_real_technique" in err
+
+
+def test_severity_matrix_techniques_rejects_wrong_direction_name(capsys):
+    exit_code = main(["severity-matrix", "--direction", "escalate", "--techniques", "direct_override"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "unknown technique(s) for direction=escalate" in err
+
+
+def test_severity_matrix_defaults_to_every_technique_for_the_direction(capsys):
+    exit_code = main(["severity-matrix", "--client", "fake-robust"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "direct_override" in out
+    assert "conversational_drift" in out
+
+
+def test_severity_matrix_escalate_direction_shows_only_dismiss_worthy_severities(capsys):
+    """escalation-direction injected alerts only ever come from dismiss-
+    worthy ground truth alerts (medium and low severity here), unlike
+    the dismiss direction's critical/high/medium."""
+    exit_code = main(["severity-matrix", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "medium" in out
+    assert "low" in out
+    assert "critical" not in out
+
+
+def test_severity_matrix_writes_markdown_report(tmp_path, capsys):
+    report_path = tmp_path / "severity-matrix.md"
+    exit_code = main(["severity-matrix", "--client", "fake-vulnerable", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    content = report_path.read_text()
+    assert "client: fake-vulnerable, direction: dismiss, defense: none" in content
+    assert "critical" in content
+    assert f"wrote severity matrix to {report_path}" in out
+
+
+def test_severity_matrix_writes_json_report(tmp_path, capsys):
+    report_path = tmp_path / "severity-matrix.json"
+    main(["severity-matrix", "--client", "fake-vulnerable", "--direction", "escalate",
+          "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["client"] == "fake-vulnerable"
+    assert parsed["direction"] == "escalate"
+    assert parsed["defense"] == "none"
+    severities = {row["severity"] for row in parsed["severities"]}
+    assert severities == {"medium", "low"}
+    assert "average" in parsed["severities"][0]
+    assert parsed["severity_filter"] is None
+
+
+def test_severity_matrix_severity_filter_is_recorded_in_reports(tmp_path, capsys):
+    md_path = tmp_path / "severity-matrix.md"
+    json_path = tmp_path / "severity-matrix.json"
+    main(["severity-matrix", "--client", "fake-vulnerable", "--severity", "critical", "--report", str(md_path)])
+    main(["severity-matrix", "--client", "fake-vulnerable", "--severity", "critical", "--report", str(json_path)])
+    capsys.readouterr()
+    assert "severity filter: critical" in md_path.read_text()
+    assert json.loads(json_path.read_text())["severity_filter"] == ["critical"]
+
+
+def test_severity_matrix_writes_csv_report(tmp_path, capsys):
+    report_path = tmp_path / "severity-matrix.csv"
+    main(["severity-matrix", "--client", "fake-vulnerable", "--report", str(report_path)])
+    capsys.readouterr()
+    rows = list(csv.DictReader(report_path.read_text().splitlines()))
+    assert len(rows) == 3  # critical, high, medium
+    assert rows[0]["client"] == "fake-vulnerable"
+    assert rows[0]["severity"] == "critical"
+    assert rows[0]["direction"] == "dismiss"
+    assert "direct_override" in rows[0]
+    assert rows[0]["average"] == "0.875"
+
+
+def test_severity_matrix_writes_transcript(tmp_path, capsys):
+    transcript_path = tmp_path / "severity-matrix-transcript.json"
+    main(["severity-matrix", "--client", "fake-vulnerable", "--transcript", str(transcript_path)])
+    out = capsys.readouterr().out
+    entries = json.loads(transcript_path.read_text())
+    assert len(entries) > 0
+    assert all(e["defense"] == "none" for e in entries)
+    assert f"wrote severity matrix transcript to {transcript_path}" in out
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out

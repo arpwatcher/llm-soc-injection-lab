@@ -123,6 +123,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the same way the per-technique table is - `_run_defense_battery` (shared by `compare` and
   `full-report`) returns it keyed by defense alongside the other per-defense stats, so neither
   command needed its own separate wiring for it.
+  `aggregate_by_severity_and_technique` keeps both axes at once instead of collapsing either:
+  severity -> `aggregate_by_technique()` output for just that severity's alerts (built by
+  calling `aggregate_by_technique` once per severity rather than duplicating its counting
+  logic). Neither `aggregate_by_technique` nor `aggregate_by_severity` alone can show whether
+  a given technique's hijack rate actually shifts with severity - one collapses severity away,
+  the other collapses technique away - this is the per-(severity, technique) breakdown that
+  answers that, the scoring-layer counterpart to the CLI's `severity-matrix` subcommand.
   `overall_hijack_rate_confidence_interval` does the same for the bottom-line rate, printed
   in every `run`/`compare`/`full-report` invocation - both call `hijacked_and_total` for the
   raw (hijacked, total) counts behind the rate, the one shared building block instead of
@@ -175,7 +182,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the one deliberate exception to this file's usual "long" shape (one row per
   defense/technique/client pair) - one row per client, one column per technique, wide on
   purpose, since a matrix is exactly the shape a spreadsheet's conditional formatting wants
-  to turn into a heatmap directly. Each defense section also shows the
+  to turn into a heatmap directly.
+  `render_severity_matrix_report`/`_json_report`/`_csv_report` are `matrix`'s severity-axis
+  sibling, for the `severity-matrix` subcommand: a severity-by-technique grid for one client
+  instead of a client-by-technique grid for several - does a given technique's hijack rate
+  actually shift with the severity of the alert it's attacking, which neither the per-severity
+  nor the per-technique breakdown alone can show. Same wide CSV shape and trailing average
+  column as `matrix`, but rows stay in canonical critical/high/medium/low order rather than
+  sorted by average - severity already has a real-world order worth keeping (critical first),
+  unlike client or technique names, which don't. Each defense section also shows the
   severity-weighted hijack rate, the 95% confidence interval, and (for every defense but the
   `none` baseline itself) the two-proportion z-test p-value against it, alongside the flat
   rate - none of the three derivable from the per-technique buckets alone (severity isn't
@@ -281,7 +296,22 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   `--techniques` narrowing (via the shared `_resolve_client_names`/`_resolve_technique_names`
   helpers `technique-leaderboard` also uses) and `--transcript`; no pairwise significance
   check here, since a grid has no single pair to compare the way exactly-two-clients or
-  exactly-two-techniques does on the other two. `soclab list-techniques [--json] [--csv]`
+  exactly-two-techniques does on the other two.
+  `soclab severity-matrix --client ... --defense ... --direction ... [--severity ...]
+  [--techniques ...] [--report FILE] [--transcript FILE]` is `matrix`'s severity-axis sibling:
+  single-client (like `run`/`compare`/`full-report`, not multi-client like `matrix` - a
+  severity x technique x client cube has no honest single table to put it in), a
+  severity-by-technique grid instead of a client-by-technique one, for seeing whether a given
+  technique's hijack rate actually shifts with the severity of the alert it's attacking -
+  something neither `run`'s per-technique table nor its per-severity breakdown can show on
+  their own, since each collapses the other axis away. Rows stay in canonical
+  critical/high/medium/low order rather than sorted by average like `matrix`'s client rows -
+  severity already has a real-world order a reader wants regardless of which row happens to be
+  most vulnerable. Same `--techniques` narrowing, `--severity` filtering, and `--transcript`
+  (single-client, so it reuses `render_transcript` the same way `run` does, not
+  `render_leaderboard_transcript`) as the rest; a `--severity` subset with nothing present for
+  the chosen direction shows just the header row with no crash, same convention every other
+  `--severity`-aware subcommand already follows. `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
   technique, description) for pulling into a thesis appendix table or spreadsheet. The
   plain-text listing prints each docstring as-is (multi-line is fine on a terminal), but
@@ -343,6 +373,8 @@ python -m soclab.cli matrix --direction dismiss --report matrix.md  # client x t
 python -m soclab.cli matrix --clients fake-robust,fake-vulnerable --techniques direct_override,unicode_homoglyph
 python -m soclab.cli matrix --report matrix.csv  # wide csv, one row per client, one column per technique
 python -m soclab.cli matrix --severity critical --techniques direct_override  # zoom into one severity/technique
+python -m soclab.cli severity-matrix --client fake-vulnerable  # severity x technique grid, one client
+python -m soclab.cli severity-matrix --client fake-vulnerable --report severity-matrix.md
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
@@ -380,7 +412,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-362 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+386 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

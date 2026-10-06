@@ -45,6 +45,9 @@ from soclab.report import (
     render_matrix_csv_report,
     render_matrix_json_report,
     render_matrix_report,
+    render_severity_matrix_csv_report,
+    render_severity_matrix_json_report,
+    render_severity_matrix_report,
     render_technique_leaderboard_csv_report,
     render_technique_leaderboard_json_report,
     render_technique_leaderboard_report,
@@ -53,6 +56,7 @@ from soclab.report import (
 from soclab.scoring import (
     SIGNIFICANCE_ALPHA,
     aggregate_by_severity,
+    aggregate_by_severity_and_technique,
     aggregate_by_technique,
     hijacked_and_total,
     is_significant,
@@ -709,6 +713,71 @@ def cmd_matrix(args):
         )
 
 
+def cmd_severity_matrix(args):
+    """The severity-axis sibling of matrix: that keeps client and
+    technique both instead of collapsing one away, for a fixed set of
+    clients; this keeps severity and technique both instead, for a
+    single client - whether a given technique's hijack rate actually
+    shifts with the severity of the alert it's attacking, which neither
+    aggregate_by_technique (collapses severity into one rate per
+    technique) nor aggregate_by_severity (collapses technique into one
+    rate per severity) can show on their own. Single-client, like run/
+    compare/full-report, not multi-client like matrix - a severity x
+    technique x client cube has no honest single table to put it in.
+    Rows stay in canonical critical/high/medium/low order rather than
+    sorted by average: severity already has a real-world order a reader
+    wants (critical first), unlike client names or technique names."""
+    client = build_client(args)
+    injected_alerts = _injected_alerts_for(args.direction)
+    requested_severities = _resolve_severities(args.severity, "severity-matrix")
+    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    technique_source = ESCALATION_TECHNIQUES if args.direction == "escalate" else TECHNIQUES
+    requested = _resolve_technique_names(args.techniques, technique_source, f"direction={args.direction}")
+    technique_names = requested if requested is not None else list(technique_source)
+
+    results = score_batch(injected_alerts, client, defense=args.defense)
+    grid = aggregate_by_severity_and_technique(results)
+
+    rows = []
+    for severity in SEVERITIES:
+        if severity not in grid:
+            continue
+        aggregated = grid[severity]
+        rates = {technique: aggregated.get(technique, {}).get("hijack_rate", 0.0) for technique in technique_names}
+        rows.append({"severity": severity, "rates": rates, "average": sum(rates.values()) / len(technique_names)})
+
+    print(f"client={args.client} direction={args.direction} defense={args.defense}\n")
+    _print_severity_filter(requested_severities)
+    print("severity | " + " | ".join(technique_names) + " | average")
+    for row in rows:
+        cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
+        print(f"{row['severity']} | {cells} | {row['average']:.0%}")
+
+    if args.report:
+        _write_report(
+            args.report,
+            markdown_content=render_severity_matrix_report(
+                rows, technique_names, args.client, args.direction, args.defense,
+                severity_filter=requested_severities,
+            ),
+            json_content=render_severity_matrix_json_report(
+                rows, technique_names, args.client, args.direction, args.defense,
+                severity_filter=requested_severities,
+            ),
+            csv_content=render_severity_matrix_csv_report(
+                rows, technique_names, args.client, args.direction, args.defense,
+            ),
+            message=f"\nwrote severity matrix to {args.report}",
+        )
+
+    if args.transcript:
+        _write_file(
+            args.transcript,
+            render_transcript({args.defense: results}, direction=args.direction),
+            f"wrote severity matrix transcript to {args.transcript}",
+        )
+
+
 def _technique_doc(func) -> str:
     """A technique function's docstring, collapsed to one line. Multi-line
     docstrings otherwise carry their source indentation straight through
@@ -905,6 +974,37 @@ def build_parser():
         help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
     matrix_parser.set_defaults(func=cmd_matrix)
+
+    severity_matrix_parser = sub.add_parser(
+        "severity-matrix", help="severity x technique cross-tab of hijack rates for one client - the "
+                                 "heatmap view run/compare/full-report each collapse away on one axis"
+    )
+    severity_matrix_parser.add_argument(
+        "--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP
+    )
+    severity_matrix_parser.add_argument("--defense", choices=list(DEFENSES), default=DEFENSE_NONE, help=_DEFENSE_HELP)
+    severity_matrix_parser.add_argument(
+        "--direction", choices=list(DIRECTIONS), default="dismiss",
+        help="which attacker goal to test: hide a real incident, or waste analyst time",
+    )
+    severity_matrix_parser.add_argument("--severity", help=_SEVERITY_HELP)
+    severity_matrix_parser.add_argument(
+        "--techniques",
+        help="comma-separated subset of techniques to show as columns (default: all of them for the "
+             "chosen --direction) - see list-techniques for the available names",
+    )
+    severity_matrix_parser.add_argument("--model", help="model name, required for --client ollama")
+    severity_matrix_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    severity_matrix_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
+    severity_matrix_parser.add_argument(
+        "--report",
+        help="write the severity matrix to this path - markdown, or json/csv if the path ends in .json/.csv",
+    )
+    severity_matrix_parser.add_argument(
+        "--transcript",
+        help="write a per-alert json record (action, reasoning, outcome) to this path, for qualitative review",
+    )
+    severity_matrix_parser.set_defaults(func=cmd_severity_matrix)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_format_group = list_parser.add_mutually_exclusive_group()

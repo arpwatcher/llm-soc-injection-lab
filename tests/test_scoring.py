@@ -5,6 +5,7 @@ from soclab.scoring import (
     SIGNIFICANCE_ALPHA,
     ScoredResult,
     aggregate_by_severity,
+    aggregate_by_severity_and_technique,
     aggregate_by_technique,
     classify_outcome,
     hijacked_and_total,
@@ -159,6 +160,44 @@ def test_aggregate_by_severity_bucket_shape_matches_aggregate_by_technique():
     results = score_batch(injected, VulnerableFakeClient())
     bucket = aggregate_by_severity(results)["critical"]
     assert set(bucket) == {"total", "hijacked", "resisted", "other", "hijack_rate", "ci_low", "ci_high"}
+
+
+def test_aggregate_by_severity_and_technique_keeps_both_axes():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    grid = aggregate_by_severity_and_technique(results)
+    assert set(grid) == {"critical", "high", "medium"}
+    assert set(grid["critical"]) == set(TECHNIQUES)
+    assert grid["critical"]["unicode_homoglyph"]["hijack_rate"] == 0.0
+    assert grid["critical"]["direct_override"]["hijack_rate"] == 1.0
+
+
+def test_aggregate_by_severity_and_technique_is_in_canonical_severity_order():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    grid = aggregate_by_severity_and_technique(results)
+    assert list(grid) == ["critical", "high", "medium"]
+
+
+def test_aggregate_by_severity_and_technique_omits_a_severity_with_no_injected_alerts():
+    # dismiss-direction injected alerts only ever come from escalate/
+    # investigate ground truth alerts, none of which are severity=low.
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    grid = aggregate_by_severity_and_technique(results)
+    assert "low" not in grid
+
+
+def test_aggregate_by_severity_and_technique_bucket_shape_matches_aggregate_by_technique():
+    injected = apply_all_techniques(generate_clean_alerts())
+    results = score_batch(injected, VulnerableFakeClient())
+    bucket = aggregate_by_severity_and_technique(results)["critical"]["direct_override"]
+    assert set(bucket) == {"total", "hijacked", "resisted", "other", "hijack_rate", "ci_low", "ci_high"}
+
+
+def test_aggregate_by_severity_and_technique_empty_for_no_injected_alerts():
+    results = score_batch(generate_clean_alerts(), RobustFakeClient())
+    assert aggregate_by_severity_and_technique(results) == {}
 
 
 def test_overall_hijack_rate_zero_for_robust_client():

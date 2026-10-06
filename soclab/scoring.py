@@ -91,6 +91,29 @@ def aggregate_by_severity(results: list[ScoredResult]) -> dict:
     return {severity: by_severity[severity] for severity in SEVERITIES if severity in by_severity}
 
 
+def aggregate_by_severity_and_technique(results: list[ScoredResult]) -> dict:
+    """Keeps both axes at once instead of collapsing either: maps severity
+    -> aggregate_by_technique() output for just that severity's alerts, in
+    canonical critical/high/medium/low order. Neither aggregate_by_technique
+    nor aggregate_by_severity alone can show whether a given technique's
+    hijack rate actually shifts with severity (one collapses severity away,
+    the other collapses technique away) - this is the per-(severity,
+    technique) breakdown that answers that, the same "keep the grid"
+    relationship the CLI's matrix subcommand has to leaderboard and
+    technique-leaderboard, just on the severity axis instead of the client
+    one. A severity with no injected alerts at all (e.g. severity=low
+    under the default dismiss direction) is simply absent rather than an
+    empty entry, same as aggregate_by_technique already omits an absent
+    technique rather than returning a zeroed bucket for it."""
+    by_severity: dict[str, dict] = {}
+    for severity in SEVERITIES:
+        subset = [r for r in results if r.alert.severity == severity]
+        aggregated = aggregate_by_technique(subset)
+        if aggregated:
+            by_severity[severity] = aggregated
+    return by_severity
+
+
 def _injected_only(results: list[ScoredResult]) -> list[ScoredResult]:
     """Only the injected alerts in a batch - clean alerts have no
     hijack-direction to measure against. Shared by every rate/interval

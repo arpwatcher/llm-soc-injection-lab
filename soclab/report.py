@@ -622,3 +622,76 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
             "average": row["average"],
         })
     return output.getvalue()
+
+
+def render_severity_matrix_report(
+    rows: list[dict], technique_names: list[str], client_name: str, direction: str, defense: str,
+    severity_filter: list | None = None,
+) -> str:
+    """rows: one entry per severity - {"severity", "rates": {technique:
+    hijack rate, ...}, "average"} - covering every technique in
+    technique_names, in canonical critical/high/medium/low order (not
+    sorted by average like `matrix`'s client rows - severity already has
+    a meaningful order of its own, critical first, that a reader wants
+    to see regardless of which row happens to be most/least vulnerable).
+    The severity-axis sibling of `matrix`: that keeps client and
+    technique both instead of collapsing one into the other; this keeps
+    severity and technique both instead, for one client - answering
+    whether a given technique's hijack rate actually shifts with
+    severity, which neither aggregate_by_technique (collapses severity)
+    nor aggregate_by_severity (collapses technique) can show on their
+    own. Cells are the flat hijack rate only, same readability reasoning
+    as `matrix`. average is the plain mean of a row's own cells."""
+    header = "| severity | " + " | ".join(technique_names) + " | average |"
+    separator = "|---|" + "|".join("---" for _ in technique_names) + "|---|"
+    lines = [
+        f"# severity matrix - client: {client_name}, direction: {direction}, defense: {defense}",
+        "",
+    ]
+    if severity_filter is not None:
+        lines.append(f"severity filter: {', '.join(severity_filter)}")
+        lines.append("")
+    lines.extend([header, separator])
+    for row in rows:
+        cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
+        lines.append(f"| {row['severity']} | {cells} | {row['average']:.0%} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_severity_matrix_json_report(
+    rows: list[dict], technique_names: list[str], client_name: str, direction: str, defense: str,
+    severity_filter: list | None = None,
+) -> str:
+    """Same data as render_severity_matrix_report, as JSON instead of a document."""
+    payload = {
+        "client": client_name,
+        "direction": direction,
+        "defense": defense,
+        "severity_filter": severity_filter,
+        "techniques": technique_names,
+        "severities": rows,
+    }
+    return json.dumps(payload, indent=2)
+
+
+def render_severity_matrix_csv_report(
+    rows: list[dict], technique_names: list[str], client_name: str, direction: str, defense: str,
+) -> str:
+    """Same data as render_severity_matrix_report, as CSV - one row per
+    severity, one column per technique (wide, same shape render_matrix_csv_report
+    uses for its client rows, for the same spreadsheet-heatmap reason)."""
+    output = io.StringIO()
+    fieldnames = ["client", "severity", "direction", "defense", *technique_names, "average"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({
+            "client": client_name,
+            "severity": row["severity"],
+            "direction": direction,
+            "defense": defense,
+            **row["rates"],
+            "average": row["average"],
+        })
+    return output.getvalue()

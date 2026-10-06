@@ -21,6 +21,9 @@ from soclab.report import (
     render_matrix_csv_report,
     render_matrix_json_report,
     render_matrix_report,
+    render_severity_matrix_csv_report,
+    render_severity_matrix_json_report,
+    render_severity_matrix_report,
     render_technique_leaderboard_csv_report,
     render_technique_leaderboard_json_report,
     render_technique_leaderboard_report,
@@ -706,3 +709,71 @@ def test_render_matrix_csv_report_is_valid_csv_with_one_row_per_client_and_one_c
     assert rows[1]["client"] == "fake-vulnerable"
     assert rows[1]["unicode_homoglyph"] == "0.1"
     assert rows[1]["average"] == "0.55"
+
+
+def _sample_severity_matrix_rows():
+    return [
+        {"severity": "critical", "rates": {"direct_override": 1.0, "unicode_homoglyph": 0.0}, "average": 0.5},
+        {"severity": "medium", "rates": {"direct_override": 0.5, "unicode_homoglyph": 0.0}, "average": 0.25},
+    ]
+
+
+def test_render_severity_matrix_report_is_a_markdown_table_with_a_column_per_technique():
+    report = render_severity_matrix_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="dismiss", defense="none",
+    )
+    assert "client: fake-vulnerable, direction: dismiss, defense: none" in report
+    header, separator, critical_row, medium_row = (
+        line for line in report.splitlines() if line.startswith("|")
+    )
+    assert header == "| severity | direct_override | unicode_homoglyph | average |"
+    assert critical_row == "| critical | 100% | 0% | 50% |"
+    assert medium_row == "| medium | 50% | 0% | 25% |"
+
+
+def test_render_severity_matrix_json_report_is_valid_json_with_expected_shape():
+    report = render_severity_matrix_json_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="escalate", defense="strict",
+    )
+    parsed = json.loads(report)
+    assert parsed["client"] == "fake-vulnerable"
+    assert parsed["direction"] == "escalate"
+    assert parsed["defense"] == "strict"
+    assert parsed["techniques"] == ["direct_override", "unicode_homoglyph"]
+    assert parsed["severities"] == _sample_severity_matrix_rows()
+    assert parsed["severity_filter"] is None
+
+
+def test_render_severity_matrix_report_includes_severity_filter_when_given():
+    report = render_severity_matrix_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="dismiss", defense="none", severity_filter=["critical", "medium"],
+    )
+    assert "severity filter: critical, medium" in report
+
+
+def test_render_severity_matrix_json_report_includes_severity_filter_when_given():
+    report = render_severity_matrix_json_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="dismiss", defense="none", severity_filter=["critical"],
+    )
+    assert json.loads(report)["severity_filter"] == ["critical"]
+
+
+def test_render_severity_matrix_csv_report_is_valid_csv_with_one_row_per_severity():
+    report = render_severity_matrix_csv_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="dismiss", defense="both",
+    )
+    rows = list(csv.DictReader(io.StringIO(report)))
+    assert len(rows) == 2
+    assert rows[0]["client"] == "fake-vulnerable"
+    assert rows[0]["severity"] == "critical"
+    assert rows[0]["direction"] == "dismiss"
+    assert rows[0]["defense"] == "both"
+    assert rows[0]["direct_override"] == "1.0"
+    assert rows[0]["average"] == "0.5"
+    assert rows[1]["severity"] == "medium"
+    assert rows[1]["average"] == "0.25"
