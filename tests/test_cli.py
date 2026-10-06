@@ -1376,6 +1376,70 @@ def test_severity_matrix_writes_transcript(tmp_path, capsys):
     assert f"wrote severity matrix transcript to {transcript_path}" in out
 
 
+def test_severity_matrix_two_severities_prints_pairwise_significance(capsys):
+    """escalation-direction alerts naturally only ever come from two
+    severities (medium, low) - the same exactly-two case leaderboard and
+    technique-leaderboard trigger pairwise significance on, here reached
+    without needing --severity at all."""
+    exit_code = main(["severity-matrix", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "medium vs low (two-proportion z-test):" in out
+
+
+def test_severity_matrix_severity_filter_to_two_prints_pairwise_significance(capsys):
+    """--severity can also narrow dismiss direction's usual three rows
+    (critical, high, medium) down to exactly two, triggering the same
+    pairwise line."""
+    exit_code = main([
+        "severity-matrix", "--client", "fake-vulnerable", "--severity", "critical,medium",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "critical vs medium (two-proportion z-test):" in out
+
+
+def test_severity_matrix_three_severities_has_no_pairwise_significance(capsys):
+    """with three rows there's no single unambiguous pair to compare,
+    same reasoning as leaderboard's three-or-more-clients case."""
+    exit_code = main(["severity-matrix", "--client", "fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "two-proportion z-test" not in out
+
+
+def test_severity_matrix_writes_pairwise_significance_to_json_report(tmp_path, capsys):
+    report_path = tmp_path / "severity-matrix.json"
+    main([
+        "severity-matrix", "--client", "fake-vulnerable", "--severity", "critical,medium",
+        "--report", str(report_path),
+    ])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["pairwise_significance"]["severity_a"] == "critical"
+    assert parsed["pairwise_significance"]["severity_b"] == "medium"
+    assert "p_value" in parsed["pairwise_significance"]
+
+
+def test_severity_matrix_writes_pairwise_significance_to_markdown_report(tmp_path, capsys):
+    report_path = tmp_path / "severity-matrix.md"
+    main([
+        "severity-matrix", "--client", "fake-vulnerable", "--severity", "critical,medium",
+        "--report", str(report_path),
+    ])
+    capsys.readouterr()
+    content = report_path.read_text()
+    assert "critical vs medium (two-proportion z-test):" in content
+
+
+def test_severity_matrix_without_pairwise_significance_omits_it_from_json_report(tmp_path, capsys):
+    report_path = tmp_path / "severity-matrix.json"
+    main(["severity-matrix", "--client", "fake-vulnerable", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert parsed["pairwise_significance"] is None
+
+
 def test_list_techniques(capsys):
     exit_code = main(["list-techniques"])
     out = capsys.readouterr().out

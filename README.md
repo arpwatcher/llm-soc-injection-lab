@@ -311,7 +311,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   (single-client, so it reuses `render_transcript` the same way `run` does, not
   `render_leaderboard_transcript`) as the rest; a `--severity` subset with nothing present for
   the chosen direction shows just the header row with no crash, same convention every other
-  `--severity`-aware subcommand already follows. `soclab list-techniques [--json] [--csv]`
+  `--severity`-aware subcommand already follows. Unlike `matrix`, this one does get a pairwise
+  significance check: when exactly two severities end up in scope (either the escalate
+  direction's natural medium/low split, or a `--severity` filter narrowed to two), a
+  two-proportion z-test between them (pooling each severity's hijacked/total across every
+  technique) prints below the table and lands in the markdown/json report, same exactly-two
+  trigger `leaderboard` and `technique-leaderboard` already use. `soclab list-techniques [--json] [--csv]`
   lists both technique sets, as plain text, JSON (name -> description), or CSV (direction,
   technique, description) for pulling into a thesis appendix table or spreadsheet. The
   plain-text listing prints each docstring as-is (multi-line is fine on a terminal), but
@@ -412,7 +417,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-386 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+395 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

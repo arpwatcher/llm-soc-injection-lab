@@ -762,6 +762,32 @@ def test_render_severity_matrix_json_report_includes_severity_filter_when_given(
     assert json.loads(report)["severity_filter"] == ["critical"]
 
 
+def test_render_severity_matrix_report_includes_pairwise_significance_when_given():
+    pairwise = {"severity_a": "critical", "severity_b": "medium", "z": -7.9, "p_value": 0.0001}
+    report = render_severity_matrix_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="dismiss", defense="none", pairwise_significance=pairwise,
+    )
+    assert "critical vs medium (two-proportion z-test): p=0.0001 (significant at p<0.05)" in report
+
+
+def test_render_severity_matrix_report_omits_pairwise_significance_when_not_given():
+    report = render_severity_matrix_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="dismiss", defense="none",
+    )
+    assert "two-proportion z-test" not in report
+
+
+def test_render_severity_matrix_json_report_includes_pairwise_significance_when_given():
+    pairwise = {"severity_a": "critical", "severity_b": "medium", "z": -7.9, "p_value": 0.0001}
+    report = render_severity_matrix_json_report(
+        _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],
+        client_name="fake-vulnerable", direction="dismiss", defense="none", pairwise_significance=pairwise,
+    )
+    assert json.loads(report)["pairwise_significance"] == pairwise
+
+
 def test_render_severity_matrix_csv_report_is_valid_csv_with_one_row_per_severity():
     report = render_severity_matrix_csv_report(
         _sample_severity_matrix_rows(), ["direct_override", "unicode_homoglyph"],

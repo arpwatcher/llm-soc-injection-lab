@@ -626,7 +626,7 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
 
 def render_severity_matrix_report(
     rows: list[dict], technique_names: list[str], client_name: str, direction: str, defense: str,
-    severity_filter: list | None = None,
+    severity_filter: list | None = None, pairwise_significance: dict | None = None,
 ) -> str:
     """rows: one entry per severity - {"severity", "rates": {technique:
     hijack rate, ...}, "average"} - covering every technique in
@@ -641,7 +641,13 @@ def render_severity_matrix_report(
     severity, which neither aggregate_by_technique (collapses severity)
     nor aggregate_by_severity (collapses technique) can show on their
     own. Cells are the flat hijack rate only, same readability reasoning
-    as `matrix`. average is the plain mean of a row's own cells."""
+    as `matrix`. average is the plain mean of a row's own cells.
+    pairwise_significance, when given (only meaningful with exactly two
+    severities in scope, via --severity), is {"severity_a", "severity_b",
+    "z", "p_value"} from a two-proportion z-test pooling each severity's
+    hijacked/total across every technique - the same exactly-two pattern
+    leaderboard and technique-leaderboard already use, appended as one
+    line below the table."""
     header = "| severity | " + " | ".join(technique_names) + " | average |"
     separator = "|---|" + "|".join("---" for _ in technique_names) + "|---|"
     lines = [
@@ -656,12 +662,20 @@ def render_severity_matrix_report(
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
         lines.append(f"| {row['severity']} | {cells} | {row['average']:.0%} |")
     lines.append("")
+    if pairwise_significance is not None:
+        p_value = pairwise_significance["p_value"]
+        verdict = "significant" if is_significant(p_value) else "not significant"
+        lines.append(
+            f"{pairwise_significance['severity_a']} vs {pairwise_significance['severity_b']} "
+            f"(two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})"
+        )
+        lines.append("")
     return "\n".join(lines)
 
 
 def render_severity_matrix_json_report(
     rows: list[dict], technique_names: list[str], client_name: str, direction: str, defense: str,
-    severity_filter: list | None = None,
+    severity_filter: list | None = None, pairwise_significance: dict | None = None,
 ) -> str:
     """Same data as render_severity_matrix_report, as JSON instead of a document."""
     payload = {
@@ -671,6 +685,7 @@ def render_severity_matrix_json_report(
         "severity_filter": severity_filter,
         "techniques": technique_names,
         "severities": rows,
+        "pairwise_significance": pairwise_significance,
     }
     return json.dumps(payload, indent=2)
 

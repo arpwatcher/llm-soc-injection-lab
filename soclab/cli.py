@@ -761,16 +761,32 @@ def cmd_severity_matrix(args):
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
         print(f"{row['severity']} | {cells} | {row['average']:.0%}")
 
+    pairwise_significance = None
+    if len(rows) == 2:
+        # same exactly-two pattern leaderboard and technique-leaderboard
+        # use: pool each severity's hijacked/total across every technique,
+        # using the table's own (canonical critical/high/medium/low) order
+        # so the line below reads the same direction as the rows above it.
+        severity_a, severity_b = rows[0]["severity"], rows[1]["severity"]
+        results_a = [r for r in results if r.alert.severity == severity_a]
+        results_b = [r for r in results if r.alert.severity == severity_b]
+        hijacked_a, total_a = hijacked_and_total(results_a)
+        hijacked_b, total_b = hijacked_and_total(results_b)
+        z, p_value = two_proportion_z_test(hijacked_a, total_a, hijacked_b, total_b)
+        pairwise_significance = {"severity_a": severity_a, "severity_b": severity_b, "z": z, "p_value": p_value}
+        verdict = "significant" if is_significant(p_value) else "not significant"
+        print(f"\n{severity_a} vs {severity_b} (two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})")
+
     if args.report:
         _write_report(
             args.report,
             markdown_content=render_severity_matrix_report(
                 rows, technique_names, args.client, args.direction, args.defense,
-                severity_filter=requested_severities,
+                severity_filter=requested_severities, pairwise_significance=pairwise_significance,
             ),
             json_content=render_severity_matrix_json_report(
                 rows, technique_names, args.client, args.direction, args.defense,
-                severity_filter=requested_severities,
+                severity_filter=requested_severities, pairwise_significance=pairwise_significance,
             ),
             csv_content=render_severity_matrix_csv_report(
                 rows, technique_names, args.client, args.direction, args.defense,
