@@ -477,6 +477,18 @@ def _resolve_technique_names(techniques_arg: str | None, valid_names, context: s
     return requested
 
 
+def _technique_names_for_direction(techniques_arg: str | None, direction: str) -> list[str]:
+    """Resolves --techniques against whichever technique set the given
+    direction actually uses (ESCALATION_TECHNIQUES for escalate,
+    TECHNIQUES otherwise), falling back to every technique for that
+    direction if none was given. Shared by matrix and severity-matrix,
+    which both need exactly this - the full column list for their grid -
+    before building any rows."""
+    technique_source = ESCALATION_TECHNIQUES if direction == "escalate" else TECHNIQUES
+    requested = _resolve_technique_names(techniques_arg, technique_source, f"direction={direction}")
+    return requested if requested is not None else list(technique_source)
+
+
 def cmd_leaderboard(args):
     """Runs every fake-* client against the same battery under one fixed
     direction/defense and ranks them, most robust first by default -
@@ -664,9 +676,7 @@ def cmd_matrix(args):
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "matrix")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
-    technique_source = ESCALATION_TECHNIQUES if args.direction == "escalate" else TECHNIQUES
-    requested = _resolve_technique_names(args.techniques, technique_source, f"direction={args.direction}")
-    technique_names = requested if requested is not None else list(technique_source)
+    technique_names = _technique_names_for_direction(args.techniques, args.direction)
 
     rows = []
     results_by_client = {}
@@ -731,9 +741,7 @@ def cmd_severity_matrix(args):
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "severity-matrix")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
-    technique_source = ESCALATION_TECHNIQUES if args.direction == "escalate" else TECHNIQUES
-    requested = _resolve_technique_names(args.techniques, technique_source, f"direction={args.direction}")
-    technique_names = requested if requested is not None else list(technique_source)
+    technique_names = _technique_names_for_direction(args.techniques, args.direction)
 
     results = score_batch(injected_alerts, client, defense=args.defense)
     grid = aggregate_by_severity_and_technique(results)
