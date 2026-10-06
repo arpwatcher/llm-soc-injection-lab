@@ -380,6 +380,7 @@ python -m soclab.cli matrix --report matrix.csv  # wide csv, one row per client,
 python -m soclab.cli matrix --severity critical --techniques direct_override  # zoom into one severity/technique
 python -m soclab.cli severity-matrix --client fake-vulnerable  # severity x technique grid, one client
 python -m soclab.cli severity-matrix --client fake-vulnerable --report severity-matrix.md
+python -m soclab.cli severity-matrix --client fake-vulnerable --severity critical,medium  # exactly 2 also runs a z-test
 python -m soclab.cli run --client ollama --model llama3.2:3b
 ```
 
