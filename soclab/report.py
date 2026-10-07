@@ -403,7 +403,7 @@ def render_combined_csv_report(client_name: str, by_direction: dict) -> str:
 
 _LEADERBOARD_CSV_FIELDS = [
     "client", "direction", "defense", "hijack_rate", "ci_low", "ci_high",
-    "severity_weighted_hijack_rate", "clean_accuracy",
+    "severity_weighted_hijack_rate", "clean_accuracy", "clean_ci_low", "clean_ci_high",
 ]
 
 
@@ -412,16 +412,19 @@ def render_leaderboard_report(
     severity_filter: list | None = None,
 ) -> str:
     """rows: one entry per client - {"client", "hijack_rate", "ci_low",
-    "ci_high", "severity_weighted_hijack_rate", "clean_accuracy"} - already
-    sorted by the caller (most robust first). Every other report here is
-    single-client, comparing defenses or directions for one client; this
-    instead compares clients against each other under one fixed direction
-    and defense, the side-by-side vulnerability-profile view none of the
-    others give. clean_accuracy (fraction of non-injected alerts correctly
-    resolved) is shown alongside the hijack rate specifically because a
-    client that just answers wrong across the board scores a misleadingly
-    good 0% hijack rate without it. pairwise_significance, when given (only
-    meaningful with exactly two clients compared), is
+    "ci_high", "severity_weighted_hijack_rate", "clean_accuracy",
+    "clean_ci_low", "clean_ci_high"} - already sorted by the caller (most
+    robust first). Every other report here is single-client, comparing
+    defenses or directions for one client; this instead compares clients
+    against each other under one fixed direction and defense, the
+    side-by-side vulnerability-profile view none of the others give.
+    clean_accuracy (fraction of non-injected alerts correctly resolved) is
+    shown alongside the hijack rate specifically because a client that
+    just answers wrong across the board scores a misleadingly good 0%
+    hijack rate without it - and gets its own Wilson 95% confidence
+    interval for the same reason the hijack rate column does: the clean
+    battery is no bigger a sample than the injected one. pairwise_significance,
+    when given (only meaningful with exactly two clients compared), is
     {"client_a", "client_b", "z", "p_value"} from a two-proportion z-test
     between them, appended as one line below the table. severity_filter,
     when given, is the --severity subset this comparison was restricted
@@ -434,14 +437,14 @@ def render_leaderboard_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     lines.extend([
-        "| client | hijack rate | 95% ci | severity-weighted | clean accuracy |",
-        "|---|---|---|---|---|",
+        "| client | hijack rate | 95% ci | severity-weighted | clean accuracy | clean 95% ci |",
+        "|---|---|---|---|---|---|",
     ])
     for row in rows:
         lines.append(
             f"| {row['client']} | {row['hijack_rate']:.0%} | "
             f"{row['ci_low']:.0%}-{row['ci_high']:.0%} | {row['severity_weighted_hijack_rate']:.0%} | "
-            f"{row['clean_accuracy']:.0%} |"
+            f"{row['clean_accuracy']:.0%} | {row['clean_ci_low']:.0%}-{row['clean_ci_high']:.0%} |"
         )
     lines.append("")
     if pairwise_significance is not None:
@@ -487,6 +490,8 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
             "ci_high": row["ci_high"],
             "severity_weighted_hijack_rate": row["severity_weighted_hijack_rate"],
             "clean_accuracy": row["clean_accuracy"],
+            "clean_ci_low": row["clean_ci_low"],
+            "clean_ci_high": row["clean_ci_high"],
         })
     return output.getvalue()
 

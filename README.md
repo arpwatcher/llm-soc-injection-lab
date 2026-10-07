@@ -263,7 +263,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
-  can't tell apart from a genuinely robust one. `--clients name,name` narrows the comparison
+  can't tell apart from a genuinely robust one. Gets its own Wilson 95% confidence interval
+  too, same as the hijack rate column next to it - the clean battery is no bigger a sample,
+  so a bare "100%" clean accuracy is just as easy to over-read (e.g. 8/8 correct comes back
+  as a 68%-100% interval, not a solid 100%). `--clients name,name` narrows the comparison
   to a chosen subset instead of always all eleven, e.g. just the escalation-direction
   clients, tolerates a stray trailing/extra comma (ignored, not an "unknown client"), and
   rejects an unrecognized name - or a value that's nothing but commas - with a clear error.
@@ -429,7 +432,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-407 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+411 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

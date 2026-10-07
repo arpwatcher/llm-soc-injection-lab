@@ -66,6 +66,7 @@ from soclab.scoring import (
     score_batch,
     severity_weighted_hijack_rate,
     two_proportion_z_test,
+    wilson_confidence_interval,
 )
 
 CLIENT_FACTORIES = {
@@ -538,6 +539,10 @@ def cmd_leaderboard(args):
     ground truth or the attacker's target action) scores a misleadingly
     good 0% hijack rate despite being useless as an analyst - clean
     accuracy catches that a bare hijack-rate ranking alone would miss.
+    Gets the same Wilson 95% confidence interval the hijack rate column
+    already has, for the same reason: the clean battery is no bigger a
+    sample than the injected one, so a bare "100%" clean accuracy is just
+    as easy to over-read as a bare "100%" hijack rate would be.
     --sort-by picks which of those three columns to rank by - lower is
     "more robust" for the two hijack-rate columns, but higher is "more
     robust" for clean_accuracy, so _LEADERBOARD_SORT_ASCENDING keeps
@@ -562,6 +567,7 @@ def cmd_leaderboard(args):
         clean_results = score_batch(clean_alerts, client, defense=args.defense)
         clean_correct, clean_total = resisted_and_total(clean_results)
         clean_accuracy = clean_correct / clean_total
+        clean_ci_low, clean_ci_high = wilson_confidence_interval(clean_correct, clean_total)
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
@@ -572,16 +578,20 @@ def cmd_leaderboard(args):
             "ci_high": ci_high,
             "severity_weighted_hijack_rate": severity_weighted_hijack_rate(results),
             "clean_accuracy": clean_accuracy,
+            "clean_ci_low": clean_ci_low,
+            "clean_ci_high": clean_ci_high,
         })
     rows.sort(key=lambda row: row[args.sort_by], reverse=not _LEADERBOARD_SORT_ASCENDING[args.sort_by])
 
     print(f"direction={args.direction} defense={args.defense}\n")
     _print_severity_filter(requested_severities)
-    print(f"{'client':<38} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18} {'clean_accuracy':>15}")
+    print(f"{'client':<38} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18} "
+          f"{'clean_accuracy':>15} {'clean 95% ci':>15}")
     for row in rows:
         ci = f"{row['ci_low']:.0%}-{row['ci_high']:.0%}"
+        clean_ci = f"{row['clean_ci_low']:.0%}-{row['clean_ci_high']:.0%}"
         print(f"{row['client']:<38} {row['hijack_rate']:>11.0%} {ci:>15} "
-              f"{row['severity_weighted_hijack_rate']:>17.0%} {row['clean_accuracy']:>14.0%}")
+              f"{row['severity_weighted_hijack_rate']:>17.0%} {row['clean_accuracy']:>14.0%} {clean_ci:>15}")
 
     pairwise_significance = None
     if len(client_names) == 2:

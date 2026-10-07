@@ -925,6 +925,39 @@ def test_leaderboard_reports_clean_accuracy_alongside_hijack_rate(tmp_path, caps
     assert robust_row["clean_accuracy"] == 1.0
 
 
+def test_leaderboard_clean_accuracy_gets_a_confidence_interval(capsys):
+    """clean_accuracy is estimated from the same small clean battery the
+    hijack rate's own CI already warns about being easy to over-read at -
+    this is the same Wilson interval, just on the resisted/total count
+    instead of the hijacked/total one. fake-robust gets a bare 100% point
+    estimate (8/8 clean alerts correct), but the interval is still wide
+    (68%-100%), exactly the over-reading risk this column exists to show."""
+    exit_code = main(["leaderboard", "--clients", "fake-robust"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "clean 95% ci" in out
+    assert "68%-100%" in out
+
+
+def test_leaderboard_writes_clean_accuracy_confidence_interval_to_json(tmp_path, capsys):
+    report_path = tmp_path / "leaderboard.json"
+    main(["leaderboard", "--clients", "fake-robust", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    robust_row = next(row for row in parsed["clients"] if row["client"] == "fake-robust")
+    assert robust_row["clean_ci_low"] == pytest.approx(0.6756, abs=0.001)
+    assert robust_row["clean_ci_high"] == 1.0
+
+
+def test_leaderboard_writes_clean_accuracy_confidence_interval_to_csv(tmp_path, capsys):
+    report_path = tmp_path / "leaderboard.csv"
+    main(["leaderboard", "--clients", "fake-robust", "--report", str(report_path)])
+    capsys.readouterr()
+    rows = list(csv.DictReader(report_path.read_text().splitlines()))
+    assert float(rows[0]["clean_ci_low"]) == pytest.approx(0.6756, abs=0.001)
+    assert rows[0]["clean_ci_high"] == "1.0"
+
+
 def test_leaderboard_writes_transcript(tmp_path, capsys):
     transcript_path = tmp_path / "leaderboard-transcript.json"
     main([
