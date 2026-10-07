@@ -659,7 +659,7 @@ def test_render_matrix_report_is_a_markdown_table_with_a_column_per_technique():
         _sample_matrix_rows(), ["direct_override", "unicode_homoglyph"], direction="dismiss", defense="none",
     )
     assert "direction: dismiss, defense: none" in report
-    header, separator, robust_row, vulnerable_row = (
+    header, _, robust_row, vulnerable_row = (
         line for line in report.splitlines() if line.startswith("|")
     )
     assert header == "| client | direct_override | unicode_homoglyph | average |"
@@ -724,7 +724,7 @@ def test_render_severity_matrix_report_is_a_markdown_table_with_a_column_per_tec
         client_name="fake-vulnerable", direction="dismiss", defense="none",
     )
     assert "client: fake-vulnerable, direction: dismiss, defense: none" in report
-    header, separator, critical_row, medium_row = (
+    header, _, critical_row, medium_row = (
         line for line in report.splitlines() if line.startswith("|")
     )
     assert header == "| severity | direct_override | unicode_homoglyph | average |"

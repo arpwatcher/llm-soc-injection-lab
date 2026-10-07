@@ -1,6 +1,16 @@
 from soclab.alerts import Alert, generate_clean_alerts
-from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_all_escalation_techniques, apply_all_techniques
-from soclab.llm_client import EscalationVulnerableFakeClient, RobustFakeClient, VulnerableFakeClient
+from soclab.analyst import AnalystDecision
+from soclab.injections import (
+    ESCALATION_TECHNIQUES,
+    TECHNIQUES,
+    apply_all_escalation_techniques,
+    apply_all_techniques,
+)
+from soclab.llm_client import (
+    EscalationVulnerableFakeClient,
+    RobustFakeClient,
+    VulnerableFakeClient,
+)
 from soclab.scoring import (
     SIGNIFICANCE_ALPHA,
     ScoredResult,
@@ -18,7 +28,6 @@ from soclab.scoring import (
     two_proportion_z_test,
     wilson_confidence_interval,
 )
-from soclab.analyst import AnalystDecision
 
 
 def _scored(severity: str, outcome: str) -> ScoredResult:

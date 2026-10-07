@@ -7,7 +7,7 @@ import json
 import sys
 
 from soclab.alerts import SEVERITIES, generate_clean_alerts
-from soclab.analyst import DEFENSES, DEFENSE_NONE
+from soclab.analyst import DEFENSE_NONE, DEFENSES
 from soclab.injections import (
     ESCALATION_TECHNIQUES,
     TECHNIQUES,

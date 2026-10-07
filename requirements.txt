@@ -1,7 +1,7 @@
 requests==2.34.2
 pytest==9.1.1
 coverage==7.16.2
-ruff==0.15.8
+ruff==0.16.10
 mypy==2.4.0
 types-requests==2.33.0.20260906
 pip-audit==2.10.1

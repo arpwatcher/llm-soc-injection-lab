@@ -3,9 +3,18 @@ import json
 import pytest
 
 from soclab.alerts import generate_clean_alerts
-from soclab.analyst import DEFENSE_BOTH, DEFENSE_NONE, DEFENSE_SANDWICH, DEFENSE_STRICT, build_user_message, get_system_prompt
+from soclab.analyst import (
+    DEFENSE_BOTH,
+    DEFENSE_NONE,
+    DEFENSE_SANDWICH,
+    DEFENSE_STRICT,
+    build_user_message,
+    get_system_prompt,
+)
 from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_technique
 from soclab.llm_client import (
+    _ESCALATION_MARKERS,
+    _INJECTION_MARKERS,
     EscalationSandwichSensitiveFakeClient,
     EscalationSemanticVulnerableFakeClient,
     EscalationStrictPromptSensitiveFakeClient,
@@ -18,8 +27,6 @@ from soclab.llm_client import (
     StrictPromptSensitiveFakeClient,
     StubbornFakeClient,
     VulnerableFakeClient,
-    _ESCALATION_MARKERS,
-    _INJECTION_MARKERS,
 )
 
 

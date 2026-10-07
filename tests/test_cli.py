@@ -16,7 +16,7 @@ def test_module_invocation_as_real_subprocess():
     to work. this runs it for real, out of process."""
     result = subprocess.run(
         [sys.executable, "-m", "soclab.cli", "list-techniques"],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, timeout=10, check=False,
     )
     assert result.returncode == 0
     assert "direct_override" in result.stdout
@@ -29,7 +29,7 @@ def test_run_help_documents_client_and_defense_choices():
     this for the first time."""
     result = subprocess.run(
         [sys.executable, "-m", "soclab.cli", "run", "--help"],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, timeout=10, check=False,
     )
     assert result.returncode == 0
     assert "which client to test" in result.stdout
@@ -41,7 +41,7 @@ def test_compare_help_documents_direction_choice():
     flag - the same {dismiss,escalate} choice left unexplained here too."""
     result = subprocess.run(
         [sys.executable, "-m", "soclab.cli", "compare", "--help"],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, timeout=10, check=False,
     )
     assert result.returncode == 0
     assert "which attacker goal to test" in result.stdout
@@ -460,8 +460,8 @@ def test_compare_writes_transcript(tmp_path, capsys):
     assert exit_code == 0
     assert f"wrote transcript to {transcript_path}" in out
     entries = json.loads(transcript_path.read_text())
-    assert set(e["defense"] for e in entries) == {"none", "sandwich", "strict", "both"}
-    assert set(e["direction"] for e in entries) == {"dismiss"}
+    assert {e["defense"] for e in entries} == {"none", "sandwich", "strict", "both"}
+    assert {e["direction"] for e in entries} == {"dismiss"}
 
 
 def test_compare_report_notes_escalate_direction(tmp_path, capsys):
@@ -575,8 +575,8 @@ def test_full_report_writes_transcript(tmp_path, capsys):
     assert exit_code == 0
     assert f"wrote combined transcript to {transcript_path}" in out
     entries = json.loads(transcript_path.read_text())
-    assert set(e["direction"] for e in entries) == {"dismiss", "escalate"}
-    assert set(e["defense"] for e in entries) == {"none", "sandwich", "strict", "both"}
+    assert {e["direction"] for e in entries} == {"dismiss", "escalate"}
+    assert {e["defense"] for e in entries} == {"none", "sandwich", "strict", "both"}
 
 
 def test_full_report_summary_shows_stubborn_client_only_helped_by_both(tmp_path, capsys):
