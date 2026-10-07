@@ -110,12 +110,30 @@ def _print_report(aggregated, results, severity_breakdown=None):
     print(f"severity-weighted hijack rate: {severity_weighted_hijack_rate(results):.0%}")
 
 
-def _print_summary(rates: dict, heading: str):
+def _print_summary(rates: dict, heading: str, column_label: str = "hijack_rate"):
     print(heading)
-    print(f"{'defense':<10} {'hijack_rate':>12}")
+    print(f"{'defense':<10} {column_label:>12}")
     for defense, rate in rates.items():
         print(f"{defense:<10} {rate:>11.0%}")
     print()
+
+
+def _clean_accuracy_by_defense(clean_alerts: list, client) -> dict[str, float]:
+    """Clean-alert accuracy under every defense - the same diagnostic
+    run's own "clean alerts: N/M correct" line gives for a single defense,
+    generalized across all four so compare/full-report can show whether a
+    defense's own added verbiage (the sandwich reinforcement, the strict
+    warning) makes the client worse at correctly handling alerts that
+    were never attacked in the first place. Neither command checked this
+    at all before - the per-defense hijack-rate tables they already print
+    can't answer it, since a clean alert has no hijack direction to
+    measure against."""
+    accuracy_by_defense = {}
+    for defense in DEFENSES:
+        results = score_batch(clean_alerts, client, defense=defense)
+        correct, total = resisted_and_total(results)
+        accuracy_by_defense[defense] = correct / total if total else 0.0
+    return accuracy_by_defense
 
 
 def _significance_vs_baseline(results_by_defense: dict, baseline: str) -> dict:
@@ -322,9 +340,11 @@ def cmd_run(args):
 def cmd_compare(args):
     client = build_client(args)
     injected_alerts = _injected_alerts_for(args.direction)
+    clean_alerts = generate_clean_alerts()
 
     requested_severities = _resolve_severities(args.severity, "compare")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
 
     print(f"direction={args.direction}\n")
     _print_severity_filter(requested_severities)
@@ -336,6 +356,10 @@ def cmd_compare(args):
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
     significance_by_defense = _significance_vs_baseline(results_by_defense, DEFENSE_NONE)
     _print_significance_vs_baseline(significance_by_defense, DEFENSE_NONE)
+    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client)
+    _print_summary(
+        clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
+    )
 
     if args.report:
         _write_report(
@@ -346,6 +370,7 @@ def cmd_compare(args):
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
+                clean_accuracy_by_defense=clean_accuracy_by_defense,
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
@@ -354,6 +379,7 @@ def cmd_compare(args):
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
+                clean_accuracy_by_defense=clean_accuracy_by_defense,
                 severity_filter=requested_severities,
             ),
             csv_content=render_csv_report(args.client, per_defense, direction=args.direction),
@@ -377,6 +403,7 @@ def cmd_full_report(args):
 
     requested_severities = _resolve_severities(args.severity, "full-report")
     _print_severity_filter(requested_severities)
+    clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
 
     by_direction = {}
     results_by_direction = {}
@@ -402,6 +429,10 @@ def cmd_full_report(args):
         combined_rate_by_defense(by_direction),
         "summary: overall hijack rate by defense (both directions combined)",
     )
+    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client)
+    _print_summary(
+        clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
+    )
 
     _write_report(
         args.report,
@@ -411,6 +442,7 @@ def cmd_full_report(args):
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
             severity_breakdown_by_direction=severity_breakdown_by_direction,
+            clean_accuracy_by_defense=clean_accuracy_by_defense,
             severity_filter=requested_severities,
         ),
         json_content=render_combined_json_report(
@@ -419,6 +451,7 @@ def cmd_full_report(args):
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
             severity_breakdown_by_direction=severity_breakdown_by_direction,
+            clean_accuracy_by_defense=clean_accuracy_by_defense,
             severity_filter=requested_severities,
         ),
         csv_content=render_combined_csv_report(args.client, by_direction),

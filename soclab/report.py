@@ -95,11 +95,13 @@ def rate_by_defense(per_defense: dict) -> dict:
     return {defense: _overall_rate(aggregated) for defense, aggregated in per_defense.items()}
 
 
-def _render_summary_table(rates: dict, heading: str) -> list[str]:
-    """Shared by both report functions: a small defense -> hijack rate
-    table, so the overall pattern is visible without reading every
-    per-technique sub-table by hand."""
-    lines = [heading, "", "| defense | hijack rate |", "|---|---|"]
+def _render_summary_table(rates: dict, heading: str, column_label: str = "hijack rate") -> list[str]:
+    """Shared by both report functions: a small defense -> rate table, so
+    the overall pattern is visible without reading every per-technique
+    sub-table by hand. column_label defaults to the hijack-rate summary's
+    own header, but is overridden for the clean-alert-accuracy summary -
+    same table shape, different column meaning."""
+    lines = [heading, "", f"| defense | {column_label} |", "|---|---|"]
     for defense, rate in rates.items():
         lines.append(f"| {defense} | {rate:.0%} |")
     lines.append("")
@@ -180,6 +182,7 @@ def render_markdown_report(
     confidence_interval_by_defense: dict | None = None,
     significance_by_defense: dict | None = None,
     severity_breakdown_by_defense: dict | None = None,
+    clean_accuracy_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """per_defense maps defense name -> aggregate_by_technique() output for
@@ -189,16 +192,25 @@ def render_markdown_report(
     glance. severity_weighted_by_defense, confidence_interval_by_defense,
     significance_by_defense, and severity_breakdown_by_defense are
     optional: see _render_defense_sections for what each maps.
-    severity_filter, when given, is the list of severities --severity
-    restricted this run to - recorded here so a saved report file still
-    shows which subset of alerts it covers without the reader having to
-    remember or dig up the exact command that produced it."""
+    clean_accuracy_by_defense, when given, maps defense name -> fraction
+    of clean (non-injected) alerts correctly handled under that defense -
+    answers whether a defense's own added verbiage makes the client worse
+    at alerts that were never attacked in the first place, which the
+    hijack-rate tables alone can't show. severity_filter, when given, is
+    the list of severities --severity restricted this run to - recorded
+    here so a saved report file still shows which subset of alerts it
+    covers without the reader having to remember or dig up the exact
+    command that produced it."""
     lines = [f"# injection results - client: {client_name}, direction: {direction}", ""]
     if severity_filter is not None:
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     if len(per_defense) > 1:
         lines.extend(_render_summary_table(rate_by_defense(per_defense), "## summary: overall hijack rate by defense"))
+    if clean_accuracy_by_defense is not None:
+        lines.extend(_render_summary_table(
+            clean_accuracy_by_defense, "## summary: clean-alert accuracy by defense", column_label="clean accuracy",
+        ))
     lines.extend(_render_defense_sections(
         per_defense,
         severity_weighted_by_defense=severity_weighted_by_defense,
@@ -217,6 +229,7 @@ def render_json_report(
     confidence_interval_by_defense: dict | None = None,
     significance_by_defense: dict | None = None,
     severity_breakdown_by_defense: dict | None = None,
+    clean_accuracy_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_markdown_report, as JSON instead of a document -
@@ -231,6 +244,7 @@ def render_json_report(
         "confidence_interval_by_defense": confidence_interval_by_defense,
         "significance_vs_none_by_defense": significance_by_defense,
         "severity_breakdown_by_defense": severity_breakdown_by_defense,
+        "clean_accuracy_by_defense": clean_accuracy_by_defense,
         "per_defense": per_defense,
     }
     return json.dumps(payload, indent=2)
@@ -261,6 +275,7 @@ def render_combined_report(
     confidence_interval_by_direction: dict | None = None,
     significance_by_direction: dict | None = None,
     severity_breakdown_by_direction: dict | None = None,
+    clean_accuracy_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
@@ -271,9 +286,14 @@ def render_combined_report(
     significance_by_direction, and severity_breakdown_by_direction are
     optional: each maps direction name -> (defense name -> its stat),
     same shape as by_direction, shown alongside the flat rate in each
-    section. severity_filter, when given, is the single --severity
-    subset applied to both directions (full-report takes one global
-    filter, not one per direction)."""
+    section. clean_accuracy_by_defense, when given, is a flat defense ->
+    accuracy map instead (unlike the others, not keyed by direction) -
+    the same clean (non-injected) alert battery applies under every
+    direction, so there's nothing direction-specific to show here, just
+    one combined summary table alongside the hijack-rate one above it.
+    severity_filter, when given, is the single --severity subset applied
+    to both directions (full-report takes one global filter, not one per
+    direction)."""
     lines = [f"# injection results - client: {client_name} (all directions, all defenses)", ""]
     if severity_filter is not None:
         lines.append(f"severity filter: {', '.join(severity_filter)}")
@@ -283,6 +303,10 @@ def render_combined_report(
         combined_rate_by_defense(by_direction),
         "## summary: overall hijack rate by defense (both directions combined)",
     ))
+    if clean_accuracy_by_defense is not None:
+        lines.extend(_render_summary_table(
+            clean_accuracy_by_defense, "## summary: clean-alert accuracy by defense", column_label="clean accuracy",
+        ))
 
     for direction, per_defense in by_direction.items():
         lines.append(f"# direction: {direction}")
@@ -309,6 +333,7 @@ def render_combined_json_report(
     confidence_interval_by_direction: dict | None = None,
     significance_by_direction: dict | None = None,
     severity_breakdown_by_direction: dict | None = None,
+    clean_accuracy_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
@@ -320,6 +345,7 @@ def render_combined_json_report(
         "confidence_interval_by_direction": confidence_interval_by_direction,
         "significance_vs_none_by_direction": significance_by_direction,
         "severity_breakdown_by_direction": severity_breakdown_by_direction,
+        "clean_accuracy_by_defense": clean_accuracy_by_defense,
         "by_direction": by_direction,
     }
     return json.dumps(payload, indent=2)

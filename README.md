@@ -238,12 +238,21 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   defense-summary table straight to the terminal, followed by a two-proportion z-test
   comparing each defense's hijack rate against `none` (is the difference actually
   significant, or could it be noise from a small sample), and optionally writes the
-  comparison and/or transcript (each entry tagged with which defense it came from);
+  comparison and/or transcript (each entry tagged with which defense it came from). Also
+  runs the same clean (non-injected) alert battery under each defense and prints/persists
+  a clean-alert-accuracy-by-defense summary table alongside the hijack-rate one - a gap
+  that went unnoticed until now: every defense's own added verbiage (the sandwich
+  reinforcement, the strict warning) gets tested against the injected battery, but never
+  against alerts that were never attacked in the first place, so there was no way to tell
+  whether a defense actually costs something on genuinely clean alerts;
   `soclab full-report --client ... [--severity ...] --report FILE
   [--transcript FILE]` is the capstone run - both directions, all four defenses, one
   client, one combined document, with the same per-direction significance check `compare`
   does and its combined summary table also printed to the terminal before the file is
-  written, plus an optional combined transcript across every direction and defense;
+  written, plus an optional combined transcript across every direction and defense. Gets
+  the same clean-alert-accuracy-by-defense table as `compare`, but only once (not once per
+  direction) - the same clean battery applies regardless of attacker direction, so there's
+  nothing direction-specific to show;
   `soclab leaderboard --direction ... --defense ... [--severity ...] [--report FILE]`
   runs every fake-* client (ollama excluded - it needs a real, reachable server) against the
   same battery under one fixed direction/defense and ranks them by hijack rate, most robust
@@ -418,7 +427,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-395 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+407 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

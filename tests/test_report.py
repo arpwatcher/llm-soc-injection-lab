@@ -307,6 +307,44 @@ def test_render_combined_json_report_includes_severity_breakdown_when_given():
     assert json.loads(report)["severity_breakdown_by_direction"] == severity_breakdown_by_direction
 
 
+def test_render_markdown_report_includes_clean_accuracy_when_given():
+    report = render_markdown_report(
+        "fake-vulnerable", {"none": _sample_aggregate(), "both": _sample_aggregate()},
+        clean_accuracy_by_defense={"none": 1.0, "both": 0.75},
+    )
+    assert "## summary: clean-alert accuracy by defense" in report
+    assert "| defense | clean accuracy |" in report
+    assert "| none | 100% |" in report
+    assert "| both | 75% |" in report
+
+
+def test_render_markdown_report_omits_clean_accuracy_when_not_given():
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+    assert "clean-alert accuracy" not in report
+
+
+def test_render_json_report_includes_clean_accuracy_when_given():
+    report = render_json_report(
+        "fake-vulnerable", {"none": _sample_aggregate()}, clean_accuracy_by_defense={"none": 1.0},
+    )
+    assert json.loads(report)["clean_accuracy_by_defense"] == {"none": 1.0}
+
+
+def test_render_combined_report_includes_clean_accuracy_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    report = render_combined_report("fake-stubborn", by_direction, clean_accuracy_by_defense={"none": 1.0})
+    assert "## summary: clean-alert accuracy by defense" in report
+    assert "| none | 100% |" in report
+    # flat, direction-independent - exactly one such table, not one per direction.
+    assert report.count("## summary: clean-alert accuracy by defense") == 1
+
+
+def test_render_combined_json_report_includes_clean_accuracy_when_given():
+    by_direction = {"dismiss": {"none": _sample_aggregate()}}
+    report = render_combined_json_report("fake-stubborn", by_direction, clean_accuracy_by_defense={"none": 1.0})
+    assert json.loads(report)["clean_accuracy_by_defense"] == {"none": 1.0}
+
+
 def test_render_markdown_report_includes_severity_filter_when_given():
     report = render_markdown_report(
         "fake-vulnerable", {"none": _sample_aggregate()}, severity_filter=["critical", "high"],

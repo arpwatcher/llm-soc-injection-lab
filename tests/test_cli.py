@@ -399,6 +399,52 @@ def test_strict_defense_only_helps_the_strict_sensitive_client(capsys):
     assert "100%" in with_wrong_defense
 
 
+def test_compare_prints_clean_accuracy_summary(capsys):
+    """compare runs every defense against the injected battery but, before
+    this, never checked whether a defense's own added verbiage (the
+    sandwich reinforcement, the strict warning) makes the client worse at
+    alerts that were never attacked in the first place - the per-defense
+    hijack-rate tables can't show that, since a clean alert has no hijack
+    direction to measure against."""
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "summary: clean-alert accuracy by defense" in out
+    clean_section = out.split("summary: clean-alert accuracy by defense")[1]
+    assert "none" in clean_section
+    assert "sandwich" in clean_section
+    assert "strict" in clean_section
+    assert "both" in clean_section
+
+
+def test_compare_writes_clean_accuracy_to_markdown_report(tmp_path, capsys):
+    report_path = tmp_path / "report.md"
+    main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(report_path)])
+    capsys.readouterr()
+    content = report_path.read_text()
+    assert "## summary: clean-alert accuracy by defense" in content
+    assert "| defense | clean accuracy |" in content
+
+
+def test_compare_writes_clean_accuracy_to_json_report(tmp_path, capsys):
+    report_path = tmp_path / "report.json"
+    main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert set(parsed["clean_accuracy_by_defense"]) == {"none", "sandwich", "strict", "both"}
+    assert parsed["clean_accuracy_by_defense"]["none"] == 1.0
+
+
+def test_compare_clean_accuracy_respects_severity_filter(capsys):
+    """clean alerts get the same --severity narrowing the injected battery
+    already does - otherwise a filtered run's clean-accuracy number would
+    silently cover more alerts than the hijack-rate numbers next to it."""
+    exit_code = main(["compare", "--client", "fake-sandwich-sensitive", "--severity", "critical"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "summary: clean-alert accuracy by defense" in out
+
+
 def test_compare_writes_markdown_report(tmp_path, capsys):
     report_path = tmp_path / "report.md"
     exit_code = main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(report_path)])
@@ -541,6 +587,40 @@ def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
     assert set(parsed["significance_vs_none_by_direction"]["dismiss"]) == {"sandwich", "strict", "both"}
     assert set(parsed["severity_breakdown_by_direction"]) == {"dismiss", "escalate"}
     assert parsed["severity_filter"] is None
+
+
+def test_full_report_prints_clean_accuracy_summary(tmp_path, capsys):
+    """same gap compare had: every defense gets run against the injected
+    battery, but clean-alert accuracy under each defense (does the
+    defense's own added verbiage hurt alerts that were never attacked)
+    was never checked at all - direction-independent, so one summary
+    table for the whole report, not one per direction."""
+    report_path = tmp_path / "full.md"
+    exit_code = main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "summary: clean-alert accuracy by defense" in out
+
+
+def test_full_report_writes_clean_accuracy_to_combined_markdown(tmp_path, capsys):
+    report_path = tmp_path / "full.md"
+    main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    capsys.readouterr()
+    content = report_path.read_text()
+    assert "## summary: clean-alert accuracy by defense" in content
+    assert "| defense | clean accuracy |" in content
+    # a flat defense -> accuracy table, not split per direction like the
+    # hijack-rate sections below it - appears exactly once in the document.
+    assert content.count("## summary: clean-alert accuracy by defense") == 1
+
+
+def test_full_report_writes_clean_accuracy_to_json(tmp_path, capsys):
+    report_path = tmp_path / "full.json"
+    main(["full-report", "--client", "fake-stubborn", "--report", str(report_path)])
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert set(parsed["clean_accuracy_by_defense"]) == {"none", "sandwich", "strict", "both"}
+    assert parsed["clean_accuracy_by_defense"]["none"] == 1.0
 
 
 def test_full_report_severity_filter_is_recorded_in_reports(tmp_path, capsys):
