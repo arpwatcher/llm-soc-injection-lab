@@ -252,7 +252,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   written, plus an optional combined transcript across every direction and defense. Gets
   the same clean-alert-accuracy-by-defense table as `compare`, but only once (not once per
   direction) - the same clean battery applies regardless of attacker direction, so there's
-  nothing direction-specific to show;
+  nothing direction-specific to show. `run`'s own saved report gets the same table too, just
+  a single row for its one defense - the terminal already printed `run`'s clean-alert count,
+  but it never made it into the saved file, unlike every other number `run` reports;
   `soclab leaderboard --direction ... --defense ... [--severity ...] [--report FILE]`
   runs every fake-* client (ollama excluded - it needs a real, reachable server) against the
   same battery under one fixed direction/defense and ranks them by hijack rate, most robust

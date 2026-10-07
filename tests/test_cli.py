@@ -162,6 +162,8 @@ def test_run_writes_markdown_report(tmp_path, capsys):
     assert "severity-weighted hijack rate:" in content
     assert "95% confidence interval:" in content
     assert "severity filter:" not in content
+    assert "## summary: clean-alert accuracy by defense" in content
+    assert "| none | 100% |" in content
 
 
 def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
@@ -179,6 +181,7 @@ def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert parsed["severity_weighted_by_defense"] == {"none": 0.875}
     assert "none" in parsed["confidence_interval_by_defense"]
     assert "critical" in parsed["severity_breakdown_by_defense"]["none"]
+    assert parsed["clean_accuracy_by_defense"] == {"none": 1.0}
 
 
 def test_run_severity_filter_is_recorded_in_markdown_report(tmp_path, capsys):

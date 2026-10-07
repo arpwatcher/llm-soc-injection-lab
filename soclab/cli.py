@@ -309,6 +309,7 @@ def cmd_run(args):
         severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
         confidence_interval = {args.defense: overall_hijack_rate_confidence_interval(injected_results)}
         severity_breakdown_by_defense = {args.defense: severity_breakdown}
+        clean_accuracy_by_defense = {args.defense: clean_correct / clean_total if clean_total else 0.0}
         _write_report(
             args.report,
             markdown_content=render_markdown_report(
@@ -316,6 +317,7 @@ def cmd_run(args):
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
+                clean_accuracy_by_defense=clean_accuracy_by_defense,
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
@@ -323,6 +325,7 @@ def cmd_run(args):
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
+                clean_accuracy_by_defense=clean_accuracy_by_defense,
                 severity_filter=requested_severities,
             ),
             csv_content=render_csv_report(args.client, {args.defense: aggregated}, direction=args.direction),
