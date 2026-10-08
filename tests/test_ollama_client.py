@@ -119,6 +119,23 @@ def test_raises_on_http_error_status(monkeypatch):
         client.complete("s", "u")
 
 
+def test_404_names_the_model_and_the_fix(monkeypatch):
+    """ollama answers /api/chat with a 404 for a model that was never
+    pulled - raise_for_status alone said "404 Client Error: Not Found for
+    url", which names neither the model nor what to do about it."""
+    monkeypatch.setattr(
+        requests, "post",
+        lambda *a, **k: _FakeResponse({"error": "model 'mistral:7b' not found"}, status_code=404),
+    )
+    client = OllamaClient(model="mistral:7b", host="http://gpu-box:11434")
+    with pytest.raises(ValueError) as excinfo:
+        client.complete("s", "u")
+    message = str(excinfo.value)
+    assert "'mistral:7b'" in message
+    assert "ollama pull mistral:7b" in message
+    assert "http://gpu-box:11434/api/chat" in message
+
+
 def test_raises_clean_error_on_missing_message_key(monkeypatch):
     """a 200 response with an unexpected shape (wrong ollama version, a
     proxy in the way, a future api change) should fail the same clean

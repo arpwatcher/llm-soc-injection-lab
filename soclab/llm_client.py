@@ -303,6 +303,14 @@ class OllamaClient:
             },
             timeout=self.timeout,
         )
+        if response.status_code == 404:
+            # ollama's answer to a model that was never pulled - the bare
+            # "404 Client Error: Not Found for url" raise_for_status gives
+            # names neither the model nor the fix.
+            raise ValueError(
+                f"{self.host}/api/chat returned 404 for model {self.model!r} - usually it isn't pulled "
+                f"there yet (run `ollama pull {self.model}`), or the host isn't an ollama server"
+            )
         response.raise_for_status()
         try:
             body = response.json()

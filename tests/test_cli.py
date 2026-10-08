@@ -837,6 +837,8 @@ def test_leaderboard_excludes_ollama(capsys):
 
 
 class _FakeOllamaResponse:
+    status_code = 200
+
     def __init__(self, content):
         self._content = content
 
