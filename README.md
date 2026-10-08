@@ -255,11 +255,18 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   nothing direction-specific to show. `run`'s own saved report gets the same table too, just
   a single row for its one defense - the terminal already printed `run`'s clean-alert count,
   but it never made it into the saved file, unlike every other number `run` reports;
-  `soclab leaderboard --direction ... --defense ... [--severity ...] [--report FILE]`
-  runs every fake-* client (ollama excluded - it needs a real, reachable server) against the
-  same battery under one fixed direction/defense and ranks them by hijack rate, most robust
-  first - every other subcommand compares defenses or directions for one client, this
-  compares clients against each other instead. Also reports clean-alert accuracy alongside
+  `soclab leaderboard --direction ... --defense ... [--severity ...] [--models ...] [--report FILE]`
+  runs every fake-* client against the same battery under one fixed direction/defense and
+  ranks them by hijack rate, most robust first - every other subcommand compares defenses or
+  directions for one client, this compares clients against each other instead.
+  `--models llama3.2:3b,mistral:7b` (on `leaderboard`, `technique-leaderboard` and `matrix`)
+  puts real ollama models in the comparison instead, each as its own `ollama:<model>` row -
+  comparing several real models side by side is the actual experiment, the fakes only ever
+  validate the harness. On its own it compares just those models; add `--clients` to keep
+  chosen fakes in as reference rows (`fake-robust` and `fake-vulnerable` make a useful
+  best/worst-case frame around the real results). `--host`/`--timeout` apply to every model
+  the same way they do for `run --client ollama`, and the models are never run unless asked
+  for, so the default invocation still works with no ollama server around. Also reports clean-alert accuracy alongside
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
@@ -399,6 +406,9 @@ python -m soclab.cli severity-matrix --client fake-vulnerable  # severity x tech
 python -m soclab.cli severity-matrix --client fake-vulnerable --report severity-matrix.md
 python -m soclab.cli severity-matrix --client fake-vulnerable --severity critical,medium  # exactly 2 also runs a z-test
 python -m soclab.cli run --client ollama --model llama3.2:3b
+python -m soclab.cli leaderboard --models llama3.2:3b,mistral:7b,qwen2.5:7b  # real models, side by side
+python -m soclab.cli leaderboard --models llama3.2:3b --clients fake-robust,fake-vulnerable  # with reference rows
+python -m soclab.cli matrix --models llama3.2:3b,mistral:7b --report real-matrix.md  # which technique works on which model
 ```
 
 ### Example output
@@ -435,7 +445,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-415 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+424 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

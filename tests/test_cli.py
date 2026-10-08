@@ -5,8 +5,10 @@ import subprocess
 import sys
 
 import pytest
+import requests
 
 from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
+from soclab.llm_client import RobustFakeClient, VulnerableFakeClient
 
 
 def test_module_invocation_as_real_subprocess():
@@ -825,13 +827,133 @@ def test_leaderboard_rejects_unknown_sort_by():
 
 
 def test_leaderboard_excludes_ollama(capsys):
-    """ollama needs a real, reachable server and --model - it isn't a fair
-    or even runnable comparison against the deterministic fakes, so it
-    should never show up as a leaderboard row."""
+    """real models need a reachable ollama server, so without --models
+    they never show up as leaderboard rows - the default run sticks to
+    the deterministic fakes."""
     exit_code = main(["leaderboard"])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "ollama" not in out
+
+
+class _FakeOllamaResponse:
+    def __init__(self, content):
+        self._content = content
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"message": {"content": self._content}}
+
+
+@pytest.fixture
+def fake_ollama(monkeypatch):
+    """Stands in for a running ollama server: answers each /api/chat
+    request the way one of the fake clients would, picked by the
+    requested model name, so the --models tests go through OllamaClient's
+    real request building and response parsing rather than around it.
+    Returns the list of requests it received, for checking host/timeout."""
+    behaviours = {"robust-model": RobustFakeClient(), "gullible-model": VulnerableFakeClient()}
+    received = []
+
+    def fake_post(url, json, timeout):
+        received.append({"url": url, "model": json["model"], "timeout": timeout})
+        system, user = (message["content"] for message in json["messages"])
+        return _FakeOllamaResponse(behaviours[json["model"]].complete(system, user))
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    return received
+
+
+def test_leaderboard_models_compares_real_models_only(fake_ollama, capsys):
+    """the actual experiment is several real models side by side - with
+    only --models given, those are the rows, no fake-* clients mixed in."""
+    exit_code = main(["leaderboard", "--models", "robust-model,gullible-model"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    rows = {
+        line.split()[0]: line for line in out.splitlines()
+        if line.startswith("ollama:") and " vs " not in line
+    }
+    assert set(rows) == {"ollama:robust-model", "ollama:gullible-model"}
+    assert rows["ollama:robust-model"].split()[1] == "0%"
+    assert rows["ollama:gullible-model"].split()[1] == "88%"
+    assert "fake-" not in out
+    assert "ollama:robust-model vs ollama:gullible-model (two-proportion z-test):" in out
+
+
+def test_leaderboard_models_with_clients_adds_fake_reference_rows(fake_ollama, capsys):
+    exit_code = main(["leaderboard", "--models", "gullible-model", "--clients", "fake-robust,fake-vulnerable"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "ollama:gullible-model" in out
+    assert "fake-robust" in out
+    assert "fake-vulnerable" in out
+
+
+def test_leaderboard_models_uses_host_and_timeout(fake_ollama, capsys):
+    main([
+        "leaderboard", "--models", "robust-model",
+        "--host", "http://gpu-box:11434/", "--timeout", "30",
+    ])
+    capsys.readouterr()
+    assert fake_ollama
+    assert all(r["url"] == "http://gpu-box:11434/api/chat" for r in fake_ollama)
+    assert all(r["timeout"] == 30.0 for r in fake_ollama)
+
+
+def test_leaderboard_models_writes_model_rows_to_json_and_transcript(fake_ollama, tmp_path, capsys):
+    report_path, transcript_path = tmp_path / "leaderboard.json", tmp_path / "transcript.json"
+    main([
+        "leaderboard", "--models", "robust-model,gullible-model",
+        "--report", str(report_path), "--transcript", str(transcript_path),
+    ])
+    capsys.readouterr()
+    clients = {row["client"] for row in json.loads(report_path.read_text())["clients"]}
+    assert clients == {"ollama:robust-model", "ollama:gullible-model"}
+    entries = json.loads(transcript_path.read_text())
+    assert {e["client"] for e in entries} == {"ollama:robust-model", "ollama:gullible-model"}
+
+
+def test_technique_leaderboard_models_aggregates_across_real_models(fake_ollama, capsys):
+    exit_code = main(["technique-leaderboard", "--models", "gullible-model"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "across 1 client(s)" in out
+    homoglyph_line = next(line for line in out.splitlines() if line.startswith("unicode_homoglyph"))
+    assert "0%" in homoglyph_line
+
+
+def test_matrix_models_gives_each_real_model_its_own_row(fake_ollama, capsys):
+    exit_code = main([
+        "matrix", "--models", "robust-model,gullible-model", "--techniques", "direct_override,unicode_homoglyph",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "ollama:robust-model | 0% | 0% | 0%" in out
+    assert "ollama:gullible-model | 100% | 0% | 50%" in out
+
+
+def test_models_rejects_duplicate_model(capsys):
+    exit_code = main(["leaderboard", "--models", "llama3.2:3b,llama3.2:3b"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "--models lists the same name more than once: llama3.2:3b" in err
+
+
+def test_models_rejects_value_with_no_names(capsys):
+    exit_code = main(["matrix", "--models", " , "])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "--models was given but contained no model names" in err
+
+
+def test_models_unreachable_server_fails_cleanly(capsys):
+    exit_code = main(["leaderboard", "--models", "llama3.2:3b", "--host", "http://localhost:1"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert err.startswith("error:")
 
 
 def test_leaderboard_clients_restricts_to_the_requested_subset(capsys):

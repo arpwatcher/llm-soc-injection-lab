@@ -509,6 +509,39 @@ def _resolve_client_names(clients_arg: str | None, command_label: str) -> list:
     return client_names
 
 
+def _resolve_model_names(models_arg: str | None) -> list:
+    """Parses a comma-separated --models value (ollama model names, e.g.
+    llama3.2:3b,mistral:7b) into a list, or [] if not given. Not checked
+    against a known set the way --clients is - which models exist depends
+    on what's been pulled on the ollama server, not on anything here."""
+    if not models_arg:
+        return []
+    models = [name.strip() for name in models_arg.split(",") if name.strip()]
+    if not models:
+        raise ValueError("--models was given but contained no model names")
+    _reject_duplicates(models, "--models")
+    return models
+
+
+def _comparison_clients(args, command_label: str) -> list[tuple[str, object]]:
+    """(label, client) pairs for the multi-client comparisons - leaderboard,
+    technique-leaderboard, matrix. The fake-* clients only ever validate
+    the harness itself; comparing several real models side by side is
+    the actual experiment, so each --models entry becomes a real
+    OllamaClient labelled "ollama:<model>". With --models alone, only the
+    real models are compared; add --clients to also include chosen fakes
+    as reference rows (e.g. fake-robust and fake-vulnerable as the two
+    extremes). With neither flag, every fake client, as before."""
+    models = _resolve_model_names(args.models)
+    fake_names = [] if models and not args.clients else _resolve_client_names(args.clients, command_label)
+    clients: list[tuple[str, object]] = [(name, CLIENT_FACTORIES[name](args)) for name in fake_names]
+    clients.extend(
+        (f"ollama:{model}", OllamaClient(model=model, host=args.host, timeout=args.timeout))
+        for model in models
+    )
+    return clients
+
+
 def _resolve_technique_names(techniques_arg: str | None, valid_names, context: str) -> list | None:
     """Parses a comma-separated --techniques value into a validated list,
     or None if not given (the caller then falls back to "all of them").
@@ -547,8 +580,9 @@ def cmd_leaderboard(args):
     every other subcommand here is single-client, comparing defenses or
     directions for one client at a time; this instead compares clients
     against each other, the side-by-side vulnerability-profile view none
-    of the others give. Skips ollama - it needs a real, reachable server
-    and --model, not a fair comparison against the deterministic fakes.
+    of the others give. Real models only take part when asked for with
+    --models (see _comparison_clients) - they need a reachable ollama
+    server, so the default run sticks to the deterministic fakes.
     Also reports clean-alert accuracy alongside the hijack rate: a client
     that just answers wrong across the board (never matching either the
     ground truth or the attacker's target action) scores a misleadingly
@@ -568,7 +602,7 @@ def cmd_leaderboard(args):
     is exactly the case where "is this difference real" has a single,
     unambiguous answer to give, unlike the general N-client leaderboard
     where every pair would need its own comparison."""
-    client_names = _resolve_client_names(args.clients, "leaderboard")
+    clients = _comparison_clients(args, "leaderboard")
 
     injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
@@ -577,8 +611,7 @@ def cmd_leaderboard(args):
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
     rows = []
     results_by_client = {}
-    for name in client_names:
-        client = CLIENT_FACTORIES[name](args)
+    for name, client in clients:
         clean_results = score_batch(clean_alerts, client, defense=args.defense)
         clean_correct, clean_total = resisted_and_total(clean_results)
         clean_accuracy = clean_correct / clean_total
@@ -609,7 +642,7 @@ def cmd_leaderboard(args):
               f"{row['severity_weighted_hijack_rate']:>17.0%} {row['clean_accuracy']:>14.0%} {clean_ci:>15}")
 
     pairwise_significance = None
-    if len(client_names) == 2:
+    if len(clients) == 2:
         # use the sorted table's order, not the --clients input order - the
         # two can disagree (e.g. --clients fake-vulnerable,fake-robust sorts
         # fake-robust to the top), and the line below should read the same
@@ -655,14 +688,13 @@ def cmd_technique_leaderboard(args):
     feeds the combined list straight into aggregate_by_technique, which
     already buckets by technique regardless of which client produced
     each result - no new scoring logic needed, just a different batch."""
-    client_names = _resolve_client_names(args.clients, "technique-leaderboard")
+    clients = _comparison_clients(args, "technique-leaderboard")
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "technique-leaderboard")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
     results_by_client = {}
     combined_results = []
-    for name in client_names:
-        client = CLIENT_FACTORIES[name](args)
+    for name, client in clients:
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         combined_results.extend(results)
@@ -676,7 +708,7 @@ def cmd_technique_leaderboard(args):
     if args.min_rate is not None:
         rows = [(technique, bucket) for technique, bucket in rows if bucket["hijack_rate"] >= args.min_rate]
 
-    print(f"direction={args.direction} defense={args.defense} across {len(client_names)} client(s)\n")
+    print(f"direction={args.direction} defense={args.defense} across {len(clients)} client(s)\n")
     _print_severity_filter(requested_severities)
     print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15}")
     for technique, bucket in rows:
@@ -701,11 +733,11 @@ def cmd_technique_leaderboard(args):
         _write_report(
             args.report,
             markdown_content=render_technique_leaderboard_report(
-                rows, args.direction, args.defense, len(client_names), pairwise_significance=pairwise_significance,
+                rows, args.direction, args.defense, len(clients), pairwise_significance=pairwise_significance,
                 severity_filter=requested_severities,
             ),
             json_content=render_technique_leaderboard_json_report(
-                rows, args.direction, args.defense, len(client_names), pairwise_significance=pairwise_significance,
+                rows, args.direction, args.defense, len(clients), pairwise_significance=pairwise_significance,
                 severity_filter=requested_severities,
             ),
             csv_content=render_technique_leaderboard_csv_report(rows, args.direction, args.defense),
@@ -733,7 +765,7 @@ def cmd_matrix(args):
     technique-leaderboard, each client's results are scored separately
     rather than concatenated - the per-technique breakdown needs to stay
     attributed to its own client, not merged into one combined rate."""
-    client_names = _resolve_client_names(args.clients, "matrix")
+    clients = _comparison_clients(args, "matrix")
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "matrix")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
@@ -741,8 +773,7 @@ def cmd_matrix(args):
 
     rows = []
     results_by_client = {}
-    for name in client_names:
-        client = CLIENT_FACTORIES[name](args)
+    for name, client in clients:
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         aggregated = aggregate_by_technique(results)
@@ -914,6 +945,20 @@ _SEVERITY_HELP = (
 )
 
 
+def _add_model_arguments(subparser) -> None:
+    subparser.add_argument(
+        "--models",
+        help="comma-separated ollama models to compare as real analysts, e.g. llama3.2:3b,mistral:7b - "
+             "each becomes its own ollama:<model> row; on its own this compares only these models, "
+             "add --clients to also include chosen fake-* clients as reference rows",
+    )
+    subparser.add_argument("--host", help="ollama host for --models, defaults to $OLLAMA_HOST or localhost:11434")
+    subparser.add_argument(
+        "--timeout", type=float, default=120.0,
+        help="request timeout in seconds for each --models request, default 120",
+    )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="soclab", description="LLM SOC analyst prompt injection lab")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -970,7 +1015,7 @@ def build_parser():
     full_report_parser.set_defaults(func=cmd_full_report)
 
     leaderboard_parser = sub.add_parser(
-        "leaderboard", help="rank every fake-* client by hijack rate under one direction/defense"
+        "leaderboard", help="rank clients (fake-* and/or real --models) by hijack rate under one direction/defense"
     )
     leaderboard_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                                      help="which attacker goal to test: hide a real incident, or waste analyst time")
@@ -978,7 +1023,7 @@ def build_parser():
     leaderboard_parser.add_argument("--severity", help=_SEVERITY_HELP)
     leaderboard_parser.add_argument(
         "--clients",
-        help="comma-separated subset of fake-* clients to compare (default: all of them) - "
+        help="comma-separated subset of fake-* clients to compare (default: all of them, or none if only --models is given) - "
              "see CLIENT_FACTORIES in cli.py or the readme for the available names",
     )
     leaderboard_parser.add_argument(
@@ -992,11 +1037,12 @@ def build_parser():
         "--transcript",
         help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
+    _add_model_arguments(leaderboard_parser)
     leaderboard_parser.set_defaults(func=cmd_leaderboard)
 
     technique_leaderboard_parser = sub.add_parser(
         "technique-leaderboard",
-        help="rank techniques by hijack rate across every compared fake-* client (most dangerous first)",
+        help="rank techniques by hijack rate across every compared client (most dangerous first)",
     )
     technique_leaderboard_parser.add_argument(
         "--direction", choices=list(DIRECTIONS), default="dismiss",
@@ -1008,7 +1054,7 @@ def build_parser():
     technique_leaderboard_parser.add_argument("--severity", help=_SEVERITY_HELP)
     technique_leaderboard_parser.add_argument(
         "--clients",
-        help="comma-separated subset of fake-* clients to aggregate across (default: all of them) - "
+        help="comma-separated subset of fake-* clients to aggregate across (default: all of them, or none if only --models is given) - "
              "see CLIENT_FACTORIES in cli.py or the readme for the available names",
     )
     technique_leaderboard_parser.add_argument(
@@ -1029,6 +1075,7 @@ def build_parser():
         "--transcript",
         help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
+    _add_model_arguments(technique_leaderboard_parser)
     technique_leaderboard_parser.set_defaults(func=cmd_technique_leaderboard)
 
     matrix_parser = sub.add_parser(
@@ -1043,7 +1090,7 @@ def build_parser():
     matrix_parser.add_argument("--severity", help=_SEVERITY_HELP)
     matrix_parser.add_argument(
         "--clients",
-        help="comma-separated subset of fake-* clients to compare (default: all of them) - "
+        help="comma-separated subset of fake-* clients to compare (default: all of them, or none if only --models is given) - "
              "see CLIENT_FACTORIES in cli.py or the readme for the available names",
     )
     matrix_parser.add_argument(
@@ -1058,6 +1105,7 @@ def build_parser():
         "--transcript",
         help="write a per-alert json record (action, reasoning, outcome) for every compared client to this path",
     )
+    _add_model_arguments(matrix_parser)
     matrix_parser.set_defaults(func=cmd_matrix)
 
     severity_matrix_parser = sub.add_parser(
