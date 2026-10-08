@@ -5,6 +5,7 @@ import argparse
 import csv
 import json
 import sys
+import time
 
 from soclab.alerts import SEVERITIES, generate_clean_alerts
 from soclab.analyst import DEFENSE_NONE, DEFENSES
@@ -89,10 +90,41 @@ DIRECTIONS = ("dismiss", "escalate")
 FAKE_CLIENT_NAMES = [name for name in CLIENT_FACTORIES if name != "ollama"]
 
 
+class _ProgressReporter:
+    """Wraps a real model's client and prints a line to stderr every
+    `every` requests. A real model takes seconds per alert and a
+    full-report run makes a few hundred requests, so with no output at
+    all a working run looks exactly like a hung one. stderr, so results
+    redirected to a file still leave progress visible on screen. The fake
+    clients answer instantly and never get wrapped."""
+
+    every = 10
+
+    def __init__(self, client, label: str):
+        self._client = client
+        self._label = label
+        self._done = 0
+        self._started = time.monotonic()
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        response = self._client.complete(system_prompt, user_message)
+        self._done += 1
+        if self._done % self.every == 0:
+            elapsed = int(time.monotonic() - self._started)
+            print(f"{self._label}: {self._done} requests done ({elapsed // 60}m{elapsed % 60:02d}s)", file=sys.stderr)
+        return response
+
+
 def build_client(args):
     if args.client == "ollama" and not args.model:
         raise ValueError("--model is required when --client ollama")
-    return CLIENT_FACTORIES[args.client](args)
+    client = CLIENT_FACTORIES[args.client](args)
+    if args.client == "ollama":
+        return _ProgressReporter(client, f"ollama:{args.model}")
+    return client
 
 
 def _print_report(aggregated, results, severity_breakdown=None):
@@ -538,7 +570,9 @@ def _comparison_clients(args, command_label: str) -> list[tuple[str, object]]:
     model_clients = [OllamaClient(model=model, host=args.host, timeout=args.timeout) for model in models]
     if model_clients:
         _check_models_pulled(models, model_clients[0])
-    clients.extend((f"ollama:{client.model}", client) for client in model_clients)
+    for client in model_clients:
+        label = f"ollama:{client.model}"
+        clients.append((label, _ProgressReporter(client, label)))
     return clients
 
 

@@ -894,6 +894,34 @@ def test_models_missing_from_server_fails_before_anything_runs(fake_ollama, caps
     assert fake_ollama == []
 
 
+def test_real_model_runs_report_progress_on_stderr(fake_ollama, capsys):
+    """a real model takes seconds per alert, so without this a few hundred
+    requests of silence look exactly like a hung run. leaderboard sends
+    8 clean + 40 injected requests here - a progress line every 10th,
+    all on stderr so stdout stays just the results."""
+    exit_code = main(["leaderboard", "--models", "robust-model"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    progress = [line for line in captured.err.splitlines() if line.startswith("ollama:robust-model:")]
+    assert len(progress) == 4
+    assert progress[-1].startswith("ollama:robust-model: 40 requests done (")
+    assert "requests done" not in captured.out
+
+
+def test_run_with_ollama_client_reports_progress_too(fake_ollama, capsys):
+    exit_code = main(["run", "--client", "ollama", "--model", "gullible-model"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "ollama:gullible-model: 40 requests done (" in captured.err
+
+
+def test_fake_clients_print_no_progress(capsys):
+    """the fakes answer instantly - progress lines would only be noise."""
+    exit_code = main(["leaderboard"])
+    assert exit_code == 0
+    assert capsys.readouterr().err == ""
+
+
 def test_models_untagged_name_matches_its_latest_tag(fake_ollama, capsys):
     exit_code = main(["leaderboard", "--models", "untagged-model"])
     out = capsys.readouterr().out
