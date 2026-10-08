@@ -535,11 +535,27 @@ def _comparison_clients(args, command_label: str) -> list[tuple[str, object]]:
     models = _resolve_model_names(args.models)
     fake_names = [] if models and not args.clients else _resolve_client_names(args.clients, command_label)
     clients: list[tuple[str, object]] = [(name, CLIENT_FACTORIES[name](args)) for name in fake_names]
-    clients.extend(
-        (f"ollama:{model}", OllamaClient(model=model, host=args.host, timeout=args.timeout))
-        for model in models
-    )
+    model_clients = [OllamaClient(model=model, host=args.host, timeout=args.timeout) for model in models]
+    if model_clients:
+        _check_models_pulled(models, model_clients[0])
+    clients.extend((f"ollama:{client.model}", client) for client in model_clients)
     return clients
+
+
+def _check_models_pulled(models: list, server: OllamaClient) -> None:
+    """Fails before anything runs if any requested model isn't on the
+    server, naming all the missing ones at once - the models run one
+    after another, so without this a typo in the last of three only
+    shows up after the first two have finished their whole battery.
+    ollama stores an untagged name like "llama3.2" as "llama3.2:latest",
+    so either spelling counts as present."""
+    available = set(server.available_models())
+    missing = [model for model in models if model not in available and f"{model}:latest" not in available]
+    if missing:
+        raise ValueError(
+            f"model(s) not pulled on {server.host}: {', '.join(missing)} - run `ollama pull <model>` "
+            f"for each first (available: {', '.join(sorted(available)) or 'none'})"
+        )
 
 
 def _resolve_technique_names(techniques_arg: str | None, valid_names, context: str) -> list | None:

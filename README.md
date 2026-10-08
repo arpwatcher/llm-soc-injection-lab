@@ -268,7 +268,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   chosen fakes in as reference rows (`fake-robust` and `fake-vulnerable` make a useful
   best/worst-case frame around the real results). `--host`/`--timeout` apply to every model
   the same way they do for `run --client ollama`, and the models are never run unless asked
-  for, so the default invocation still works with no ollama server around. Also reports clean-alert accuracy alongside
+  for, so the default invocation still works with no ollama server around. Before any
+  model runs, every requested one is checked against the server's `/api/tags` list - a
+  missing or misspelled model fails straight away, all of them named in one error, instead
+  of surfacing only after every model listed before it has finished its whole battery. Also reports clean-alert accuracy alongside
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
@@ -447,7 +450,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-425 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+429 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

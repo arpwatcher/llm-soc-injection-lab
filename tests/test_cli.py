@@ -839,14 +839,14 @@ def test_leaderboard_excludes_ollama(capsys):
 class _FakeOllamaResponse:
     status_code = 200
 
-    def __init__(self, content):
-        self._content = content
+    def __init__(self, payload):
+        self._payload = payload
 
     def raise_for_status(self):
         pass
 
     def json(self):
-        return {"message": {"content": self._content}}
+        return self._payload
 
 
 @pytest.fixture
@@ -855,17 +855,50 @@ def fake_ollama(monkeypatch):
     request the way one of the fake clients would, picked by the
     requested model name, so the --models tests go through OllamaClient's
     real request building and response parsing rather than around it.
-    Returns the list of requests it received, for checking host/timeout."""
-    behaviours = {"robust-model": RobustFakeClient(), "gullible-model": VulnerableFakeClient()}
+    /api/tags lists the pulled models the way ollama does - an untagged
+    pull shows up with ":latest" on the end. Returns the list of chat
+    requests it received, for checking host/timeout."""
+    behaviours = {
+        "robust-model": RobustFakeClient(),
+        "gullible-model": VulnerableFakeClient(),
+        "untagged-model": RobustFakeClient(),
+    }
+    pulled = ["robust-model", "gullible-model", "untagged-model:latest"]
     received = []
 
     def fake_post(url, json, timeout):
         received.append({"url": url, "model": json["model"], "timeout": timeout})
         system, user = (message["content"] for message in json["messages"])
-        return _FakeOllamaResponse(behaviours[json["model"]].complete(system, user))
+        return _FakeOllamaResponse({"message": {"content": behaviours[json["model"]].complete(system, user)}})
+
+    def fake_get(url, timeout):
+        assert url.endswith("/api/tags")
+        return _FakeOllamaResponse({"models": [{"name": name} for name in pulled]})
 
     monkeypatch.setattr(requests, "post", fake_post)
+    monkeypatch.setattr(requests, "get", fake_get)
     return received
+
+
+def test_models_missing_from_server_fails_before_anything_runs(fake_ollama, capsys):
+    """the models run one after another, so without a check up front a
+    typo in the last one only shows up after every earlier model has
+    finished its whole battery - this names every missing one at once,
+    before a single chat request goes out."""
+    exit_code = main(["leaderboard", "--models", "robust-model,mistral:7b,qwen2.5:7b"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "model(s) not pulled on http://localhost:11434: mistral:7b, qwen2.5:7b" in err
+    assert "ollama pull" in err
+    assert "robust-model" in err  # listed as available
+    assert fake_ollama == []
+
+
+def test_models_untagged_name_matches_its_latest_tag(fake_ollama, capsys):
+    exit_code = main(["leaderboard", "--models", "untagged-model"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "ollama:untagged-model" in out
 
 
 def test_leaderboard_models_compares_real_models_only(fake_ollama, capsys):

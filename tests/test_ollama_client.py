@@ -119,6 +119,26 @@ def test_raises_on_http_error_status(monkeypatch):
         client.complete("s", "u")
 
 
+def test_available_models_lists_pulled_model_names(monkeypatch):
+    captured = {}
+
+    def fake_get(url, timeout):
+        captured["url"], captured["timeout"] = url, timeout
+        return _FakeResponse({"models": [{"name": "llama3.2:3b", "size": 1}, {"name": "mistral:7b"}]})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    client = OllamaClient(model="llama3.2:3b", host="http://gpu-box:11434/", timeout=7.0)
+    assert client.available_models() == ["llama3.2:3b", "mistral:7b"]
+    assert captured == {"url": "http://gpu-box:11434/api/tags", "timeout": 7.0}
+
+
+def test_available_models_raises_clean_error_on_unexpected_shape(monkeypatch):
+    monkeypatch.setattr(requests, "get", lambda *a, **k: _FakeResponse({"oops": []}, text='{"oops": []}'))
+    client = OllamaClient(model="m")
+    with pytest.raises(ValueError, match="unexpected response from ollama /api/tags"):
+        client.available_models()
+
+
 def test_404_names_the_model_and_the_fix(monkeypatch):
     """ollama answers /api/chat with a 404 for a model that was never
     pulled - raise_for_status alone said "404 Client Error: Not Found for

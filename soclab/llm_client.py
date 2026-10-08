@@ -285,6 +285,18 @@ class OllamaClient:
         self.host = (host or default_host).rstrip("/")
         self.timeout = timeout
 
+    def available_models(self) -> list[str]:
+        """Names of every model already pulled on this server (GET
+        /api/tags), so a multi-model run can check up front that each one
+        is there - otherwise a missing one only surfaces after every model
+        listed before it has already run its whole battery."""
+        response = requests.get(f"{self.host}/api/tags", timeout=self.timeout)
+        response.raise_for_status()
+        try:
+            return [entry["name"] for entry in response.json()["models"]]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError(f"unexpected response from ollama /api/tags: {response.text!r}") from exc
+
     def complete(self, system_prompt: str, user_message: str) -> str:
         response = requests.post(
             f"{self.host}/api/chat",
