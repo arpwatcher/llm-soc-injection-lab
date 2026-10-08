@@ -270,6 +270,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   to a chosen subset instead of always all eleven, e.g. just the escalation-direction
   clients, tolerates a stray trailing/extra comma (ignored, not an "unknown client"), and
   rejects an unrecognized name - or a value that's nothing but commas - with a clear error.
+  Every comma-separated flag (`--clients`, `--techniques`, `--severity`) also rejects a name
+  listed twice: a duplicated technique in `matrix` used to get its own column while the
+  average quietly divided by the wrong count (100%, 100%, 0% averaged to 33%).
   `--sort-by hijack_rate|severity_weighted_hijack_rate|clean_accuracy` picks which column
   ranks the table (default hijack_rate) - always most-robust-first regardless of column,
   since higher is better for clean_accuracy but lower is better for the other two. With
@@ -432,7 +435,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-411 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+415 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

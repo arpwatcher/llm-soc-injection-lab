@@ -1275,6 +1275,47 @@ def test_matrix_rejects_unknown_technique(capsys):
     assert "not_a_real_technique" in err
 
 
+def test_matrix_rejects_duplicate_technique(capsys):
+    """a duplicated technique used to get its own column while the average
+    divided by the list length but summed a dict of distinct rates - 100%,
+    100%, 0% came out as a 33% average, matching neither the cells shown
+    nor the distinct techniques."""
+    exit_code = main([
+        "matrix", "--clients", "fake-vulnerable",
+        "--techniques", "direct_override,direct_override,unicode_homoglyph",
+    ])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "--techniques lists the same name more than once: direct_override" in err
+
+
+def test_severity_matrix_rejects_duplicate_technique(capsys):
+    exit_code = main([
+        "severity-matrix", "--client", "fake-vulnerable",
+        "--techniques", "direct_override,unicode_homoglyph,direct_override",
+    ])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "--techniques lists the same name more than once: direct_override" in err
+
+
+def test_leaderboard_rejects_duplicate_client(capsys):
+    """used to print two identical rows plus a meaningless "fake-robust vs
+    fake-robust" significance line."""
+    exit_code = main(["leaderboard", "--clients", "fake-robust,fake-robust"])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "--clients lists the same name more than once: fake-robust" in captured.err
+    assert "two-proportion z-test" not in captured.out
+
+
+def test_run_rejects_duplicate_severity(capsys):
+    exit_code = main(["run", "--severity", "critical,high,critical"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "--severity lists the same name more than once: critical" in err
+
+
 def test_matrix_techniques_rejects_wrong_direction_name(capsys):
     exit_code = main(["matrix", "--direction", "escalate", "--techniques", "direct_override"])
     err = capsys.readouterr().err

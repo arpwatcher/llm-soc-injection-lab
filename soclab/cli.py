@@ -242,6 +242,18 @@ def _run_defense_battery(injected_alerts: list, client, heading_prefix: str = ""
     )
 
 
+def _reject_duplicates(names: list, flag: str) -> None:
+    """A name listed twice used to go through silently and produce wrong
+    output: a duplicated --techniques entry in matrix/severity-matrix got
+    its own column but the average divided by the list length while
+    summing a dict of distinct rates (100%, 100%, 0% averaged to 33%), and
+    a duplicated --clients entry in leaderboard ran a meaningless "X vs X"
+    significance test."""
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(f"{flag} lists the same name more than once: {', '.join(duplicates)}")
+
+
 def _resolve_severities(severity_arg: str | None, command_label: str) -> list | None:
     """Parses a comma-separated --severity value into a validated list, or
     None if not given (the caller then doesn't filter at all). Same
@@ -257,6 +269,7 @@ def _resolve_severities(severity_arg: str | None, command_label: str) -> list | 
     unknown = [name for name in requested if name not in SEVERITIES]
     if unknown:
         raise ValueError(f"unknown severity/severities for {command_label}: {', '.join(unknown)}")
+    _reject_duplicates(requested, "--severity")
     return requested
 
 
@@ -492,6 +505,7 @@ def _resolve_client_names(clients_arg: str | None, command_label: str) -> list:
     unknown = [name for name in client_names if name not in FAKE_CLIENT_NAMES]
     if unknown:
         raise ValueError(f"unknown client(s) for {command_label}: {', '.join(unknown)}")
+    _reject_duplicates(client_names, "--clients")
     return client_names
 
 
@@ -511,6 +525,7 @@ def _resolve_technique_names(techniques_arg: str | None, valid_names, context: s
     unknown = [name for name in requested if name not in valid_names]
     if unknown:
         raise ValueError(f"unknown technique(s) for {context}: {', '.join(unknown)}")
+    _reject_duplicates(requested, "--techniques")
     return requested
 
 
