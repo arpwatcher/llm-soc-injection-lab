@@ -958,6 +958,37 @@ def test_temperature_and_seed_reach_every_model_in_a_comparison(fake_ollama, cap
     assert all(r["options"] == {"temperature": 0.0} for r in fake_ollama)
 
 
+def test_pinned_sampling_settings_are_recorded_in_saved_reports(fake_ollama, tmp_path, capsys):
+    """a report from a temperature-0 run and one from the model's default
+    used to look identical - the settings that make a run reproducible
+    weren't written down anywhere in it."""
+    report_path = tmp_path / "r.json"
+    main([
+        "run", "--client", "ollama", "--model", "robust-model",
+        "--temperature", "0", "--seed", "42", "--report", str(report_path),
+    ])
+    captured = capsys.readouterr()
+    assert json.loads(report_path.read_text())["client"] == "ollama:robust-model (temperature=0, seed=42)"
+    assert "ollama:robust-model (temperature=0, seed=42): 40 requests done" in captured.err
+
+
+def test_comparison_rows_carry_pinned_sampling_settings(fake_ollama, tmp_path, capsys):
+    report_path = tmp_path / "lb.json"
+    main(["leaderboard", "--models", "robust-model", "--temperature", "0.7", "--report", str(report_path)])
+    capsys.readouterr()
+    clients = [row["client"] for row in json.loads(report_path.read_text())["clients"]]
+    assert clients == ["ollama:robust-model (temperature=0.7)"]
+
+
+def test_leaderboard_columns_stay_aligned_with_long_model_labels(fake_ollama, capsys):
+    main(["leaderboard", "--models", "robust-model", "--clients", "fake-vulnerable", "--temperature", "0", "--seed", "1"])
+    rows = [line for line in capsys.readouterr().out.splitlines() if line.startswith(("ollama:", "fake-")) and " vs " not in line]
+    assert len(rows) == 2
+    # the first "%" closes the hijack_rate value - same column on every row,
+    # whether its label is a short fake-* name or a long model label
+    assert len({row.index("%") for row in rows}) == 1
+
+
 def test_no_sampling_options_sent_unless_asked_for(fake_ollama, capsys):
     main(["run", "--client", "ollama", "--model", "robust-model"])
     capsys.readouterr()

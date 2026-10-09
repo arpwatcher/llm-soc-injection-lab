@@ -281,7 +281,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   could only be told apart by their filenames. `--temperature`/`--seed` (on every command that can run a real
   model) are passed through as ollama's sampling `options`; left unset, nothing is sent and
   the model's own defaults apply - usually a temperature above 0, so two runs of the same
-  battery can disagree. `--temperature 0 --seed 42` makes a run repeatable. Also reports clean-alert accuracy alongside
+  battery can disagree. `--temperature 0 --seed 42` makes a run repeatable. Whatever was
+  pinned is carried in the model's label - `ollama:llama3.2:3b (temperature=0, seed=42)` - so
+  it lands in every saved report, row and transcript, and a run at temperature 0 can't be
+  mistaken for one at the model's default. Also reports clean-alert accuracy alongside
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
@@ -461,7 +464,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-439 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+442 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

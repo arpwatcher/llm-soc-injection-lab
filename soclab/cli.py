@@ -120,14 +120,29 @@ class _ProgressReporter:
         return response
 
 
+def _model_label(model: str, temperature: float | None, seed: int | None) -> str:
+    """ollama:<model>, plus whichever sampling settings were pinned - a run
+    at temperature 0 and one at the model's own default are different
+    experimental conditions, so their rows and saved reports shouldn't
+    look identical. Carried in the label because the label already
+    reaches every output (report titles, json/csv client fields,
+    leaderboard and matrix rows, transcripts, progress lines)."""
+    settings = []
+    if temperature is not None:
+        settings.append(f"temperature={temperature:g}")
+    if seed is not None:
+        settings.append(f"seed={seed}")
+    return f"ollama:{model}" + (f" ({', '.join(settings)})" if settings else "")
+
+
 def _client_label(args) -> str:
     """What a single-client report calls the client. "ollama" alone says
     nothing about which model produced the numbers - a saved full-report
     for llama3.2:3b and one for mistral:7b used to be indistinguishable
-    from their contents - so a real model gets the same "ollama:<model>"
-    label the comparison commands already use for their rows."""
+    from their contents - so a real model gets the same label the
+    comparison commands give their rows."""
     if args.client == "ollama":
-        return f"ollama:{args.model}"
+        return _model_label(args.model, args.temperature, args.seed)
     return args.client
 
 
@@ -587,7 +602,7 @@ def _comparison_clients(args, command_label: str) -> list[tuple[str, object]]:
     if model_clients:
         _check_models_pulled(models, model_clients[0])
     for client in model_clients:
-        label = f"ollama:{client.model}"
+        label = _model_label(client.model, args.temperature, args.seed)
         clients.append((label, _ProgressReporter(client, label)))
     return clients
 
@@ -699,12 +714,15 @@ def cmd_leaderboard(args):
 
     print(f"direction={args.direction} defense={args.defense}\n")
     _print_severity_filter(requested_severities)
-    print(f"{'client':<38} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18} "
+    # at least 38 for the fake-* names, wider when a model label with its
+    # sampling settings needs it, so the numeric columns stay lined up
+    width = max([38, *(len(row["client"]) for row in rows)])
+    print(f"{'client':<{width}} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18} "
           f"{'clean_accuracy':>15} {'clean 95% ci':>15}")
     for row in rows:
         ci = f"{row['ci_low']:.0%}-{row['ci_high']:.0%}"
         clean_ci = f"{row['clean_ci_low']:.0%}-{row['clean_ci_high']:.0%}"
-        print(f"{row['client']:<38} {row['hijack_rate']:>11.0%} {ci:>15} "
+        print(f"{row['client']:<{width}} {row['hijack_rate']:>11.0%} {ci:>15} "
               f"{row['severity_weighted_hijack_rate']:>17.0%} {row['clean_accuracy']:>14.0%} {clean_ci:>15}")
 
     pairwise_significance = None
