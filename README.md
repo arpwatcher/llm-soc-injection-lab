@@ -101,7 +101,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the harness and scoring logic get proven correct before a single real model call happens.
 - `scoring.py` - classifies each result as resisted / hijacked / other (against whichever
   direction that specific alert's injection was aiming for), aggregates a hijack rate per
-  technique, and an overall hijack rate across a whole batch. Also computes a
+  technique, and an overall hijack rate across a whole batch. Every per-technique and
+  per-severity bucket also counts `unparseable` responses (a subset of "other") - a real model
+  that breaks its answer format can never be scored as hijacked on those alerts, so it would
+  otherwise look more robust than it is; `run`/`compare`/`full-report` print and save an
+  `unparseable responses: N/M` line next to the overall rate, and the csv gets its own column.
+  Also computes a
   severity-weighted hijack rate (critical alerts weighted higher than low ones) alongside
   the flat one - a client that mostly resists on low-severity alerts but caves on critical
   ones looks fine under the flat rate while actually being much worse in practice. This
@@ -464,7 +469,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-442 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+447 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

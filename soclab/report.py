@@ -159,6 +159,8 @@ def _render_defense_sections(
             lines.append("")
 
         lines.append(f"overall hijack rate: {_overall_rate(aggregated):.0%}")
+        unparseable = sum(bucket.get("unparseable", 0) for bucket in aggregated.values())
+        lines.append(f"unparseable responses: {unparseable}/{sum(bucket['total'] for bucket in aggregated.values())}")
         if confidence_interval_by_defense is not None:
             ci_low, ci_high = confidence_interval_by_defense[defense]
             lines.append(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
@@ -353,7 +355,7 @@ def render_combined_json_report(
 
 _CSV_FIELDS = [
     "client", "direction", "defense", "technique",
-    "hijacked", "resisted", "other", "total", "hijack_rate", "ci_low", "ci_high",
+    "hijacked", "resisted", "other", "unparseable", "total", "hijack_rate", "ci_low", "ci_high",
 ]
 
 
@@ -369,6 +371,7 @@ def _csv_rows(client_name: str, direction: str, per_defense: dict) -> list[dict]
                 "hijacked": bucket["hijacked"],
                 "resisted": bucket["resisted"],
                 "other": bucket["other"],
+                "unparseable": bucket.get("unparseable", 0),
                 "total": bucket["total"],
                 "hijack_rate": bucket["hijack_rate"],
                 "ci_low": bucket.get("ci_low", ""),

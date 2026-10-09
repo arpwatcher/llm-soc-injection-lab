@@ -8,7 +8,7 @@ import pytest
 import requests
 
 from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
-from soclab.llm_client import RobustFakeClient, VulnerableFakeClient
+from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
 
 
 def test_module_invocation_as_real_subprocess():
@@ -862,8 +862,9 @@ def fake_ollama(monkeypatch):
         "robust-model": RobustFakeClient(),
         "gullible-model": VulnerableFakeClient(),
         "untagged-model": RobustFakeClient(),
+        "rambling-model": ScriptedLLMClient(["I'd rather not answer in json, sorry."] * 200),
     }
-    pulled = ["robust-model", "gullible-model", "untagged-model:latest"]
+    pulled = ["robust-model", "gullible-model", "untagged-model:latest", "rambling-model"]
     received = []
 
     def fake_post(url, json, timeout):
@@ -999,6 +1000,26 @@ def test_negative_temperature_is_rejected(capsys):
     with pytest.raises(SystemExit):
         main(["run", "--client", "ollama", "--model", "m", "--temperature", "-0.5"])
     assert "must be 0 or more" in capsys.readouterr().err
+
+
+def test_unparseable_responses_are_reported_not_hidden(fake_ollama, tmp_path, capsys):
+    """a model that never keeps to the answer format scores a 0% hijack
+    rate - every alert lands in "other" - which reads like perfect
+    robustness unless the unparseable count is right next to it."""
+    md_path, csv_path = tmp_path / "r.md", tmp_path / "r.csv"
+    for path in (md_path, csv_path):
+        assert main(["run", "--client", "ollama", "--model", "rambling-model", "--report", str(path)]) == 0
+    out = capsys.readouterr().out
+    assert "overall hijack rate: 0%" in out
+    assert "unparseable responses: 40/40" in out
+    assert "unparseable responses: 40/40" in md_path.read_text()
+    rows = list(csv.DictReader(io.StringIO(csv_path.read_text())))
+    assert sum(int(row["unparseable"]) for row in rows) == 40
+
+
+def test_fake_clients_report_zero_unparseable(capsys):
+    main(["run", "--client", "fake-vulnerable"])
+    assert "unparseable responses: 0/40" in capsys.readouterr().out
 
 
 def test_fake_clients_print_no_progress(capsys):

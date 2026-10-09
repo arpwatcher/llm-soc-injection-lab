@@ -67,6 +67,7 @@ from soclab.scoring import (
     score_batch,
     severity_weighted_hijack_rate,
     two_proportion_z_test,
+    unparseable_and_total,
     wilson_confidence_interval,
 )
 
@@ -169,6 +170,8 @@ def _print_report(aggregated, results, severity_breakdown=None):
     ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
     print(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
     print(f"severity-weighted hijack rate: {severity_weighted_hijack_rate(results):.0%}")
+    unparseable, total = unparseable_and_total(results)
+    print(f"unparseable responses: {unparseable}/{total}")
 
 
 def _print_summary(rates: dict, heading: str, column_label: str = "hijack_rate"):
