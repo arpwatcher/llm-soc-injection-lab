@@ -915,6 +915,29 @@ def test_run_with_ollama_client_reports_progress_too(fake_ollama, capsys):
     assert "ollama:gullible-model: 40 requests done (" in captured.err
 
 
+def test_single_client_reports_name_the_real_model(fake_ollama, tmp_path, capsys):
+    """a saved report used to say just "ollama" - two full-report files for
+    two different models were indistinguishable from their contents, only
+    from their filenames. same ollama:<model> label the comparison
+    commands already use for their rows."""
+    md_path, json_path, csv_path = tmp_path / "r.md", tmp_path / "r.json", tmp_path / "r.csv"
+    for path in (md_path, json_path, csv_path):
+        assert main(["run", "--client", "ollama", "--model", "robust-model", "--report", str(path)]) == 0
+    capsys.readouterr()
+    assert "client: ollama:robust-model" in md_path.read_text()
+    assert json.loads(json_path.read_text())["client"] == "ollama:robust-model"
+    assert {row["client"] for row in csv.DictReader(io.StringIO(csv_path.read_text()))} == {"ollama:robust-model"}
+
+
+def test_full_report_and_severity_matrix_name_the_real_model(fake_ollama, tmp_path, capsys):
+    report_path = tmp_path / "full.json"
+    assert main(["full-report", "--client", "ollama", "--model", "gullible-model", "--report", str(report_path)]) == 0
+    assert json.loads(report_path.read_text())["client"] == "ollama:gullible-model"
+    capsys.readouterr()
+    assert main(["severity-matrix", "--client", "ollama", "--model", "gullible-model"]) == 0
+    assert "client=ollama:gullible-model direction=dismiss" in capsys.readouterr().out
+
+
 def test_fake_clients_print_no_progress(capsys):
     """the fakes answer instantly - progress lines would only be noise."""
     exit_code = main(["leaderboard"])

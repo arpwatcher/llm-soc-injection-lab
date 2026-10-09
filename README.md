@@ -275,7 +275,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   Every real-model run (`--models`, or `--client ollama` on the single-client commands)
   also prints `ollama:<model>: 40 requests done (1m12s)` to stderr every 10 requests - at
   a few seconds per alert, a few hundred silent requests otherwise look just like a hung
-  run. stderr, so the results on stdout stay clean even when redirected to a file. Also reports clean-alert accuracy alongside
+  run. stderr, so the results on stdout stay clean even when redirected to a file. Saved
+  reports from `run`/`compare`/`full-report`/`severity-matrix --client ollama --model X` name
+  the client `ollama:X` too, not just `ollama` - otherwise two report files for two models
+  could only be told apart by their filenames. Also reports clean-alert accuracy alongside
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
@@ -454,7 +457,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-432 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+434 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

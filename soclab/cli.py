@@ -118,12 +118,23 @@ class _ProgressReporter:
         return response
 
 
+def _client_label(args) -> str:
+    """What a single-client report calls the client. "ollama" alone says
+    nothing about which model produced the numbers - a saved full-report
+    for llama3.2:3b and one for mistral:7b used to be indistinguishable
+    from their contents - so a real model gets the same "ollama:<model>"
+    label the comparison commands already use for their rows."""
+    if args.client == "ollama":
+        return f"ollama:{args.model}"
+    return args.client
+
+
 def build_client(args):
     if args.client == "ollama" and not args.model:
         raise ValueError("--model is required when --client ollama")
     client = CLIENT_FACTORIES[args.client](args)
     if args.client == "ollama":
-        return _ProgressReporter(client, f"ollama:{args.model}")
+        return _ProgressReporter(client, _client_label(args))
     return client
 
 
@@ -359,7 +370,7 @@ def cmd_run(args):
         _write_report(
             args.report,
             markdown_content=render_markdown_report(
-                args.client, {args.defense: aggregated}, direction=args.direction,
+                _client_label(args), {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
@@ -367,14 +378,14 @@ def cmd_run(args):
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
-                args.client, {args.defense: aggregated}, direction=args.direction,
+                _client_label(args), {args.defense: aggregated}, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted,
                 confidence_interval_by_defense=confidence_interval,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 severity_filter=requested_severities,
             ),
-            csv_content=render_csv_report(args.client, {args.defense: aggregated}, direction=args.direction),
+            csv_content=render_csv_report(_client_label(args), {args.defense: aggregated}, direction=args.direction),
             message=f"\nwrote report to {args.report}",
         )
 
@@ -414,7 +425,7 @@ def cmd_compare(args):
         _write_report(
             args.report,
             markdown_content=render_markdown_report(
-                args.client, per_defense, direction=args.direction,
+                _client_label(args), per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
@@ -423,7 +434,7 @@ def cmd_compare(args):
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
-                args.client, per_defense, direction=args.direction,
+                _client_label(args), per_defense, direction=args.direction,
                 severity_weighted_by_defense=severity_weighted_by_defense,
                 confidence_interval_by_defense=confidence_interval_by_defense,
                 significance_by_defense=significance_by_defense,
@@ -431,7 +442,7 @@ def cmd_compare(args):
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 severity_filter=requested_severities,
             ),
-            csv_content=render_csv_report(args.client, per_defense, direction=args.direction),
+            csv_content=render_csv_report(_client_label(args), per_defense, direction=args.direction),
             message=f"wrote report to {args.report}",
         )
 
@@ -486,7 +497,7 @@ def cmd_full_report(args):
     _write_report(
         args.report,
         markdown_content=render_combined_report(
-            args.client, by_direction,
+            _client_label(args), by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
@@ -495,7 +506,7 @@ def cmd_full_report(args):
             severity_filter=requested_severities,
         ),
         json_content=render_combined_json_report(
-            args.client, by_direction,
+            _client_label(args), by_direction,
             severity_weighted_by_direction=severity_weighted_by_direction,
             confidence_interval_by_direction=confidence_interval_by_direction,
             significance_by_direction=significance_by_direction,
@@ -503,7 +514,7 @@ def cmd_full_report(args):
             clean_accuracy_by_defense=clean_accuracy_by_defense,
             severity_filter=requested_severities,
         ),
-        csv_content=render_combined_csv_report(args.client, by_direction),
+        csv_content=render_combined_csv_report(_client_label(args), by_direction),
         message=f"wrote combined report to {args.report}",
     )
 
@@ -896,7 +907,7 @@ def cmd_severity_matrix(args):
         rates = {technique: aggregated.get(technique, {}).get("hijack_rate", 0.0) for technique in technique_names}
         rows.append({"severity": severity, "rates": rates, "average": sum(rates.values()) / len(technique_names)})
 
-    print(f"client={args.client} direction={args.direction} defense={args.defense}\n")
+    print(f"client={_client_label(args)} direction={args.direction} defense={args.defense}\n")
     _print_severity_filter(requested_severities)
     print("severity | " + " | ".join(technique_names) + " | average")
     for row in rows:
@@ -923,15 +934,15 @@ def cmd_severity_matrix(args):
         _write_report(
             args.report,
             markdown_content=render_severity_matrix_report(
-                rows, technique_names, args.client, args.direction, args.defense,
+                rows, technique_names, _client_label(args), args.direction, args.defense,
                 severity_filter=requested_severities, pairwise_significance=pairwise_significance,
             ),
             json_content=render_severity_matrix_json_report(
-                rows, technique_names, args.client, args.direction, args.defense,
+                rows, technique_names, _client_label(args), args.direction, args.defense,
                 severity_filter=requested_severities, pairwise_significance=pairwise_significance,
             ),
             csv_content=render_severity_matrix_csv_report(
-                rows, technique_names, args.client, args.direction, args.defense,
+                rows, technique_names, _client_label(args), args.direction, args.defense,
             ),
             message=f"\nwrote severity matrix to {args.report}",
         )
