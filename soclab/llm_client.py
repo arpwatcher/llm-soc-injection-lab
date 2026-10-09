@@ -276,8 +276,16 @@ class OllamaClient:
     test suite, but the actual code path that builds the request and
     parses the response is exercised, not skipped."""
 
-    def __init__(self, model: str, host: str | None = None, timeout: float = 120.0):
+    def __init__(
+        self, model: str, host: str | None = None, timeout: float = 120.0,
+        temperature: float | None = None, seed: int | None = None,
+    ):
         self.model = model
+        # sampling options - left out of the request entirely when not set,
+        # so the model's own defaults apply (usually a temperature above 0,
+        # which means two runs of the same battery can disagree).
+        self.temperature = temperature
+        self.seed = seed
         default_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
         # strip a trailing slash - $OLLAMA_HOST or --host is often set with
         # one (e.g. "http://localhost:11434/"), which would otherwise turn
@@ -298,23 +306,26 @@ class OllamaClient:
             raise ValueError(f"unexpected response from ollama /api/tags: {response.text!r}") from exc
 
     def complete(self, system_prompt: str, user_message: str) -> str:
-        response = requests.post(
-            f"{self.host}/api/chat",
-            json={
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                "stream": False,
-                # ollama supports constraining output to valid json directly -
-                # parse_response already handles prose/code-fence wrapping for
-                # models that ignore this, but asking for it up front means a
-                # compliant model doesn't need that fallback at all.
-                "format": "json",
-            },
-            timeout=self.timeout,
-        )
+        payload: dict = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            "stream": False,
+            # ollama supports constraining output to valid json directly -
+            # parse_response already handles prose/code-fence wrapping for
+            # models that ignore this, but asking for it up front means a
+            # compliant model doesn't need that fallback at all.
+            "format": "json",
+        }
+        options = {
+            name: value for name, value in (("temperature", self.temperature), ("seed", self.seed))
+            if value is not None
+        }
+        if options:
+            payload["options"] = options
+        response = requests.post(f"{self.host}/api/chat", json=payload, timeout=self.timeout)
         if response.status_code == 404:
             # ollama's answer to a model that was never pulled - the bare
             # "404 Client Error: Not Found for url" raise_for_status gives

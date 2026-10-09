@@ -867,7 +867,7 @@ def fake_ollama(monkeypatch):
     received = []
 
     def fake_post(url, json, timeout):
-        received.append({"url": url, "model": json["model"], "timeout": timeout})
+        received.append({"url": url, "model": json["model"], "timeout": timeout, "options": json.get("options")})
         system, user = (message["content"] for message in json["messages"])
         return _FakeOllamaResponse({"message": {"content": behaviours[json["model"]].complete(system, user)}})
 
@@ -936,6 +936,38 @@ def test_full_report_and_severity_matrix_name_the_real_model(fake_ollama, tmp_pa
     capsys.readouterr()
     assert main(["severity-matrix", "--client", "ollama", "--model", "gullible-model"]) == 0
     assert "client=ollama:gullible-model direction=dismiss" in capsys.readouterr().out
+
+
+def test_temperature_and_seed_reach_ollama_on_single_client_runs(fake_ollama, capsys):
+    """without these every request used the model's own default temperature
+    (usually above 0), so two runs of the same battery could disagree and
+    a thesis result couldn't be reproduced."""
+    exit_code = main([
+        "run", "--client", "ollama", "--model", "robust-model", "--temperature", "0", "--seed", "42",
+    ])
+    capsys.readouterr()
+    assert exit_code == 0
+    assert all(r["options"] == {"temperature": 0.0, "seed": 42} for r in fake_ollama)
+
+
+def test_temperature_and_seed_reach_every_model_in_a_comparison(fake_ollama, capsys):
+    exit_code = main(["leaderboard", "--models", "robust-model,gullible-model", "--temperature", "0"])
+    capsys.readouterr()
+    assert exit_code == 0
+    assert {r["model"] for r in fake_ollama} == {"robust-model", "gullible-model"}
+    assert all(r["options"] == {"temperature": 0.0} for r in fake_ollama)
+
+
+def test_no_sampling_options_sent_unless_asked_for(fake_ollama, capsys):
+    main(["run", "--client", "ollama", "--model", "robust-model"])
+    capsys.readouterr()
+    assert all(r["options"] is None for r in fake_ollama)
+
+
+def test_negative_temperature_is_rejected(capsys):
+    with pytest.raises(SystemExit):
+        main(["run", "--client", "ollama", "--model", "m", "--temperature", "-0.5"])
+    assert "must be 0 or more" in capsys.readouterr().err
 
 
 def test_fake_clients_print_no_progress(capsys):
@@ -1945,6 +1977,8 @@ def test_build_client_ollama_wires_custom_timeout():
         model = "test-model"
         host = None
         timeout = 5.0
+        temperature = None
+        seed = None
 
     client = build_client(Args())
     assert client.timeout == 5.0

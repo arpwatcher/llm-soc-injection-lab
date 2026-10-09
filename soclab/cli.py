@@ -82,7 +82,9 @@ CLIENT_FACTORIES = {
     "fake-escalation-sandwich-sensitive": lambda args: EscalationSandwichSensitiveFakeClient(),
     "fake-escalation-strict-sensitive": lambda args: EscalationStrictPromptSensitiveFakeClient(),
     "fake-escalation-stubborn": lambda args: EscalationStubbornFakeClient(),
-    "ollama": lambda args: OllamaClient(model=args.model, host=args.host, timeout=args.timeout),
+    "ollama": lambda args: OllamaClient(
+        model=args.model, host=args.host, timeout=args.timeout, temperature=args.temperature, seed=args.seed,
+    ),
 }
 
 DIRECTIONS = ("dismiss", "escalate")
@@ -578,7 +580,10 @@ def _comparison_clients(args, command_label: str) -> list[tuple[str, object]]:
     models = _resolve_model_names(args.models)
     fake_names = [] if models and not args.clients else _resolve_client_names(args.clients, command_label)
     clients: list[tuple[str, object]] = [(name, CLIENT_FACTORIES[name](args)) for name in fake_names]
-    model_clients = [OllamaClient(model=model, host=args.host, timeout=args.timeout) for model in models]
+    model_clients = [
+        OllamaClient(model=model, host=args.host, timeout=args.timeout, temperature=args.temperature, seed=args.seed)
+        for model in models
+    ]
     if model_clients:
         _check_models_pulled(models, model_clients[0])
     for client in model_clients:
@@ -1006,6 +1011,25 @@ _SEVERITY_HELP = (
 )
 
 
+def _non_negative_float(value: str) -> float:
+    number = float(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"must be 0 or more, got {value}")
+    return number
+
+
+def _add_sampling_arguments(subparser) -> None:
+    subparser.add_argument(
+        "--temperature", type=_non_negative_float,
+        help="sampling temperature sent to ollama (default: the model's own) - 0 makes a model "
+             "answer the same alert the same way every time, so a run can be repeated",
+    )
+    subparser.add_argument(
+        "--seed", type=int,
+        help="random seed sent to ollama (default: none) - pin it alongside --temperature for a reproducible run",
+    )
+
+
 def _add_model_arguments(subparser) -> None:
     subparser.add_argument(
         "--models",
@@ -1018,6 +1042,7 @@ def _add_model_arguments(subparser) -> None:
         "--timeout", type=float, default=120.0,
         help="request timeout in seconds for each --models request, default 120",
     )
+    _add_sampling_arguments(subparser)
 
 
 def build_parser():
@@ -1033,6 +1058,7 @@ def build_parser():
     run_parser.add_argument("--model", help="model name, required for --client ollama")
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     run_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
+    _add_sampling_arguments(run_parser)
     run_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     run_parser.add_argument(
         "--transcript",
@@ -1048,6 +1074,7 @@ def build_parser():
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
+    _add_sampling_arguments(compare_parser)
     compare_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     compare_parser.add_argument(
         "--transcript",
@@ -1065,6 +1092,7 @@ def build_parser():
     full_report_parser.add_argument("--model", help="model name, required for --client ollama")
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     full_report_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
+    _add_sampling_arguments(full_report_parser)
     full_report_parser.add_argument(
         "--report", required=True,
         help="path to write the combined report to - markdown, or json/csv if the path ends in .json/.csv",
@@ -1190,6 +1218,7 @@ def build_parser():
     severity_matrix_parser.add_argument("--model", help="model name, required for --client ollama")
     severity_matrix_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     severity_matrix_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
+    _add_sampling_arguments(severity_matrix_parser)
     severity_matrix_parser.add_argument(
         "--report",
         help="write the severity matrix to this path - markdown, or json/csv if the path ends in .json/.csv",

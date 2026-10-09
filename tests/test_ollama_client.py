@@ -112,6 +112,22 @@ def test_defaults_to_localhost_when_no_host_or_env(monkeypatch):
     assert captured["url"] == "http://localhost:11434/api/chat"
 
 
+def test_sends_sampling_options_only_when_set(monkeypatch):
+    sent = []
+
+    def fake_post(url, json, timeout):
+        sent.append(json)
+        return _FakeResponse({"message": {"content": "ok"}})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    OllamaClient(model="m").complete("s", "u")
+    OllamaClient(model="m", temperature=0.0, seed=7).complete("s", "u")
+    OllamaClient(model="m", seed=7).complete("s", "u")
+    assert "options" not in sent[0]
+    assert sent[1]["options"] == {"temperature": 0.0, "seed": 7}
+    assert sent[2]["options"] == {"seed": 7}
+
+
 def test_raises_on_http_error_status(monkeypatch):
     monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse({}, status_code=500))
     client = OllamaClient(model="m")
