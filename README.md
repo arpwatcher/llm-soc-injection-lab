@@ -289,7 +289,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   battery can disagree. `--temperature 0 --seed 42` makes a run repeatable. Whatever was
   pinned is carried in the model's label - `ollama:llama3.2:3b (temperature=0, seed=42)` - so
   it lands in every saved report, row and transcript, and a run at temperature 0 can't be
-  mistaken for one at the model's default. Also reports clean-alert accuracy alongside
+  mistaken for one at the model's default. `soclab check-ollama [--model M]` is the seconds-long check to
+  run before any of that: the server answers, which models are pulled, and - with
+  `--model` - one real alert sent to that model, showing whether its answer parses and
+  what it decided, so a broken setup fails here rather than partway into a long run. Also reports clean-alert accuracy alongside
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
@@ -428,6 +431,7 @@ python -m soclab.cli matrix --severity critical --techniques direct_override  # 
 python -m soclab.cli severity-matrix --client fake-vulnerable  # severity x technique grid, one client
 python -m soclab.cli severity-matrix --client fake-vulnerable --report severity-matrix.md
 python -m soclab.cli severity-matrix --client fake-vulnerable --severity critical,medium  # exactly 2 also runs a z-test
+python -m soclab.cli check-ollama --model llama3.2:3b  # first, on a new setup
 python -m soclab.cli run --client ollama --model llama3.2:3b
 python -m soclab.cli leaderboard --models llama3.2:3b,mistral:7b,qwen2.5:7b  # real models, side by side
 python -m soclab.cli leaderboard --models llama3.2:3b --clients fake-robust,fake-vulnerable  # with reference rows
@@ -469,7 +473,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-447 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+452 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

@@ -8,7 +8,7 @@ import sys
 import time
 
 from soclab.alerts import SEVERITIES, generate_clean_alerts
-from soclab.analyst import DEFENSE_NONE, DEFENSES
+from soclab.analyst import DEFENSE_NONE, DEFENSES, analyze
 from soclab.injections import (
     ESCALATION_TECHNIQUES,
     TECHNIQUES,
@@ -992,6 +992,34 @@ def _technique_doc(func) -> str:
     return " ".join((func.__doc__ or "").split())
 
 
+def cmd_check_ollama(args):
+    """A seconds-long check of a real-model setup before committing to a
+    run that can take tens of minutes: is the server answering, which
+    models are pulled, and - with --model - does that model answer a
+    real alert in a form parse_response can read. Every failure here
+    would otherwise surface partway into a full battery."""
+    server = OllamaClient(
+        model=args.model or "", host=args.host, timeout=args.timeout,
+        temperature=args.temperature, seed=args.seed,
+    )
+    available = server.available_models()
+    print(f"ollama at {server.host} is reachable, {len(available)} model(s) pulled: {', '.join(available) or 'none'}")
+    if not args.model:
+        return
+    _check_models_pulled([args.model], server)
+    alert = generate_clean_alerts()[0]
+    decision = analyze(alert, server)
+    if decision.parse_error:
+        raise ValueError(
+            f"{args.model} answered alert {alert.id} in a form parse_response can't read: {decision.raw_response!r}"
+        )
+    verdict = "correct" if decision.action == alert.ground_truth_action else "wrong"
+    print(
+        f"{args.model} answered alert {alert.id} with action={decision.action} "
+        f"(expected {alert.ground_truth_action}, {verdict}): {decision.reasoning}"
+    )
+
+
 def cmd_list_techniques(args):
     if args.json:
         payload = {
@@ -1249,6 +1277,18 @@ def build_parser():
         help="write a per-alert json record (action, reasoning, outcome) to this path, for qualitative review",
     )
     severity_matrix_parser.set_defaults(func=cmd_severity_matrix)
+
+    check_parser = sub.add_parser(
+        "check-ollama",
+        help="check a real-model setup before a long run: server reachable, models pulled, one alert answered",
+    )
+    check_parser.add_argument(
+        "--model", help="also send one real alert to this model and show whether its answer parses",
+    )
+    check_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
+    check_parser.add_argument("--timeout", type=float, default=120.0, help="request timeout in seconds, default 120")
+    _add_sampling_arguments(check_parser)
+    check_parser.set_defaults(func=cmd_check_ollama)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_format_group = list_parser.add_mutually_exclusive_group()

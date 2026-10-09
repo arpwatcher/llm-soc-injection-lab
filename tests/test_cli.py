@@ -1022,6 +1022,47 @@ def test_fake_clients_report_zero_unparseable(capsys):
     assert "unparseable responses: 0/40" in capsys.readouterr().out
 
 
+def test_check_ollama_lists_pulled_models(fake_ollama, capsys):
+    exit_code = main(["check-ollama", "--host", "http://gpu-box:11434"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "ollama at http://gpu-box:11434 is reachable, 4 model(s) pulled: robust-model, gullible-model" in out
+    assert fake_ollama == []  # no --model, so no chat request
+
+
+def test_check_ollama_sends_one_alert_to_the_model(fake_ollama, capsys):
+    exit_code = main(["check-ollama", "--model", "robust-model", "--temperature", "0"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "robust-model answered alert A001 with action=escalate (expected escalate, correct)" in out
+    assert len(fake_ollama) == 1
+    assert fake_ollama[0]["options"] == {"temperature": 0.0}
+
+
+def test_check_ollama_fails_when_the_answer_cant_be_parsed(fake_ollama, capsys):
+    """the setup problem that would otherwise only show up as a column of
+    unparseable responses after a whole run."""
+    exit_code = main(["check-ollama", "--model", "rambling-model"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "rambling-model answered alert A001 in a form parse_response can't read" in err
+    assert "rather not answer in json" in err
+
+
+def test_check_ollama_fails_for_a_model_that_isnt_pulled(fake_ollama, capsys):
+    exit_code = main(["check-ollama", "--model", "mistral:7b"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "model(s) not pulled on http://localhost:11434: mistral:7b" in err
+    assert fake_ollama == []
+
+
+def test_check_ollama_unreachable_server_fails_cleanly(capsys):
+    exit_code = main(["check-ollama", "--host", "http://localhost:1"])
+    assert exit_code == 1
+    assert capsys.readouterr().err.startswith("error:")
+
+
 def test_fake_clients_print_no_progress(capsys):
     """the fakes answer instantly - progress lines would only be noise."""
     exit_code = main(["leaderboard"])
