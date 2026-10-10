@@ -1063,6 +1063,69 @@ def test_check_ollama_unreachable_server_fails_cleanly(capsys):
     assert capsys.readouterr().err.startswith("error:")
 
 
+def test_cache_resumes_a_run_that_died_partway(fake_ollama, monkeypatch, tmp_path, capsys):
+    """a real-model run that dies partway (one request timing out, the
+    laptop sleeping, ctrl-c) used to throw away every answer it already
+    had. with --cache, rerunning the same command picks up where it
+    stopped: only the unanswered requests go out again, and the result
+    is the same as an uninterrupted run."""
+    cache_path = tmp_path / "answers.json"
+    command = ["run", "--client", "ollama", "--model", "gullible-model", "--cache", str(cache_path)]
+
+    answering = requests.post
+    calls = {"n": 0}
+
+    def dies_after_25(url, json, timeout):
+        calls["n"] += 1
+        if calls["n"] > 25:
+            raise requests.exceptions.ReadTimeout("read timed out")
+        return answering(url, json=json, timeout=timeout)
+
+    monkeypatch.setattr(requests, "post", dies_after_25)
+    assert main(command) == 1
+    assert "read timed out" in capsys.readouterr().err
+    assert len(fake_ollama) == 25
+
+    monkeypatch.setattr(requests, "post", answering)
+    assert main(command) == 0
+    resumed = capsys.readouterr().out
+    assert len(fake_ollama) == 25 + (48 - 25)  # only the 23 unanswered requests went out again
+
+    fake_ollama.clear()
+    main(["run", "--client", "ollama", "--model", "gullible-model"])
+    uninterrupted = capsys.readouterr().out
+    assert resumed == uninterrupted
+
+
+def test_cache_never_reuses_answers_across_models_or_settings(fake_ollama, tmp_path, capsys):
+    cache_path = tmp_path / "answers.json"
+    main(["run", "--client", "ollama", "--model", "robust-model", "--cache", str(cache_path)])
+    first = len(fake_ollama)
+    main(["run", "--client", "ollama", "--model", "gullible-model", "--cache", str(cache_path)])
+    main(["run", "--client", "ollama", "--model", "robust-model", "--temperature", "0", "--cache", str(cache_path)])
+    capsys.readouterr()
+    assert len(fake_ollama) == 3 * first  # neither the other model nor the pinned temperature hit the cache
+
+
+def test_cache_works_for_models_comparisons_too(fake_ollama, tmp_path, capsys):
+    cache_path = tmp_path / "answers.json"
+    command = ["leaderboard", "--models", "robust-model,gullible-model", "--cache", str(cache_path)]
+    main(command)
+    first_out = capsys.readouterr().out
+    requests_first_run = len(fake_ollama)
+    main(command)
+    assert capsys.readouterr().out == first_out
+    assert len(fake_ollama) == requests_first_run
+
+
+def test_cache_file_that_isnt_json_fails_cleanly(tmp_path, capsys):
+    cache_path = tmp_path / "answers.json"
+    cache_path.write_text("{not json")
+    exit_code = main(["run", "--client", "ollama", "--model", "m", "--cache", str(cache_path)])
+    assert exit_code == 1
+    assert "isn't valid json - delete it to start a fresh cache" in capsys.readouterr().err
+
+
 def test_fake_clients_print_no_progress(capsys):
     """the fakes answer instantly - progress lines would only be noise."""
     exit_code = main(["leaderboard"])
@@ -2072,6 +2135,7 @@ def test_build_client_ollama_wires_custom_timeout():
         timeout = 5.0
         temperature = None
         seed = None
+        cache = None
 
     client = build_client(Args())
     assert client.timeout == 5.0

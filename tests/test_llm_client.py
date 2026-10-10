@@ -15,11 +15,14 @@ from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_technique
 from soclab.llm_client import (
     _ESCALATION_MARKERS,
     _INJECTION_MARKERS,
+    CachedClient,
     EscalationSandwichSensitiveFakeClient,
     EscalationSemanticVulnerableFakeClient,
     EscalationStrictPromptSensitiveFakeClient,
     EscalationStubbornFakeClient,
     EscalationVulnerableFakeClient,
+    OllamaClient,
+    ResponseCache,
     RobustFakeClient,
     SandwichSensitiveFakeClient,
     ScriptedLLMClient,
@@ -318,3 +321,43 @@ def test_dismiss_and_escalation_markers_have_no_substring_collisions():
         for escalation_marker in _ESCALATION_MARKERS:
             assert dismiss_marker not in escalation_marker, f"{dismiss_marker!r} collides with {escalation_marker!r}"
             assert escalation_marker not in dismiss_marker, f"{escalation_marker!r} collides with {dismiss_marker!r}"
+
+
+def test_cached_client_answers_repeats_from_disk(tmp_path):
+    path = str(tmp_path / "cache.json")
+    inner = ScriptedLLMClient(["first answer", "second answer"])
+    cached = CachedClient(inner, ResponseCache(path), key_prefix="ollama:m")
+    assert cached.complete("sys", "alert one") == "first answer"
+    assert cached.complete("sys", "alert one") == "first answer"  # served from the cache, inner not asked again
+    assert cached.complete("sys", "alert two") == "second answer"
+
+    reloaded = CachedClient(ScriptedLLMClient([]), ResponseCache(path), key_prefix="ollama:m")
+    assert reloaded.complete("sys", "alert one") == "first answer"
+    assert reloaded.complete("sys", "alert two") == "second answer"
+
+
+def test_cached_client_keys_include_the_prefix(tmp_path):
+    path = str(tmp_path / "cache.json")
+    CachedClient(ScriptedLLMClient(["from model a"]), ResponseCache(path), key_prefix="ollama:a").complete("s", "u")
+    other = CachedClient(ScriptedLLMClient(["from model b"]), ResponseCache(path), key_prefix="ollama:b")
+    assert other.complete("s", "u") == "from model b"
+
+
+def test_cached_client_forwards_attributes(tmp_path):
+    inner = OllamaClient(model="llama3.2:3b", timeout=9.0)
+    cached = CachedClient(inner, ResponseCache(str(tmp_path / "c.json")), key_prefix="x")
+    assert cached.model == "llama3.2:3b"
+    assert cached.timeout == 9.0
+
+
+def test_clients_sharing_one_cache_keep_each_others_answers(tmp_path):
+    """the bug a per-client copy of the file had: in a multi-model run the
+    second model's save wrote back only its own answers, wiping out the
+    first model's."""
+    path = str(tmp_path / "cache.json")
+    cache = ResponseCache(path)
+    CachedClient(ScriptedLLMClient(["a's answer"]), cache, key_prefix="ollama:a").complete("s", "u")
+    CachedClient(ScriptedLLMClient(["b's answer"]), cache, key_prefix="ollama:b").complete("s", "u")
+    reloaded = ResponseCache(path)
+    assert CachedClient(ScriptedLLMClient([]), reloaded, key_prefix="ollama:a").complete("s", "u") == "a's answer"
+    assert CachedClient(ScriptedLLMClient([]), reloaded, key_prefix="ollama:b").complete("s", "u") == "b's answer"

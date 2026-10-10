@@ -16,12 +16,14 @@ from soclab.injections import (
     apply_all_techniques,
 )
 from soclab.llm_client import (
+    CachedClient,
     EscalationSandwichSensitiveFakeClient,
     EscalationSemanticVulnerableFakeClient,
     EscalationStrictPromptSensitiveFakeClient,
     EscalationStubbornFakeClient,
     EscalationVulnerableFakeClient,
     OllamaClient,
+    ResponseCache,
     RobustFakeClient,
     SandwichSensitiveFakeClient,
     SemanticVulnerableFakeClient,
@@ -152,8 +154,20 @@ def build_client(args):
         raise ValueError("--model is required when --client ollama")
     client = CLIENT_FACTORIES[args.client](args)
     if args.client == "ollama":
-        return _ProgressReporter(client, _client_label(args))
+        return _wrap_real_model(client, _client_label(args), _response_cache(args))
     return client
+
+
+def _response_cache(args) -> ResponseCache | None:
+    return ResponseCache(args.cache) if args.cache else None
+
+
+def _wrap_real_model(client, label: str, cache: ResponseCache | None):
+    """Everything a real model gets that the instant, deterministic fakes
+    don't need: the optional on-disk answer cache, then progress lines."""
+    if cache is not None:
+        client = CachedClient(client, cache, key_prefix=label)
+    return _ProgressReporter(client, label)
 
 
 def _print_report(aggregated, results, severity_breakdown=None):
@@ -604,9 +618,10 @@ def _comparison_clients(args, command_label: str) -> list[tuple[str, object]]:
     ]
     if model_clients:
         _check_models_pulled(models, model_clients[0])
+    cache = _response_cache(args) if model_clients else None
     for client in model_clients:
         label = _model_label(client.model, args.temperature, args.seed)
-        clients.append((label, _ProgressReporter(client, label)))
+        clients.append((label, _wrap_real_model(client, label, cache)))
     return clients
 
 
@@ -1079,6 +1094,14 @@ def _add_sampling_arguments(subparser) -> None:
     )
 
 
+def _add_cache_argument(subparser) -> None:
+    subparser.add_argument(
+        "--cache",
+        help="save every real-model answer to this json file as it arrives, and reuse answers already in it - "
+             "rerun the same command with the same file to resume a run that died partway",
+    )
+
+
 def _add_model_arguments(subparser) -> None:
     subparser.add_argument(
         "--models",
@@ -1092,6 +1115,7 @@ def _add_model_arguments(subparser) -> None:
         help="request timeout in seconds for each --models request, default 120",
     )
     _add_sampling_arguments(subparser)
+    _add_cache_argument(subparser)
 
 
 def build_parser():
@@ -1108,6 +1132,7 @@ def build_parser():
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     run_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(run_parser)
+    _add_cache_argument(run_parser)
     run_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     run_parser.add_argument(
         "--transcript",
@@ -1124,6 +1149,7 @@ def build_parser():
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(compare_parser)
+    _add_cache_argument(compare_parser)
     compare_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     compare_parser.add_argument(
         "--transcript",
@@ -1142,6 +1168,7 @@ def build_parser():
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     full_report_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(full_report_parser)
+    _add_cache_argument(full_report_parser)
     full_report_parser.add_argument(
         "--report", required=True,
         help="path to write the combined report to - markdown, or json/csv if the path ends in .json/.csv",
@@ -1268,6 +1295,7 @@ def build_parser():
     severity_matrix_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     severity_matrix_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(severity_matrix_parser)
+    _add_cache_argument(severity_matrix_parser)
     severity_matrix_parser.add_argument(
         "--report",
         help="write the severity matrix to this path - markdown, or json/csv if the path ends in .json/.csv",

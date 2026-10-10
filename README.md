@@ -292,7 +292,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   mistaken for one at the model's default. `soclab check-ollama [--model M]` is the seconds-long check to
   run before any of that: the server answers, which models are pulled, and - with
   `--model` - one real alert sent to that model, showing whether its answer parses and
-  what it decided, so a broken setup fails here rather than partway into a long run. Also reports clean-alert accuracy alongside
+  what it decided, so a broken setup fails here rather than partway into a long run.
+  `--cache FILE` (every command that can run a real model) saves each answer to a json
+  file the moment it arrives and reuses whatever is already in it, so a run that dies
+  partway - one request timing out, the laptop sleeping, ctrl-c - resumes from where it
+  stopped when the same command is rerun with the same file, instead of starting over.
+  Answers are keyed on the model label (model plus pinned settings) and the exact prompt,
+  so a different model or temperature never picks up another run's answers; at the
+  model's default temperature a cached answer is reused rather than resampled, so delete
+  the file for a fresh sample. Also reports clean-alert accuracy alongside
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
@@ -436,7 +444,7 @@ python -m soclab.cli run --client ollama --model llama3.2:3b
 python -m soclab.cli leaderboard --models llama3.2:3b,mistral:7b,qwen2.5:7b  # real models, side by side
 python -m soclab.cli leaderboard --models llama3.2:3b --clients fake-robust,fake-vulnerable  # with reference rows
 python -m soclab.cli matrix --models llama3.2:3b,mistral:7b --report real-matrix.md  # which technique works on which model
-python -m soclab.cli full-report --client ollama --model llama3.2:3b --temperature 0 --seed 42 --report llama.md  # repeatable
+python -m soclab.cli full-report --client ollama --model llama3.2:3b --temperature 0 --seed 42 --cache llama-cache.json --report llama.md  # repeatable, resumable
 ```
 
 ### Example output
@@ -473,7 +481,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-452 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+460 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

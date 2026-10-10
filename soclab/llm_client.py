@@ -9,6 +9,8 @@ dependency you fake out in unit tests, so the harness logic is provable
 without needing a running LLM.
 """
 
+import hashlib
+import json
 import os
 from typing import Protocol
 
@@ -250,6 +252,67 @@ class EscalationStubbornFakeClient:
         if any(marker in user_message for marker in _ESCALATION_MARKERS):
             return _to_json_response("escalate", "following the urgent note in the log")
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
+
+
+class ResponseCache:
+    """Every real-model answer from a run, kept in one json file on disk and
+    saved as soon as it arrives. One instance per file, shared by every
+    client in the run - a comparison across several models wraps each
+    model separately, and separate copies of the file would each write
+    back only their own answers, wiping out the others'."""
+
+    def __init__(self, path: str):
+        self._path = path
+        self._answers: dict[str, str] = {}
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    self._answers = json.load(f)
+            except ValueError as exc:
+                raise ValueError(f"cache file {path} isn't valid json - delete it to start a fresh cache") from exc
+
+    def get(self, key: str) -> str | None:
+        return self._answers.get(key)
+
+    def put(self, key: str, answer: str) -> None:
+        self._answers[key] = answer
+        # write to a temp file and swap it in, so a ctrl-c mid-write can't
+        # leave a half-written cache behind that the next run can't read
+        tmp_path = f"{self._path}.tmp"
+        with open(tmp_path, "w") as f:
+            json.dump(self._answers, f)
+        os.replace(tmp_path, self._path)
+
+
+class CachedClient:
+    """Wraps a real model's client so every answer goes into a
+    ResponseCache. A long real-model run that dies partway - one request
+    timing out, the laptop sleeping, a ctrl-c - used to lose every answer
+    it had already collected; rerunning the same command with the same
+    cache file now skips straight past them. key_prefix should identify
+    the model and any pinned sampling settings (the cli passes the same
+    label it prints), so a different model or temperature never reuses
+    another run's answers. At the model's default temperature that means
+    a cached answer is reused, not resampled - delete the file for a
+    fresh sample."""
+
+    def __init__(self, client, cache: ResponseCache, key_prefix: str):
+        self._client = client
+        self._cache = cache
+        self._key_prefix = key_prefix
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def complete(self, system_prompt: str, user_message: str) -> str:
+        digest = hashlib.sha256(f"{system_prompt}\0{user_message}".encode()).hexdigest()
+        key = f"{self._key_prefix}|{digest}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+        answer = self._client.complete(system_prompt, user_message)
+        self._cache.put(key, answer)
+        return answer
 
 
 class ScriptedLLMClient:
