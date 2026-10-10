@@ -53,7 +53,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   dismiss-direction ones (targets a model that's told what to watch for); `both` layers
   them together. Parses the model's response back into a structured decision - pulls the
   JSON out even if the model wraps it in a sentence, and rejects anything outside the known
-  action set instead of guessing. Finds that JSON object by counting brace depth
+  action set instead of guessing - after trimming and lowercasing it, since real models
+  capitalize freely and an exact match used to score `"action": "Dismiss"` on an injected
+  alert as unparseable rather than hijacked. Finds that JSON object by counting brace depth
   (`_extract_json_object`), not a regex: a greedy `\{.*\}` (the original implementation)
   spans from the first `{` to the LAST `}` in the whole response, so any trailing content
   after the real object that happened to contain another brace got wrongly swallowed into
@@ -489,7 +491,7 @@ each technique only gets 5 alerts) both come straight out of that one blind spot
 pytest
 ```
 
-468 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+470 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
