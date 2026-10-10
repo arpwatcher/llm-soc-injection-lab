@@ -155,6 +155,32 @@ def test_available_models_raises_clean_error_on_unexpected_shape(monkeypatch):
         client.available_models()
 
 
+def test_error_status_passes_on_ollamas_own_reason(monkeypatch):
+    """a model too big for the machine's memory - likely on a laptop -
+    comes back as a 500 whose body says exactly that, but raise_for_status
+    alone reduced it to "500 Server Error: Internal Server Error for url"."""
+    reason = "model requires more system memory (8.0 GiB) than is available (4.0 GiB)"
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse({"error": reason}, status_code=500))
+    client = OllamaClient(model="llama3.1:8b")
+    with pytest.raises(ValueError) as excinfo:
+        client.complete("s", "u")
+    assert str(excinfo.value) == f"ollama returned 500 for model 'llama3.1:8b': {reason}"
+
+
+def test_error_status_without_a_reason_still_raises_http_error(monkeypatch):
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse(None, status_code=502, text="<html>bad gateway"))
+    client = OllamaClient(model="m")
+    with pytest.raises(requests.HTTPError):
+        client.complete("s", "u")
+
+
+def test_error_status_with_a_non_object_body_still_raises_http_error(monkeypatch):
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _FakeResponse(["not", "an", "object"], status_code=500))
+    client = OllamaClient(model="m")
+    with pytest.raises(requests.HTTPError):
+        client.complete("s", "u")
+
+
 def test_404_names_the_model_and_the_fix(monkeypatch):
     """ollama answers /api/chat with a 404 for a model that was never
     pulled - raise_for_status alone said "404 Client Error: Not Found for

@@ -397,6 +397,17 @@ class OllamaClient:
                 f"{self.host}/api/chat returned 404 for model {self.model!r} - usually it isn't pulled "
                 f"there yet (run `ollama pull {self.model}`), or the host isn't an ollama server"
             )
+        if response.status_code >= 400:
+            # ollama explains most failures in an {"error": ...} body - e.g.
+            # a model needing more memory than the machine has, likely on a
+            # laptop - which raise_for_status alone reduces to "500 Server
+            # Error: Internal Server Error for url"
+            try:
+                reason = response.json().get("error")
+            except (ValueError, AttributeError):
+                reason = None
+            if reason:
+                raise ValueError(f"ollama returned {response.status_code} for model {self.model!r}: {reason}")
         response.raise_for_status()
         try:
             body = response.json()
