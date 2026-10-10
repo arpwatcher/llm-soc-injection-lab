@@ -1118,6 +1118,22 @@ def test_cache_works_for_models_comparisons_too(fake_ollama, tmp_path, capsys):
     assert len(fake_ollama) == requests_first_run
 
 
+def test_cache_makes_a_second_report_format_free(fake_ollama, tmp_path, capsys):
+    """the readme's workflow: full-report writes one format per run, and
+    rerunning the same command for the .md after the .json should answer
+    every request from the cache rather than run the battery again."""
+    cache = str(tmp_path / "cache.json")
+    base = ["full-report", "--client", "ollama", "--model", "gullible-model",
+            "--temperature", "0", "--seed", "42", "--cache", cache]
+    assert main([*base, "--report", str(tmp_path / "llama.json")]) == 0
+    first_run = len(fake_ollama)
+    assert main([*base, "--report", str(tmp_path / "llama.md")]) == 0
+    capsys.readouterr()
+    assert first_run > 0
+    assert len(fake_ollama) == first_run
+    assert "client: ollama:gullible-model (temperature=0, seed=42)" in (tmp_path / "llama.md").read_text()
+
+
 def test_cache_file_that_isnt_json_fails_cleanly(tmp_path, capsys):
     cache_path = tmp_path / "answers.json"
     cache_path.write_text("{not json")

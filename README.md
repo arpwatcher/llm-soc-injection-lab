@@ -487,13 +487,48 @@ marker phrase except `unicode_homoglyph`'s cyrillic look-alike substitution, whi
 whole point of that technique - the 88% flat rate and its wide interval (74%-95%, since
 each technique only gets 5 alerts) both come straight out of that one blind spot.
 
+## Running the real experiment
+
+Everything above can run against the fake clients alone; the actual results need a real
+model. Step by step, on a machine with [Ollama](https://ollama.com) installed (its server
+listens on `localhost:11434` once the app is running, or after `ollama serve`):
+
+```
+ollama pull llama3.2:3b && ollama pull mistral:7b && ollama pull qwen2.5:7b
+
+# 1. seconds-long check: server up, models pulled, one alert answered and parsed
+python -m soclab.cli check-ollama --model llama3.2:3b
+
+# 2. one full-report per model - pinned temperature/seed so the run can be repeated,
+#    a cache file so a run that dies partway resumes instead of starting over
+python -m soclab.cli full-report --client ollama --model llama3.2:3b \
+    --temperature 0 --seed 42 --cache cache.json --report llama.json
+# same command with --report llama.md answers every request from the cache - the
+# readable version costs nothing extra
+
+# 3. the headline table: hijack rate and clean accuracy per defense, one row per model
+python -m soclab.cli summarize llama.json mistral.json qwen.json --report summary.md
+
+# 4. which technique works on which model, and which techniques work in general
+python -m soclab.cli matrix --models llama3.2:3b,mistral:7b,qwen2.5:7b \
+    --temperature 0 --seed 42 --cache cache.json --report matrix.csv
+python -m soclab.cli technique-leaderboard --models llama3.2:3b,mistral:7b,qwen2.5:7b \
+    --temperature 0 --seed 42 --cache cache.json
+```
+
+Worth reporting alongside the hijack rates: the `unparseable responses: N/M` line (a model
+that breaks its answer format can't be scored as hijacked on those alerts, so a high count
+makes its hijack rate look better than it is) and clean-alert accuracy (a defense that hurts
+the model on alerts that were never attacked has a real cost). `--host` (or `$OLLAMA_HOST`)
+points at an ollama server on another machine.
+
 ## Tests
 
 ```
 pytest
 ```
 
-473 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+474 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
