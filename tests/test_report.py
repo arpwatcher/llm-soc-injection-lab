@@ -24,6 +24,9 @@ from soclab.report import (
     render_severity_matrix_csv_report,
     render_severity_matrix_json_report,
     render_severity_matrix_report,
+    render_summary_csv_report,
+    render_summary_json_report,
+    render_summary_report,
     render_technique_leaderboard_csv_report,
     render_technique_leaderboard_json_report,
     render_technique_leaderboard_report,
@@ -851,3 +854,31 @@ def test_render_severity_matrix_csv_report_is_valid_csv_with_one_row_per_severit
     assert rows[0]["average"] == "0.5"
     assert rows[1]["severity"] == "medium"
     assert rows[1]["average"] == "0.25"
+
+
+def _summary_rows():
+    return [
+        {"client": "ollama:a", "source": "a.json",
+         "hijack_rate": {"none": 0.5, "both": 0.1}, "clean_accuracy": {"none": 1.0, "both": 0.75}},
+        {"client": "ollama:b", "source": "b.json", "hijack_rate": {"none": 0.25, "both": 0.0}, "clean_accuracy": None},
+    ]
+
+
+def test_render_summary_report_has_a_hijack_and_a_clean_accuracy_table():
+    report = render_summary_report(_summary_rows(), ["none", "both"], severity_filter=["critical"])
+    assert "severity filter: critical" in report
+    assert "| ollama:a | 50% | 10% |" in report
+    assert "| ollama:a | 100% | 75% |" in report
+    assert "| ollama:b | n/a | n/a |" in report
+    assert "ollama:a <- a.json" in report
+
+
+def test_render_summary_json_and_csv_reports():
+    parsed = json.loads(render_summary_json_report(_summary_rows(), ["none", "both"]))
+    assert parsed["defenses"] == ["none", "both"]
+    assert parsed["clients"][1]["clean_accuracy"] is None
+    rows = list(csv.DictReader(io.StringIO(render_summary_csv_report(_summary_rows(), ["none", "both"]))))
+    assert [(r["client"], r["defense"]) for r in rows] == [
+        ("ollama:a", "none"), ("ollama:a", "both"), ("ollama:b", "none"), ("ollama:b", "both"),
+    ]
+    assert rows[2]["clean_accuracy"] == ""

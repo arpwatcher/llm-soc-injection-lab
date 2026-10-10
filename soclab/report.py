@@ -744,3 +744,54 @@ def render_severity_matrix_csv_report(
             "average": row["average"],
         })
     return output.getvalue()
+
+
+def render_summary_report(rows: list[dict], defenses: list[str], severity_filter: list | None = None) -> str:
+    """rows: one per saved full-report, in the order given - {"client",
+    "source", "hijack_rate": {defense: rate}, "clean_accuracy": {defense:
+    rate} or None for a report saved before clean accuracy existed}. The
+    cross-model headline table: full-report is single-client by design,
+    so comparing how much each defense helps across several real models
+    otherwise meant copying numbers out of one file per model by hand."""
+    lines = ["# summary - hijack rate by defense, both directions combined", ""]
+    if severity_filter is not None:
+        lines.extend([f"severity filter: {', '.join(severity_filter)}", ""])
+    lines.append("| client | " + " | ".join(defenses) + " |")
+    lines.append("|---|" + "|".join("---" for _ in defenses) + "|")
+    for row in rows:
+        lines.append(f"| {row['client']} | " + " | ".join(f"{row['hijack_rate'][d]:.0%}" for d in defenses) + " |")
+    lines.extend(["", "## clean-alert accuracy by defense", ""])
+    lines.append("| client | " + " | ".join(defenses) + " |")
+    lines.append("|---|" + "|".join("---" for _ in defenses) + "|")
+    for row in rows:
+        cells = (
+            " | ".join(f"{row['clean_accuracy'][d]:.0%}" for d in defenses)
+            if row["clean_accuracy"] is not None else " | ".join("n/a" for _ in defenses)
+        )
+        lines.append(f"| {row['client']} | {cells} |")
+    lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
+    return "\n".join(lines)
+
+
+def render_summary_json_report(rows: list[dict], defenses: list[str], severity_filter: list | None = None) -> str:
+    """Same data as render_summary_report, as JSON instead of a document."""
+    return json.dumps({"severity_filter": severity_filter, "defenses": defenses, "clients": rows}, indent=2)
+
+
+def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
+    """Same data as render_summary_report, as CSV - long format, one row per
+    (client, defense), the shape a spreadsheet pivot or a plotting
+    library's grouped bar chart takes directly."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["client", "defense", "hijack_rate", "clean_accuracy", "source"])
+    writer.writeheader()
+    for row in rows:
+        for defense in defenses:
+            writer.writerow({
+                "client": row["client"],
+                "defense": defense,
+                "hijack_rate": row["hijack_rate"][defense],
+                "clean_accuracy": row["clean_accuracy"][defense] if row["clean_accuracy"] is not None else "",
+                "source": row["source"],
+            })
+    return output.getvalue()

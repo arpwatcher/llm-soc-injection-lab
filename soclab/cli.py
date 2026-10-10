@@ -51,6 +51,9 @@ from soclab.report import (
     render_severity_matrix_csv_report,
     render_severity_matrix_json_report,
     render_severity_matrix_report,
+    render_summary_csv_report,
+    render_summary_json_report,
+    render_summary_report,
     render_technique_leaderboard_csv_report,
     render_technique_leaderboard_json_report,
     render_technique_leaderboard_report,
@@ -1035,6 +1038,78 @@ def cmd_check_ollama(args):
     )
 
 
+def _load_full_report(path: str) -> dict:
+    try:
+        with open(path) as f:
+            report = json.load(f)
+    except ValueError as exc:
+        raise ValueError(f"{path} isn't json - summarize reads the .json reports full-report writes") from exc
+    if not isinstance(report, dict) or not {"client", "summary_by_defense", "by_direction"} <= set(report):
+        raise ValueError(f"{path} isn't a full-report json report - run full-report with a .json --report path")
+    return report
+
+
+def cmd_summarize(args):
+    """One table across several saved full-report json files - the
+    cross-model headline result (how much does each defense help, per
+    model) without re-running anything. full-report is single-client by
+    design, so with real models this otherwise meant copying numbers out
+    of one file per model by hand. Refuses to mix reports run with
+    different --severity filters (they'd be measuring different alert
+    sets in one table) or two reports with the same client label (rows
+    nobody could tell apart)."""
+    reports = [(path, _load_full_report(path)) for path in args.reports]
+    filters = {json.dumps(report.get("severity_filter")) for _, report in reports}
+    if len(filters) > 1:
+        detail = ", ".join(f"{path}: {report.get('severity_filter') or 'all severities'}" for path, report in reports)
+        raise ValueError(f"these reports were run with different --severity filters, so they don't compare: {detail}")
+    seen = {}
+    for path, report in reports:
+        if report["client"] in seen:
+            raise ValueError(
+                f"two reports for the same client {report['client']}: {seen[report['client']]} and {path} - "
+                f"pin --seed to tell repeated runs apart"
+            )
+        seen[report["client"]] = path
+
+    defenses = list(DEFENSES)
+    rows = [
+        {
+            "client": report["client"],
+            "source": path,
+            "hijack_rate": {d: report["summary_by_defense"][d] for d in defenses},
+            "clean_accuracy": (
+                {d: report["clean_accuracy_by_defense"][d] for d in defenses}
+                if report.get("clean_accuracy_by_defense") else None
+            ),
+        }
+        for path, report in reports
+    ]
+    severity_filter = reports[0][1].get("severity_filter")
+
+    width = max([10, *(len(row["client"]) for row in rows)])
+    _print_severity_filter(severity_filter)
+    print("hijack rate by defense, both directions combined")
+    print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
+    for row in rows:
+        print(f"{row['client']:<{width}} " + " ".join(f"{row['hijack_rate'][d]:>9.0%}" for d in defenses))
+    print("\nclean-alert accuracy by defense")
+    print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
+    for row in rows:
+        cells = (" ".join(f"{row['clean_accuracy'][d]:>9.0%}" for d in defenses)
+                 if row["clean_accuracy"] is not None else " ".join(f"{'n/a':>9}" for _ in defenses))
+        print(f"{row['client']:<{width}} {cells}")
+
+    if args.report:
+        _write_report(
+            args.report,
+            markdown_content=render_summary_report(rows, defenses, severity_filter=severity_filter),
+            json_content=render_summary_json_report(rows, defenses, severity_filter=severity_filter),
+            csv_content=render_summary_csv_report(rows, defenses),
+            message=f"\nwrote summary to {args.report}",
+        )
+
+
 def cmd_list_techniques(args):
     if args.json:
         payload = {
@@ -1317,6 +1392,16 @@ def build_parser():
     check_parser.add_argument("--timeout", type=float, default=120.0, help="request timeout in seconds, default 120")
     _add_sampling_arguments(check_parser)
     check_parser.set_defaults(func=cmd_check_ollama)
+
+    summarize_parser = sub.add_parser(
+        "summarize",
+        help="one hijack-rate-by-defense table across several saved full-report json files (one per model)",
+    )
+    summarize_parser.add_argument("reports", nargs="+", help="full-report .json files, one row each, in this order")
+    summarize_parser.add_argument(
+        "--report", help="write the summary to this path - markdown, or json/csv if the path ends in .json/.csv",
+    )
+    summarize_parser.set_defaults(func=cmd_summarize)
 
     list_parser = sub.add_parser("list-techniques", help="list available injection techniques")
     list_format_group = list_parser.add_mutually_exclusive_group()

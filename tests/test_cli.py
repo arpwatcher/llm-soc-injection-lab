@@ -2151,3 +2151,87 @@ def test_ollama_client_unreachable_host_fails_cleanly(capsys):
     assert exit_code == 1
     assert "error:" in err
     assert "Connection refused" in err or "Failed to establish a new connection" in err
+
+
+def _saved_full_report(tmp_path, client, *extra):
+    path = tmp_path / f"{client}.json"
+    assert main(["full-report", "--client", client, "--report", str(path), *extra]) == 0
+    return path
+
+
+def test_summarize_puts_saved_full_reports_in_one_table(tmp_path, capsys):
+    """full-report is single-client by design, so the cross-model headline
+    table - how much each defense helps, per model - otherwise meant
+    copying numbers out of one file per model by hand."""
+    stubborn = _saved_full_report(tmp_path, "fake-stubborn")
+    sandwich = _saved_full_report(tmp_path, "fake-sandwich-sensitive")
+    capsys.readouterr()
+    exit_code = main(["summarize", str(stubborn), str(sandwich)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "fake-stubborn                 55%       55%       55%        0%" in out
+    assert "fake-sandwich-sensitive       55%        0%       55%        0%" in out
+    assert out.index("fake-stubborn") < out.index("fake-sandwich-sensitive")  # input order kept
+
+
+def test_summarize_writes_markdown_json_and_csv(tmp_path, capsys):
+    stubborn = _saved_full_report(tmp_path, "fake-stubborn")
+    sandwich = _saved_full_report(tmp_path, "fake-sandwich-sensitive")
+    md, js, cs = tmp_path / "s.md", tmp_path / "s.json", tmp_path / "s.csv"
+    for path in (md, js, cs):
+        assert main(["summarize", str(stubborn), str(sandwich), "--report", str(path)]) == 0
+    capsys.readouterr()
+    assert "| fake-sandwich-sensitive | 55% | 0% | 55% | 0% |" in md.read_text()
+    parsed = json.loads(js.read_text())
+    assert [row["client"] for row in parsed["clients"]] == ["fake-stubborn", "fake-sandwich-sensitive"]
+    assert parsed["clients"][0]["hijack_rate"]["both"] == 0.0
+    rows = list(csv.DictReader(io.StringIO(cs.read_text())))
+    assert len(rows) == 8  # 2 clients x 4 defenses, long format
+    assert {r["defense"] for r in rows} == {"none", "sandwich", "strict", "both"}
+
+
+def test_summarize_refuses_reports_with_different_severity_filters(tmp_path, capsys):
+    """a critical-only run next to a full-battery run would put two
+    different alert sets in one table as if they were comparable."""
+    full = _saved_full_report(tmp_path, "fake-stubborn")
+    critical = tmp_path / "critical.json"
+    main(["full-report", "--client", "fake-vulnerable", "--severity", "critical", "--report", str(critical)])
+    capsys.readouterr()
+    exit_code = main(["summarize", str(full), str(critical)])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "different --severity filters" in err
+    assert "all severities" in err and "critical" in err
+
+
+def test_summarize_refuses_two_reports_for_the_same_client(tmp_path, capsys):
+    first = _saved_full_report(tmp_path, "fake-stubborn")
+    second = tmp_path / "again.json"
+    main(["full-report", "--client", "fake-stubborn", "--report", str(second)])
+    capsys.readouterr()
+    exit_code = main(["summarize", str(first), str(second)])
+    assert exit_code == 1
+    assert "two reports for the same client fake-stubborn" in capsys.readouterr().err
+
+
+def test_summarize_rejects_files_that_arent_full_report_json(tmp_path, capsys):
+    not_json = tmp_path / "report.md"
+    not_json.write_text("# not json")
+    leaderboard = tmp_path / "leaderboard.json"
+    main(["leaderboard", "--report", str(leaderboard)])
+    capsys.readouterr()
+    assert main(["summarize", str(not_json)]) == 1
+    assert "isn't json - summarize reads the .json reports full-report writes" in capsys.readouterr().err
+    assert main(["summarize", str(leaderboard)]) == 1
+    assert "isn't a full-report json report" in capsys.readouterr().err
+
+
+def test_summarize_handles_a_report_saved_before_clean_accuracy_existed(tmp_path, capsys):
+    path = _saved_full_report(tmp_path, "fake-stubborn")
+    report = json.loads(path.read_text())
+    del report["clean_accuracy_by_defense"]
+    path.write_text(json.dumps(report))
+    capsys.readouterr()
+    assert main(["summarize", str(path)]) == 0
+    clean_section = capsys.readouterr().out.split("clean-alert accuracy by defense")[1]
+    assert "n/a" in clean_section
