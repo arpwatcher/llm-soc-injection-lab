@@ -114,6 +114,9 @@ class _ProgressReporter:
         self._label = label
         self._done = 0
         self._started = time.monotonic()
+        # set by the command once it knows its battery (_expect_requests),
+        # so a line reads "120/576" - how far along, not just how many
+        self.expected: int | None = None
 
     def __getattr__(self, name):
         return getattr(self._client, name)
@@ -123,7 +126,8 @@ class _ProgressReporter:
         self._done += 1
         if self._done % self.every == 0:
             elapsed = int(time.monotonic() - self._started)
-            print(f"{self._label}: {self._done} requests done ({elapsed // 60}m{elapsed % 60:02d}s)", file=sys.stderr)
+            done = f"{self._done}/{self.expected}" if self.expected else f"{self._done}"
+            print(f"{self._label}: {done} requests done ({elapsed // 60}m{elapsed % 60:02d}s)", file=sys.stderr)
         return response
 
 
@@ -151,6 +155,13 @@ def _client_label(args) -> str:
     if args.client == "ollama":
         return _model_label(args.model, args.temperature, args.seed)
     return args.client
+
+
+def _expect_requests(client, count: int) -> None:
+    """Tells a real model's progress reporter how many requests the run
+    will make; the instant fakes aren't wrapped and ignore it."""
+    if isinstance(client, _ProgressReporter):
+        client.expected = count
 
 
 def build_client(args):
@@ -410,6 +421,7 @@ def cmd_run(args):
     requested_severities = _resolve_severities(args.severity, "run")
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    _expect_requests(client, len(clean_alerts) + len(injected_alerts))
 
     clean_results = score_batch(clean_alerts, client, defense=args.defense)
     clean_correct, clean_total = resisted_and_total(clean_results)
@@ -466,6 +478,7 @@ def cmd_compare(args):
     defenses = _resolve_defenses(args.defenses)
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
+    _expect_requests(client, (len(clean_alerts) + len(injected_alerts)) * len(defenses))
 
     print(f"direction={args.direction}\n")
     _print_severity_filter(requested_severities)
@@ -526,6 +539,13 @@ def cmd_full_report(args):
     defenses = _resolve_defenses(args.defenses)
     _print_severity_filter(requested_severities)
     clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
+    injected_by_direction = {
+        direction: _filter_by_severity(_injected_alerts_for(direction), requested_severities)
+        for direction in DIRECTIONS
+    }
+    _expect_requests(
+        client, (len(clean_alerts) + sum(len(alerts) for alerts in injected_by_direction.values())) * len(defenses),
+    )
 
     by_direction = {}
     results_by_direction = {}
@@ -534,7 +554,7 @@ def cmd_full_report(args):
     significance_by_direction = {}
     severity_breakdown_by_direction = {}
     for direction in DIRECTIONS:
-        injected_alerts = _filter_by_severity(_injected_alerts_for(direction), requested_severities)
+        injected_alerts = injected_by_direction[direction]
         (
             per_defense, results_by_defense, severity_weighted_by_defense,
             confidence_interval_by_defense, severity_breakdown_by_defense,
@@ -736,6 +756,8 @@ def cmd_leaderboard(args):
     requested_severities = _resolve_severities(args.severity, "leaderboard")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
+    for _, client in clients:
+        _expect_requests(client, len(clean_alerts) + len(injected_alerts))
     rows = []
     results_by_client = {}
     for name, client in clients:
@@ -822,6 +844,8 @@ def cmd_technique_leaderboard(args):
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "technique-leaderboard")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    for _, client in clients:
+        _expect_requests(client, len(injected_alerts))
     results_by_client = {}
     combined_results = []
     for name, client in clients:
@@ -899,6 +923,8 @@ def cmd_matrix(args):
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "matrix")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    for _, client in clients:
+        _expect_requests(client, len(injected_alerts))
     technique_names = _technique_names_for_direction(args.techniques, args.direction)
 
     rows = []
@@ -963,6 +989,7 @@ def cmd_severity_matrix(args):
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "severity-matrix")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    _expect_requests(client, len(injected_alerts))
     technique_names = _technique_names_for_direction(args.techniques, args.direction)
 
     results = score_batch(injected_alerts, client, defense=args.defense)

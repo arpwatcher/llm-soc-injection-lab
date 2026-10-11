@@ -907,7 +907,7 @@ def test_real_model_runs_report_progress_on_stderr(fake_ollama, capsys):
     assert exit_code == 0
     progress = [line for line in captured.err.splitlines() if line.startswith("ollama:robust-model:")]
     assert len(progress) == 8
-    assert progress[-1].startswith("ollama:robust-model: 80 requests done (")
+    assert progress[-1].startswith("ollama:robust-model: 80/88 requests done (")
     assert "requests done" not in captured.out
 
 
@@ -915,7 +915,7 @@ def test_run_with_ollama_client_reports_progress_too(fake_ollama, capsys):
     exit_code = main(["run", "--client", "ollama", "--model", "gullible-model"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "ollama:gullible-model: 40 requests done (" in captured.err
+    assert "ollama:gullible-model: 40/88 requests done (" in captured.err
 
 
 def test_single_client_reports_name_the_real_model(fake_ollama, tmp_path, capsys):
@@ -972,7 +972,7 @@ def test_pinned_sampling_settings_are_recorded_in_saved_reports(fake_ollama, tmp
     ])
     captured = capsys.readouterr()
     assert json.loads(report_path.read_text())["client"] == "ollama:robust-model (temperature=0, seed=42)"
-    assert "ollama:robust-model (temperature=0, seed=42): 40 requests done" in captured.err
+    assert "ollama:robust-model (temperature=0, seed=42): 40/88 requests done" in captured.err
 
 
 def test_comparison_rows_carry_pinned_sampling_settings(fake_ollama, tmp_path, capsys):
@@ -2329,3 +2329,31 @@ def test_summarize_drops_a_defense_no_report_ran(tmp_path, capsys):
     assert main(["summarize", str(a), str(b)]) == 0
     header = capsys.readouterr().out.splitlines()[1]
     assert header.split() == ["client", "none", "both"]
+
+
+@pytest.mark.parametrize("command", [
+    ["run", "--client", "ollama", "--model", "gullible-model"],
+    ["compare", "--client", "ollama", "--model", "gullible-model", "--defenses", "both"],
+    ["full-report", "--client", "ollama", "--model", "gullible-model", "--report", "REPORT"],
+    ["full-report", "--client", "ollama", "--model", "gullible-model", "--severity", "high", "--report", "REPORT"],
+    ["severity-matrix", "--client", "ollama", "--model", "gullible-model"],
+    ["leaderboard", "--models", "gullible-model"],
+    ["technique-leaderboard", "--models", "gullible-model", "--direction", "escalate"],
+    ["matrix", "--models", "gullible-model"],
+])
+def test_progress_total_matches_the_requests_actually_made(command, fake_ollama, tmp_path, capsys):
+    """progress lines read "120/576" so a half-hour run says how far along
+    it is - each command works out its own total up front, and that total
+    has to be the number of requests it then really sends."""
+    command = [str(tmp_path / "r.md") if part == "REPORT" else part for part in command]
+    assert main(command) == 0
+    err = capsys.readouterr().err
+    totals = {line.split(": ")[-1].split("/")[1].split()[0] for line in err.splitlines() if "requests done" in line}
+    assert totals == {str(len(fake_ollama))}
+
+
+def test_full_report_progress_total_with_every_defense(fake_ollama, tmp_path, capsys):
+    main(["full-report", "--client", "ollama", "--model", "gullible-model", "--report", str(tmp_path / "r.md")])
+    err = capsys.readouterr().err
+    assert len(fake_ollama) == 576  # (16 clean + 72 + 56 injected) x 4 defenses, as the readme says
+    assert "570/576 requests done" in err
