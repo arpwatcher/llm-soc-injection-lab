@@ -776,6 +776,11 @@ def percent_or_na(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.0%}"
 
 
+def points_or_na(value: float | None) -> str:
+    """A lift (a difference of two rates) in signed percentage points."""
+    return "n/a" if value is None else f"{value * 100:+.0f}"
+
+
 def render_summary_report(rows: list[dict], defenses: list[str], severity_filter: list | None = None) -> str:
     """rows: one per saved full-report, in the order given - {"client",
     "source", "hijack_rate": {defense: rate}, "clean_accuracy": {defense:
@@ -799,6 +804,11 @@ def render_summary_report(rows: list[dict], defenses: list[str], severity_filter
             if row["clean_accuracy"] is not None else " | ".join("n/a" for _ in defenses)
         )
         lines.append(f"| {row['client']} | {cells} |")
+    lines.extend(["", "## injection lift over the no-injection baseline, in points", ""])
+    lines.append("| client | " + " | ".join(defenses) + " |")
+    lines.append("|---|" + "|".join("---" for _ in defenses) + "|")
+    for row in rows:
+        lines.append(f"| {row['client']} | " + " | ".join(points_or_na(row["lift"][d]) for d in defenses) + " |")
     lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
     return "\n".join(lines)
 
@@ -813,7 +823,7 @@ def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
     (client, defense), the shape a spreadsheet pivot or a plotting
     library's grouped bar chart takes directly."""
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["client", "defense", "hijack_rate", "clean_accuracy", "source"])
+    writer = csv.DictWriter(output, fieldnames=["client", "defense", "hijack_rate", "clean_accuracy", "lift", "source"])
     writer.writeheader()
     for row in rows:
         for defense in defenses:
@@ -825,6 +835,7 @@ def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
                     "" if row["clean_accuracy"] is None or row["clean_accuracy"][defense] is None
                     else row["clean_accuracy"][defense]
                 ),
+                "lift": "" if row["lift"][defense] is None else row["lift"][defense],
                 "source": row["source"],
             })
     return output.getvalue()

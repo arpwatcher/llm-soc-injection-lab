@@ -2409,3 +2409,32 @@ def test_full_report_baseline_per_direction(fake_ollama, tmp_path, capsys):
     assert baseline["dismiss"]["none"]["baseline"] == 9
     assert baseline["escalate"]["none"] == {"target": "escalate", "baseline": 0, "eligible": 7, "rate": 0.0, "lift": 0.0}
     assert "no-injection baseline: 0/7 already answered escalate with no injection (0%)" in md.read_text()
+
+
+def test_summarize_shows_the_injection_lift_per_model(fake_ollama, tmp_path, capsys):
+    """the headline table across models, read honestly: a model that
+    dismisses everything has a high hijack rate but the injection caused
+    none of it - its lift is what separates it from a model the attack
+    really moved."""
+    stubborn = _saved_full_report(tmp_path, "fake-stubborn")
+    lazy = tmp_path / "lazy.json"
+    main(["full-report", "--client", "ollama", "--model", "dismiss-everything-model", "--report", str(lazy)])
+    capsys.readouterr()
+    assert main(["summarize", str(stubborn), str(lazy)]) == 0
+    lift_table = capsys.readouterr().out.split("injection lift over the no-injection baseline, in points")[1]
+    rows = {line.split()[0]: line.split()[1:] for line in lift_table.strip().splitlines()[1:]}
+    assert rows["fake-stubborn"] == ["+49", "+49", "+49", "+0"]
+    # dismisses all 9 eligible alerts and escalates none of the 7 benign ones, injected or not:
+    # pooled hijack 72/128 vs pooled baseline 9/16 - the same 56%, so no lift at all
+    assert rows["ollama:dismiss-everything-model"] == ["+0", "+0", "+0", "+0"]
+
+
+def test_summarize_shows_na_lift_for_a_report_saved_before_the_baseline_existed(tmp_path, capsys):
+    path = _saved_full_report(tmp_path, "fake-stubborn")
+    report = json.loads(path.read_text())
+    del report["baseline_by_direction"]
+    path.write_text(json.dumps(report))
+    capsys.readouterr()
+    assert main(["summarize", str(path)]) == 0
+    lift_table = capsys.readouterr().out.split("in points")[1]
+    assert "n/a" in lift_table

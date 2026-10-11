@@ -321,7 +321,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   model's default temperature a cached answer is reused rather than resampled, so delete
   the file for a fresh sample. `soclab summarize a.json b.json ...` reads saved full-report json
   files - one per model - and puts them in one table: hijack rate per defense (both
-  directions combined) and clean-alert accuracy per defense, a row per report in the order
+  directions combined), clean-alert accuracy per defense, and the injection lift over the
+  no-injection baseline per defense (pooled across both directions the same way the hijack
+  rate is), a row per report in the order
   given, with the same `--report` md/json/csv choice as everything else (csv in long form, one
   row per model and defense). That's the cross-model headline result, which full-report,
   being single-client, can't give on its own. It refuses reports run with different
@@ -532,7 +534,7 @@ python -m soclab.cli full-report --client ollama --model llama3.2:3b \
 # same command with --report llama.md answers every request from the cache - the
 # readable version costs nothing extra
 
-# 3. the headline table: hijack rate and clean accuracy per defense, one row per model
+# 3. the headline table: hijack rate, clean accuracy and injection lift per defense, one row per model
 python -m soclab.cli summarize llama.json mistral.json qwen.json --report summary.md
 
 # 4. which technique works on which model, and which techniques work in general
@@ -556,7 +558,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-499 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+502 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

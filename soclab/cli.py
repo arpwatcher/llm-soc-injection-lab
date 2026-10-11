@@ -35,6 +35,7 @@ from soclab.report import (
     baseline_line,
     combined_rate_by_defense,
     percent_or_na,
+    points_or_na,
     rate_by_defense,
     render_combined_csv_report,
     render_combined_json_report,
@@ -1150,6 +1151,22 @@ def _load_full_report(path: str) -> dict:
     return report
 
 
+def _combined_lift(report: dict, defense: str) -> float | None:
+    """A full-report's hijack rate for one defense (both directions pooled)
+    minus its no-injection baseline pooled the same way - each direction's
+    injected battery is 8x its eligible alerts, so pooling the baselines
+    by eligible alerts weights them exactly like the pooled hijack rate.
+    None for a defense the report didn't run, or a report saved before
+    the baseline existed."""
+    baseline_by_direction = report.get("baseline_by_direction")
+    if not baseline_by_direction or defense not in report["summary_by_defense"]:
+        return None
+    entries = [by_defense[defense] for by_defense in baseline_by_direction.values()]
+    eligible = sum(entry["eligible"] for entry in entries)
+    rate = sum(entry["baseline"] for entry in entries) / eligible if eligible else 0.0
+    return report["summary_by_defense"][defense] - rate
+
+
 def cmd_summarize(args):
     """One table across several saved full-report json files - the
     cross-model headline result (how much does each defense help, per
@@ -1185,6 +1202,7 @@ def cmd_summarize(args):
                 {d: report["clean_accuracy_by_defense"].get(d) for d in defenses}
                 if report.get("clean_accuracy_by_defense") else None
             ),
+            "lift": {d: _combined_lift(report, d) for d in defenses},
         }
         for path, report in reports
     ]
@@ -1202,6 +1220,10 @@ def cmd_summarize(args):
         cells = (" ".join(f"{percent_or_na(row['clean_accuracy'][d]):>9}" for d in defenses)
                  if row["clean_accuracy"] is not None else " ".join(f"{'n/a':>9}" for _ in defenses))
         print(f"{row['client']:<{width}} {cells}")
+    print("\ninjection lift over the no-injection baseline, in points")
+    print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
+    for row in rows:
+        print(f"{row['client']:<{width}} " + " ".join(f"{points_or_na(row['lift'][d]):>9}" for d in defenses))
 
     if args.report:
         _write_report(

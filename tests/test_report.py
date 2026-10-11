@@ -860,8 +860,10 @@ def test_render_severity_matrix_csv_report_is_valid_csv_with_one_row_per_severit
 def _summary_rows():
     return [
         {"client": "ollama:a", "source": "a.json",
-         "hijack_rate": {"none": 0.5, "both": 0.1}, "clean_accuracy": {"none": 1.0, "both": 0.75}},
-        {"client": "ollama:b", "source": "b.json", "hijack_rate": {"none": 0.25, "both": 0.0}, "clean_accuracy": None},
+         "hijack_rate": {"none": 0.5, "both": 0.1}, "clean_accuracy": {"none": 1.0, "both": 0.75},
+         "lift": {"none": 0.4, "both": -0.05}},
+        {"client": "ollama:b", "source": "b.json", "hijack_rate": {"none": 0.25, "both": 0.0}, "clean_accuracy": None,
+         "lift": {"none": None, "both": None}},
     ]
 
 
@@ -897,3 +899,12 @@ def test_render_markdown_report_includes_baseline_when_given():
     report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()}, baseline_by_defense={"none": entry})
     assert baseline_line(entry) in report
     assert "no-injection baseline" not in render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})
+
+
+def test_render_summary_report_has_a_lift_table():
+    report = render_summary_report(_summary_rows(), ["none", "both"])
+    assert "## injection lift over the no-injection baseline, in points" in report
+    assert "| ollama:a | +40 | -5 |" in report
+    rows = list(csv.DictReader(io.StringIO(render_summary_csv_report(_summary_rows(), ["none", "both"]))))
+    assert rows[0]["lift"] == "0.4"
+    assert rows[2]["lift"] == ""
