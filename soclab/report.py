@@ -746,6 +746,12 @@ def render_severity_matrix_csv_report(
     return output.getvalue()
 
 
+def percent_or_na(value: float | None) -> str:
+    """A summarized report that didn't run a defense (full-report
+    --defenses) has None there rather than a rate."""
+    return "n/a" if value is None else f"{value:.0%}"
+
+
 def render_summary_report(rows: list[dict], defenses: list[str], severity_filter: list | None = None) -> str:
     """rows: one per saved full-report, in the order given - {"client",
     "source", "hijack_rate": {defense: rate}, "clean_accuracy": {defense:
@@ -759,13 +765,13 @@ def render_summary_report(rows: list[dict], defenses: list[str], severity_filter
     lines.append("| client | " + " | ".join(defenses) + " |")
     lines.append("|---|" + "|".join("---" for _ in defenses) + "|")
     for row in rows:
-        lines.append(f"| {row['client']} | " + " | ".join(f"{row['hijack_rate'][d]:.0%}" for d in defenses) + " |")
+        lines.append(f"| {row['client']} | " + " | ".join(percent_or_na(row["hijack_rate"][d]) for d in defenses) + " |")
     lines.extend(["", "## clean-alert accuracy by defense", ""])
     lines.append("| client | " + " | ".join(defenses) + " |")
     lines.append("|---|" + "|".join("---" for _ in defenses) + "|")
     for row in rows:
         cells = (
-            " | ".join(f"{row['clean_accuracy'][d]:.0%}" for d in defenses)
+            " | ".join(percent_or_na(row["clean_accuracy"][d]) for d in defenses)
             if row["clean_accuracy"] is not None else " | ".join("n/a" for _ in defenses)
         )
         lines.append(f"| {row['client']} | {cells} |")
@@ -790,8 +796,11 @@ def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
             writer.writerow({
                 "client": row["client"],
                 "defense": defense,
-                "hijack_rate": row["hijack_rate"][defense],
-                "clean_accuracy": row["clean_accuracy"][defense] if row["clean_accuracy"] is not None else "",
+                "hijack_rate": "" if row["hijack_rate"][defense] is None else row["hijack_rate"][defense],
+                "clean_accuracy": (
+                    "" if row["clean_accuracy"] is None or row["clean_accuracy"][defense] is None
+                    else row["clean_accuracy"][defense]
+                ),
                 "source": row["source"],
             })
     return output.getvalue()

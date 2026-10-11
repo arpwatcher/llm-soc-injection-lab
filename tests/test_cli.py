@@ -2256,3 +2256,76 @@ def test_summarize_handles_a_report_saved_before_clean_accuracy_existed(tmp_path
     assert main(["summarize", str(path)]) == 0
     clean_section = capsys.readouterr().out.split("clean-alert accuracy by defense")[1]
     assert "n/a" in clean_section
+
+
+def test_compare_defenses_runs_only_the_chosen_ones_plus_the_none_baseline(tmp_path, capsys):
+    """each defense is a full pass over the battery - against a real model
+    a few hundred requests - so a question that only needs none vs both
+    shouldn't have to pay for sandwich and strict too. none always runs:
+    it's what every significance test compares against."""
+    report_path = tmp_path / "r.json"
+    exit_code = main(["compare", "--client", "fake-stubborn", "--defenses", "both", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "--- defense=none ---" in out
+    assert "--- defense=both ---" in out
+    assert "defense=sandwich" not in out and "defense=strict" not in out
+    assert "none vs both:" in out
+    parsed = json.loads(report_path.read_text())
+    assert set(parsed["per_defense"]) == {"none", "both"}
+    assert set(parsed["clean_accuracy_by_defense"]) == {"none", "both"}
+    assert set(parsed["significance_vs_none_by_defense"]) == {"both"}
+
+
+def test_full_report_defenses_subset(tmp_path, capsys):
+    report_path = tmp_path / "r.json"
+    assert main([
+        "full-report", "--client", "fake-sandwich-sensitive", "--defenses", "sandwich", "--report", str(report_path),
+    ]) == 0
+    capsys.readouterr()
+    parsed = json.loads(report_path.read_text())
+    assert set(parsed["summary_by_defense"]) == {"none", "sandwich"}
+    assert set(parsed["by_direction"]["escalate"]) == {"none", "sandwich"}
+
+
+def test_defenses_none_alone_runs_just_the_baseline(capsys):
+    assert main(["compare", "--client", "fake-stubborn", "--defenses", "none"]) == 0
+    out = capsys.readouterr().out
+    assert "--- defense=none ---" in out
+    assert " vs " not in out
+
+
+def test_defenses_rejects_unknown_duplicate_or_empty(capsys):
+    assert main(["compare", "--defenses", "sandwich,firewall"]) == 1
+    assert "unknown defense(s): firewall - choose from none, sandwich, strict, both" in capsys.readouterr().err
+    assert main(["full-report", "--defenses", "both,both", "--report", "x.md"]) == 1
+    assert "--defenses lists the same name more than once: both" in capsys.readouterr().err
+    assert main(["compare", "--defenses", " , "]) == 1
+    assert "--defenses was given but contained no defense names" in capsys.readouterr().err
+
+
+def test_summarize_shows_na_for_a_defense_a_report_didnt_run(tmp_path, capsys):
+    partial = tmp_path / "partial.json"
+    main(["full-report", "--client", "fake-stubborn", "--defenses", "both", "--report", str(partial)])
+    full = _saved_full_report(tmp_path, "fake-sandwich-sensitive")
+    md, cs = tmp_path / "s.md", tmp_path / "s.csv"
+    capsys.readouterr()
+    assert main(["summarize", str(partial), str(full)]) == 0
+    assert "fake-stubborn                 49%       n/a       n/a        0%" in capsys.readouterr().out
+    main(["summarize", str(partial), str(full), "--report", str(md)])
+    main(["summarize", str(partial), str(full), "--report", str(cs)])
+    capsys.readouterr()
+    assert "| fake-stubborn | 49% | n/a | n/a | 0% |" in md.read_text()
+    rows = {(r["client"], r["defense"]): r for r in csv.DictReader(io.StringIO(cs.read_text()))}
+    assert rows[("fake-stubborn", "sandwich")]["hijack_rate"] == ""
+    assert rows[("fake-stubborn", "sandwich")]["clean_accuracy"] == ""
+
+
+def test_summarize_drops_a_defense_no_report_ran(tmp_path, capsys):
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    main(["full-report", "--client", "fake-stubborn", "--defenses", "both", "--report", str(a)])
+    main(["full-report", "--client", "fake-vulnerable", "--defenses", "both", "--report", str(b)])
+    capsys.readouterr()
+    assert main(["summarize", str(a), str(b)]) == 0
+    header = capsys.readouterr().out.splitlines()[1]
+    assert header.split() == ["client", "none", "both"]

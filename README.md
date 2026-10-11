@@ -253,7 +253,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   defense-summary table straight to the terminal, followed by a two-proportion z-test
   comparing each defense's hijack rate against `none` (is the difference actually
   significant, or could it be noise from a small sample), and optionally writes the
-  comparison and/or transcript (each entry tagged with which defense it came from). Also
+  comparison and/or transcript (each entry tagged with which defense it came from).
+  `--defenses both` (or any comma-separated subset, on `compare` and `full-report`) runs just
+  those plus `none` - always kept, since it's the baseline every significance test compares
+  against - because each defense is a full pass over the battery, and against a real model
+  that's what decides how long a run takes. Also
   runs the same clean (non-injected) alert battery under each defense and prints/persists
   a clean-alert-accuracy-by-defense summary table alongside the hijack-rate one - a gap
   that went unnoticed until now: every defense's own added verbiage (the sandwich
@@ -512,7 +516,10 @@ ollama pull llama3.2:3b && ollama pull mistral:7b && ollama pull qwen2.5:7b
 python -m soclab.cli check-ollama --model llama3.2:3b
 
 # 2. one full-report per model - pinned temperature/seed so the run can be repeated,
-#    a cache file so a run that dies partway resumes instead of starting over
+#    a cache file so a run that dies partway resumes instead of starting over.
+#    that's 576 requests per model (16 clean + 72 + 56 injected alerts, under each of the
+#    4 defenses) - at a few seconds each, budget around half an hour; add --defenses both
+#    to run only none and both, which halves it
 python -m soclab.cli full-report --client ollama --model llama3.2:3b \
     --temperature 0 --seed 42 --cache cache.json --report llama.json
 # same command with --report llama.md answers every request from the cache - the
@@ -540,7 +547,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-476 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+482 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

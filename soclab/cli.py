@@ -33,6 +33,7 @@ from soclab.llm_client import (
 )
 from soclab.report import (
     combined_rate_by_defense,
+    percent_or_na,
     rate_by_defense,
     render_combined_csv_report,
     render_combined_json_report,
@@ -199,7 +200,7 @@ def _print_summary(rates: dict, heading: str, column_label: str = "hijack_rate")
     print()
 
 
-def _clean_accuracy_by_defense(clean_alerts: list, client) -> dict[str, float]:
+def _clean_accuracy_by_defense(clean_alerts: list, client, defenses: list) -> dict[str, float]:
     """Clean-alert accuracy under every defense - the same diagnostic
     run's own "clean alerts: N/M correct" line gives for a single defense,
     generalized across all four so compare/full-report can show whether a
@@ -210,7 +211,7 @@ def _clean_accuracy_by_defense(clean_alerts: list, client) -> dict[str, float]:
     can't answer it, since a clean alert has no hijack direction to
     measure against."""
     accuracy_by_defense = {}
-    for defense in DEFENSES:
+    for defense in defenses:
         results = score_batch(clean_alerts, client, defense=defense)
         correct, total = resisted_and_total(results)
         accuracy_by_defense[defense] = correct / total if total else 0.0
@@ -238,6 +239,9 @@ def _print_significance_vs_baseline(significance: dict, baseline: str):
     being statistically meaningful, and this is the number that actually
     answers whether a defense measurably helped rather than just reading
     the rates off and eyeballing the difference."""
+    if not significance:
+        # --defenses none: nothing to compare the baseline against
+        return
     print(f"significance vs defense={baseline} (two-proportion z-test):")
     for defense, (_, p_value) in significance.items():
         verdict = "significant" if is_significant(p_value) else "not significant"
@@ -289,7 +293,7 @@ def _injected_alerts_for(direction: str) -> list:
     return apply_all_techniques(clean_alerts)
 
 
-def _run_defense_battery(injected_alerts: list, client, heading_prefix: str = "") -> tuple:
+def _run_defense_battery(injected_alerts: list, client, defenses: list, heading_prefix: str = "") -> tuple:
     """Runs the injection battery under every defense, printing each
     defense's per-technique and per-severity tables as it goes. compare
     runs this once; full-report runs it once per direction (heading_prefix
@@ -304,7 +308,7 @@ def _run_defense_battery(injected_alerts: list, client, heading_prefix: str = ""
     severity_weighted_by_defense = {}
     confidence_interval_by_defense = {}
     severity_breakdown_by_defense = {}
-    for defense in DEFENSES:
+    for defense in defenses:
         print(f"--- {heading_prefix}defense={defense} ---")
         results = score_batch(injected_alerts, client, defense=defense)
         aggregated = aggregate_by_technique(results)
@@ -332,6 +336,25 @@ def _reject_duplicates(names: list, flag: str) -> None:
     duplicates = sorted({name for name in names if names.count(name) > 1})
     if duplicates:
         raise ValueError(f"{flag} lists the same name more than once: {', '.join(duplicates)}")
+
+
+def _resolve_defenses(defenses_arg: str | None) -> list:
+    """Parses --defenses into a list in canonical none/sandwich/strict/both
+    order, always including none - it's the baseline every significance
+    test compares against. Every defense against a real model is a full
+    pass over the battery (a few hundred requests for full-report), so
+    running just the ones a question needs - none and both, say - cuts
+    the run roughly in half. All of them if not given."""
+    if not defenses_arg:
+        return list(DEFENSES)
+    requested = [name.strip() for name in defenses_arg.split(",") if name.strip()]
+    if not requested:
+        raise ValueError("--defenses was given but contained no defense names")
+    unknown = [name for name in requested if name not in DEFENSES]
+    if unknown:
+        raise ValueError(f"unknown defense(s): {', '.join(unknown)} - choose from {', '.join(DEFENSES)}")
+    _reject_duplicates(requested, "--defenses")
+    return [d for d in DEFENSES if d == DEFENSE_NONE or d in requested]
 
 
 def _resolve_severities(severity_arg: str | None, command_label: str) -> list | None:
@@ -440,6 +463,7 @@ def cmd_compare(args):
     clean_alerts = generate_clean_alerts()
 
     requested_severities = _resolve_severities(args.severity, "compare")
+    defenses = _resolve_defenses(args.defenses)
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
 
@@ -448,12 +472,12 @@ def cmd_compare(args):
     (
         per_defense, results_by_defense, severity_weighted_by_defense,
         confidence_interval_by_defense, severity_breakdown_by_defense,
-    ) = _run_defense_battery(injected_alerts, client)
+    ) = _run_defense_battery(injected_alerts, client, defenses)
 
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
     significance_by_defense = _significance_vs_baseline(results_by_defense, DEFENSE_NONE)
     _print_significance_vs_baseline(significance_by_defense, DEFENSE_NONE)
-    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client)
+    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client, defenses)
     _print_summary(
         clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
     )
@@ -499,6 +523,7 @@ def cmd_full_report(args):
     client = build_client(args)
 
     requested_severities = _resolve_severities(args.severity, "full-report")
+    defenses = _resolve_defenses(args.defenses)
     _print_severity_filter(requested_severities)
     clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
 
@@ -513,7 +538,7 @@ def cmd_full_report(args):
         (
             per_defense, results_by_defense, severity_weighted_by_defense,
             confidence_interval_by_defense, severity_breakdown_by_defense,
-        ) = _run_defense_battery(injected_alerts, client, heading_prefix=f"direction={direction} ")
+        ) = _run_defense_battery(injected_alerts, client, defenses, heading_prefix=f"direction={direction} ")
         by_direction[direction] = per_defense
         results_by_direction[direction] = results_by_defense
         severity_weighted_by_direction[direction] = severity_weighted_by_defense
@@ -526,7 +551,7 @@ def cmd_full_report(args):
         combined_rate_by_defense(by_direction),
         "summary: overall hijack rate by defense (both directions combined)",
     )
-    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client)
+    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client, defenses)
     _print_summary(
         clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
     )
@@ -1072,14 +1097,16 @@ def cmd_summarize(args):
             )
         seen[report["client"]] = path
 
-    defenses = list(DEFENSES)
+    # only defenses some report actually ran (full-report --defenses can
+    # skip some); a report that didn't run one gets None there, shown n/a
+    defenses = [d for d in DEFENSES if any(d in report["summary_by_defense"] for _, report in reports)]
     rows = [
         {
             "client": report["client"],
             "source": path,
-            "hijack_rate": {d: report["summary_by_defense"][d] for d in defenses},
+            "hijack_rate": {d: report["summary_by_defense"].get(d) for d in defenses},
             "clean_accuracy": (
-                {d: report["clean_accuracy_by_defense"][d] for d in defenses}
+                {d: report["clean_accuracy_by_defense"].get(d) for d in defenses}
                 if report.get("clean_accuracy_by_defense") else None
             ),
         }
@@ -1092,11 +1119,11 @@ def cmd_summarize(args):
     print("hijack rate by defense, both directions combined")
     print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
     for row in rows:
-        print(f"{row['client']:<{width}} " + " ".join(f"{row['hijack_rate'][d]:>9.0%}" for d in defenses))
+        print(f"{row['client']:<{width}} " + " ".join(f"{percent_or_na(row['hijack_rate'][d]):>9}" for d in defenses))
     print("\nclean-alert accuracy by defense")
     print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
     for row in rows:
-        cells = (" ".join(f"{row['clean_accuracy'][d]:>9.0%}" for d in defenses)
+        cells = (" ".join(f"{percent_or_na(row['clean_accuracy'][d]):>9}" for d in defenses)
                  if row["clean_accuracy"] is not None else " ".join(f"{'n/a':>9}" for _ in defenses))
         print(f"{row['client']:<{width}} {cells}")
 
@@ -1220,6 +1247,12 @@ def build_parser():
     compare_parser.add_argument("--direction", choices=list(DIRECTIONS), default="dismiss",
                                  help="which attacker goal to test: hide a real incident, or waste analyst time")
     compare_parser.add_argument("--severity", help=_SEVERITY_HELP)
+    compare_parser.add_argument(
+        "--defenses",
+        help="comma-separated subset of defenses to run, e.g. both or sandwich,both (default: all four) - "
+             "none is always included as the baseline the others are tested against. each defense is a "
+             "full pass over the battery, so against a real model this is what decides how long a run takes",
+    )
     compare_parser.add_argument("--model", help="model name, required for --client ollama")
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
@@ -1239,6 +1272,12 @@ def build_parser():
         "--client", choices=list(CLIENT_FACTORIES), default="fake-robust", help=_CLIENT_HELP
     )
     full_report_parser.add_argument("--severity", help=_SEVERITY_HELP)
+    full_report_parser.add_argument(
+        "--defenses",
+        help="comma-separated subset of defenses to run, e.g. both or sandwich,both (default: all four) - "
+             "none is always included as the baseline the others are tested against. each defense is a "
+             "full pass over the battery, so against a real model this is what decides how long a run takes",
+    )
     full_report_parser.add_argument("--model", help="model name, required for --client ollama")
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     full_report_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
