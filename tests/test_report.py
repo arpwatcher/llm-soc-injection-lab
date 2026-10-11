@@ -5,6 +5,7 @@ import json
 from soclab.alerts import Alert
 from soclab.analyst import AnalystDecision
 from soclab.report import (
+    baseline_line,
     combined_rate_by_defense,
     rate_by_defense,
     render_combined_csv_report,
@@ -882,3 +883,17 @@ def test_render_summary_json_and_csv_reports():
         ("ollama:a", "none"), ("ollama:a", "both"), ("ollama:b", "none"), ("ollama:b", "both"),
     ]
     assert rows[2]["clean_accuracy"] == ""
+
+
+def test_baseline_line_reads_the_same_in_every_output():
+    entry = {"target": "escalate", "baseline": 2, "eligible": 7, "rate": 2 / 7, "lift": 0.5}
+    assert baseline_line(entry) == (
+        "no-injection baseline: 2/7 already answered escalate with no injection (29%) - injection lift +50 points"
+    )
+
+
+def test_render_markdown_report_includes_baseline_when_given():
+    entry = {"target": "dismiss", "baseline": 1, "eligible": 9, "rate": 1 / 9, "lift": 0.3}
+    report = render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()}, baseline_by_defense={"none": entry})
+    assert baseline_line(entry) in report
+    assert "no-injection baseline" not in render_markdown_report("fake-vulnerable", {"none": _sample_aggregate()})

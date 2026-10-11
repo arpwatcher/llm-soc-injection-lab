@@ -108,6 +108,18 @@ def _render_summary_table(rates: dict, heading: str, column_label: str = "hijack
     return lines
 
 
+def baseline_line(entry: dict) -> str:
+    """entry: {"target", "baseline", "eligible", "rate", "lift"} - how often
+    the model already gave the attack's target action on the same alerts
+    with no injection, and how far the hijack rate sits above that (the
+    part the injection itself caused). Shared by the terminal output and
+    the markdown reports so the two read the same."""
+    return (
+        f"no-injection baseline: {entry['baseline']}/{entry['eligible']} already answered {entry['target']} "
+        f"with no injection ({entry['rate']:.0%}) - injection lift {entry['lift'] * 100:+.0f} points"
+    )
+
+
 def _render_defense_sections(
     per_defense: dict,
     severity_weighted_by_defense: dict | None = None,
@@ -115,6 +127,7 @@ def _render_defense_sections(
     significance_by_defense: dict | None = None,
     heading_level: str = "##",
     severity_breakdown_by_defense: dict | None = None,
+    baseline_by_defense: dict | None = None,
 ) -> list[str]:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense, e.g. {"none": {...}, "sandwich": {...}}. Shared by both
@@ -161,6 +174,8 @@ def _render_defense_sections(
         lines.append(f"overall hijack rate: {_overall_rate(aggregated):.0%}")
         unparseable = sum(bucket.get("unparseable", 0) for bucket in aggregated.values())
         lines.append(f"unparseable responses: {unparseable}/{sum(bucket['total'] for bucket in aggregated.values())}")
+        if baseline_by_defense is not None and defense in baseline_by_defense:
+            lines.append(baseline_line(baseline_by_defense[defense]))
         if confidence_interval_by_defense is not None:
             ci_low, ci_high = confidence_interval_by_defense[defense]
             lines.append(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
@@ -185,6 +200,7 @@ def render_markdown_report(
     significance_by_defense: dict | None = None,
     severity_breakdown_by_defense: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
+    baseline_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """per_defense maps defense name -> aggregate_by_technique() output for
@@ -219,6 +235,7 @@ def render_markdown_report(
         confidence_interval_by_defense=confidence_interval_by_defense,
         significance_by_defense=significance_by_defense,
         severity_breakdown_by_defense=severity_breakdown_by_defense,
+        baseline_by_defense=baseline_by_defense,
     ))
     return "\n".join(lines)
 
@@ -232,6 +249,7 @@ def render_json_report(
     significance_by_defense: dict | None = None,
     severity_breakdown_by_defense: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
+    baseline_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_markdown_report, as JSON instead of a document -
@@ -247,6 +265,7 @@ def render_json_report(
         "significance_vs_none_by_defense": significance_by_defense,
         "severity_breakdown_by_defense": severity_breakdown_by_defense,
         "clean_accuracy_by_defense": clean_accuracy_by_defense,
+        "baseline_by_defense": baseline_by_defense,
         "per_defense": per_defense,
     }
     return json.dumps(payload, indent=2)
@@ -278,6 +297,7 @@ def render_combined_report(
     significance_by_direction: dict | None = None,
     severity_breakdown_by_direction: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
+    baseline_by_direction: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
@@ -317,6 +337,7 @@ def render_combined_report(
         confidence_interval = confidence_interval_by_direction[direction] if confidence_interval_by_direction else None
         significance = significance_by_direction[direction] if significance_by_direction else None
         severity_breakdown = severity_breakdown_by_direction[direction] if severity_breakdown_by_direction else None
+        baseline = baseline_by_direction[direction] if baseline_by_direction else None
         lines.extend(_render_defense_sections(
             per_defense,
             severity_weighted_by_defense=severity_weighted,
@@ -324,6 +345,7 @@ def render_combined_report(
             significance_by_defense=significance,
             heading_level="##",
             severity_breakdown_by_defense=severity_breakdown,
+            baseline_by_defense=baseline,
         ))
     return "\n".join(lines)
 
@@ -336,6 +358,7 @@ def render_combined_json_report(
     significance_by_direction: dict | None = None,
     severity_breakdown_by_direction: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
+    baseline_by_direction: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
@@ -348,6 +371,7 @@ def render_combined_json_report(
         "significance_vs_none_by_direction": significance_by_direction,
         "severity_breakdown_by_direction": severity_breakdown_by_direction,
         "clean_accuracy_by_defense": clean_accuracy_by_defense,
+        "baseline_by_direction": baseline_by_direction,
         "by_direction": by_direction,
     }
     return json.dumps(payload, indent=2)

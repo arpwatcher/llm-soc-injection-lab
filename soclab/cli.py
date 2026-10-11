@@ -32,6 +32,7 @@ from soclab.llm_client import (
     VulnerableFakeClient,
 )
 from soclab.report import (
+    baseline_line,
     combined_rate_by_defense,
     percent_or_na,
     rate_by_defense,
@@ -65,6 +66,7 @@ from soclab.scoring import (
     aggregate_by_severity,
     aggregate_by_severity_and_technique,
     aggregate_by_technique,
+    baseline_and_total,
     hijacked_and_total,
     is_significant,
     overall_hijack_rate,
@@ -211,22 +213,47 @@ def _print_summary(rates: dict, heading: str, column_label: str = "hijack_rate")
     print()
 
 
-def _clean_accuracy_by_defense(clean_alerts: list, client, defenses: list) -> dict[str, float]:
-    """Clean-alert accuracy under every defense - the same diagnostic
-    run's own "clean alerts: N/M correct" line gives for a single defense,
-    generalized across all four so compare/full-report can show whether a
-    defense's own added verbiage (the sandwich reinforcement, the strict
-    warning) makes the client worse at correctly handling alerts that
-    were never attacked in the first place. Neither command checked this
-    at all before - the per-defense hijack-rate tables they already print
-    can't answer it, since a clean alert has no hijack direction to
-    measure against."""
+def _score_clean_by_defense(clean_alerts: list, client, defenses: list) -> dict[str, list]:
+    """The clean battery scored under every defense - compare/full-report
+    derive both clean-alert accuracy (does a defense's own added verbiage
+    make the client worse on alerts that were never attacked?) and the
+    no-injection baseline from these same results, no extra requests."""
+    return {defense: score_batch(clean_alerts, client, defense=defense) for defense in defenses}
+
+
+def _clean_accuracy(clean_results_by_defense: dict) -> dict[str, float]:
     accuracy_by_defense = {}
-    for defense in defenses:
-        results = score_batch(clean_alerts, client, defense=defense)
+    for defense, results in clean_results_by_defense.items():
         correct, total = resisted_and_total(results)
         accuracy_by_defense[defense] = correct / total if total else 0.0
     return accuracy_by_defense
+
+
+def _baseline_entry(clean_results: list, injected_results: list, target_action: str) -> dict:
+    """See baseline_and_total - the no-injection rate of the attack's
+    target action on its own alerts, and the hijack rate's lift over it."""
+    baseline, eligible = baseline_and_total(clean_results, target_action)
+    rate = baseline / eligible if eligible else 0.0
+    return {
+        "target": target_action, "baseline": baseline, "eligible": eligible,
+        "rate": rate, "lift": overall_hijack_rate(injected_results) - rate,
+    }
+
+
+def _baseline_by_defense(clean_results_by_defense: dict, results_by_defense: dict, target_action: str) -> dict:
+    return {
+        defense: _baseline_entry(clean_results_by_defense[defense], results_by_defense[defense], target_action)
+        for defense in results_by_defense
+    }
+
+
+def _print_baseline_summary(baseline_by_defense: dict, heading: str) -> None:
+    print(heading)
+    print(f"{'defense':<10} {'hijack_rate':>12} {'baseline':>9} {'lift':>7}")
+    for defense, entry in baseline_by_defense.items():
+        print(f"{defense:<10} {entry['rate'] + entry['lift']:>11.0%} {entry['rate']:>9.0%} "
+              f"{entry['lift'] * 100:>+6.0f}")
+    print()
 
 
 def _significance_vs_baseline(results_by_defense: dict, baseline: str) -> dict:
@@ -433,12 +460,16 @@ def cmd_run(args):
     aggregated = aggregate_by_technique(injected_results)
     severity_breakdown = aggregate_by_severity(injected_results)
     _print_report(aggregated, injected_results, severity_breakdown)
+    # each direction is named after its attack's target action
+    baseline = _baseline_entry(clean_results, injected_results, args.direction)
+    print(baseline_line(baseline))
 
     if args.report:
         severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
         confidence_interval = {args.defense: overall_hijack_rate_confidence_interval(injected_results)}
         severity_breakdown_by_defense = {args.defense: severity_breakdown}
         clean_accuracy_by_defense = {args.defense: clean_correct / clean_total if clean_total else 0.0}
+        baseline_by_defense = {args.defense: baseline}
         _write_report(
             args.report,
             markdown_content=render_markdown_report(
@@ -447,6 +478,7 @@ def cmd_run(args):
                 confidence_interval_by_defense=confidence_interval,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
+                baseline_by_defense=baseline_by_defense,
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
@@ -455,6 +487,7 @@ def cmd_run(args):
                 confidence_interval_by_defense=confidence_interval,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
+                baseline_by_defense=baseline_by_defense,
                 severity_filter=requested_severities,
             ),
             csv_content=render_csv_report(_client_label(args), {args.defense: aggregated}, direction=args.direction),
@@ -490,10 +523,13 @@ def cmd_compare(args):
     _print_summary(rate_by_defense(per_defense), "summary: overall hijack rate by defense")
     significance_by_defense = _significance_vs_baseline(results_by_defense, DEFENSE_NONE)
     _print_significance_vs_baseline(significance_by_defense, DEFENSE_NONE)
-    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client, defenses)
+    clean_results_by_defense = _score_clean_by_defense(clean_alerts, client, defenses)
+    clean_accuracy_by_defense = _clean_accuracy(clean_results_by_defense)
     _print_summary(
         clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
     )
+    baseline_by_defense = _baseline_by_defense(clean_results_by_defense, results_by_defense, args.direction)
+    _print_baseline_summary(baseline_by_defense, "summary: injection lift over the no-injection baseline")
 
     if args.report:
         _write_report(
@@ -505,6 +541,7 @@ def cmd_compare(args):
                 significance_by_defense=significance_by_defense,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
+                baseline_by_defense=baseline_by_defense,
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
@@ -514,6 +551,7 @@ def cmd_compare(args):
                 significance_by_defense=significance_by_defense,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
+                baseline_by_defense=baseline_by_defense,
                 severity_filter=requested_severities,
             ),
             csv_content=render_csv_report(_client_label(args), per_defense, direction=args.direction),
@@ -571,10 +609,19 @@ def cmd_full_report(args):
         combined_rate_by_defense(by_direction),
         "summary: overall hijack rate by defense (both directions combined)",
     )
-    clean_accuracy_by_defense = _clean_accuracy_by_defense(clean_alerts, client, defenses)
+    clean_results_by_defense = _score_clean_by_defense(clean_alerts, client, defenses)
+    clean_accuracy_by_defense = _clean_accuracy(clean_results_by_defense)
     _print_summary(
         clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
     )
+    baseline_by_direction = {
+        direction: _baseline_by_defense(clean_results_by_defense, results_by_direction[direction], direction)
+        for direction in DIRECTIONS
+    }
+    for direction, baseline_by_defense in baseline_by_direction.items():
+        _print_baseline_summary(
+            baseline_by_defense, f"summary: injection lift over the no-injection baseline, direction={direction}",
+        )
 
     _write_report(
         args.report,
@@ -585,6 +632,7 @@ def cmd_full_report(args):
             significance_by_direction=significance_by_direction,
             severity_breakdown_by_direction=severity_breakdown_by_direction,
             clean_accuracy_by_defense=clean_accuracy_by_defense,
+            baseline_by_direction=baseline_by_direction,
             severity_filter=requested_severities,
         ),
         json_content=render_combined_json_report(
@@ -594,6 +642,7 @@ def cmd_full_report(args):
             significance_by_direction=significance_by_direction,
             severity_breakdown_by_direction=severity_breakdown_by_direction,
             clean_accuracy_by_defense=clean_accuracy_by_defense,
+            baseline_by_direction=baseline_by_direction,
             severity_filter=requested_severities,
         ),
         csv_content=render_combined_csv_report(_client_label(args), by_direction),

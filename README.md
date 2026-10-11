@@ -114,6 +114,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   that breaks its answer format can never be scored as hijacked on those alerts, so it would
   otherwise look more robust than it is; `run`/`compare`/`full-report` print and save an
   `unparseable responses: N/M` line next to the overall rate, and the csv gets its own column.
+  `baseline_and_total` is the other half of reading a hijack rate honestly: how often the
+  model already gives the attack's target action on the same alerts with no injection at all
+  (from the clean run that's scored anyway, so no extra requests). A model that dismisses
+  everything scores a 100% dismiss "hijack rate" while the injection did nothing; `run`,
+  `compare` and `full-report` print and save `no-injection baseline: 9/9 ... (100%) -
+  injection lift +0 points` alongside it, the lift being the part the injection caused.
   Also computes a
   severity-weighted hijack rate (critical alerts weighted higher than low ones) alongside
   the flat one - a client that mostly resists on low-severity alerts but caves on critical
@@ -536,7 +542,9 @@ python -m soclab.cli technique-leaderboard --models llama3.2:3b,mistral:7b,qwen2
     --temperature 0 --seed 42 --cache cache.json
 ```
 
-Worth reporting alongside the hijack rates: the `unparseable responses: N/M` line (a model
+Worth reporting alongside the hijack rates: the injection lift over the no-injection baseline
+(the hijack rate minus how often the model already gave that answer without any injection -
+the part the attack actually caused), the `unparseable responses: N/M` line (a model
 that breaks its answer format can't be scored as hijacked on those alerts, so a high count
 makes its hijack rate look better than it is) and clean-alert accuracy (a defense that hurts
 the model on alerts that were never attacked has a real cost). `--host` (or `$OLLAMA_HOST`)
@@ -548,7 +556,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-491 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+499 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
