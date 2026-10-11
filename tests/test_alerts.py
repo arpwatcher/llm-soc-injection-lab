@@ -23,6 +23,29 @@ def test_alert_ids_are_unique():
     assert len(ids) == len(set(ids))
 
 
+def test_each_technique_gets_enough_alerts_in_both_directions():
+    """each technique runs once per eligible alert, so these are the sample
+    sizes behind every per-technique hijack rate. at the original 5 and 3,
+    a perfect 3/3 came with a 95% interval of 44%-100% - too wide to say
+    much about a real model; 9 and 7 narrow that to 70% and 65% at the
+    low end."""
+    alerts = generate_clean_alerts()
+    dismiss_direction = sum(1 for a in alerts if a.ground_truth_action != "dismiss")
+    escalate_direction = sum(1 for a in alerts if a.ground_truth_action == "dismiss")
+    assert dismiss_direction >= 9
+    assert escalate_direction >= 7
+
+
+def test_both_directions_span_several_severities():
+    """per-severity breakdowns and severity-matrix need more than one or two
+    severities on each side to show anything."""
+    alerts = generate_clean_alerts()
+    dismiss_direction = {a.severity for a in alerts if a.ground_truth_action != "dismiss"}
+    escalate_direction = {a.severity for a in alerts if a.ground_truth_action == "dismiss"}
+    assert dismiss_direction == set(SEVERITIES)
+    assert len(escalate_direction) >= 3
+
+
 def test_clean_alerts_have_at_least_two_of_each_ground_truth_action():
     alerts = generate_clean_alerts()
     for action in ("escalate", "investigate", "dismiss"):

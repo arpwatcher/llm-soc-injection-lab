@@ -103,9 +103,9 @@ def test_run_severity_filter_restricts_clean_and_injected_alerts_to_that_severit
     assert exit_code == 0
     # only A001 and A006 (the two critical escalate alerts) remain clean-side,
     # and only their 2 injected copies per technique remain on the injected side.
-    assert "clean alerts: 2/2 correct action" in out
+    assert "clean alerts: 3/3 correct action" in out
     assert "severity filter: critical" in out
-    assert "direct_override                 2        0      0        100%" in out
+    assert "direct_override                 3        0      0        100%" in out
     assert "high" not in out
     assert "medium" not in out
 
@@ -114,7 +114,7 @@ def test_run_severity_filter_accepts_a_comma_separated_subset(capsys):
     exit_code = main(["run", "--client", "fake-vulnerable", "--severity", "critical,high"])
     out = capsys.readouterr().out
     assert exit_code == 0
-    assert "clean alerts: 3/3 correct action" in out  # A001, A006 (critical) + A002 (high)
+    assert "clean alerts: 7/7 correct action" in out  # A001, A006 (critical) + A002 (high)
     assert "severity filter: critical, high" in out
     assert "medium" not in out
 
@@ -135,12 +135,14 @@ def test_run_severity_filter_all_commas_is_a_clear_error(capsys):
 
 
 def test_run_severity_filter_with_nothing_present_is_empty_not_a_crash(capsys):
-    """dismiss-direction injected alerts only ever come from escalate/
-    investigate ground truth alerts, none of which are severity=low -
-    asking for --severity low should produce an empty (not erroring)
-    injected battery, same as an injected-alerts-only filter in scoring.py
-    gracefully returning 0.0/empty rather than raising on an empty batch."""
-    exit_code = main(["run", "--client", "fake-vulnerable", "--severity", "low"])
+    """escalation-direction injected alerts only ever come from dismiss-
+    worthy ground truth alerts, none of which are severity=critical -
+    asking for --severity critical there should produce an empty (not
+    erroring) injected battery, same as an injected-alerts-only filter in
+    scoring.py gracefully returning 0.0/empty rather than raising."""
+    exit_code = main([
+        "run", "--client", "fake-escalation-vulnerable", "--direction", "escalate", "--severity", "critical",
+    ])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "overall hijack rate: 0%" in out
@@ -240,12 +242,12 @@ def test_run_writes_transcript(tmp_path, capsys):
     assert exit_code == 0
     assert f"wrote transcript to {transcript_path}" in out
     entries = json.loads(transcript_path.read_text())
-    assert len(entries) == 40  # 8 techniques x 5 alerts each
+    assert len(entries) == 72  # 8 techniques x 9 alerts each
     assert all("reasoning" in e for e in entries)
     hijacked = [e for e in entries if e["outcome"] == "hijacked"]
     resisted = [e for e in entries if e["outcome"] == "resisted"]
-    assert len(hijacked) == 35  # every technique but unicode_homoglyph
-    assert len(resisted) == 5
+    assert len(hijacked) == 63  # every technique but unicode_homoglyph, 9 alerts each
+    assert len(resisted) == 9  # unicode_homoglyph's 9
 
 
 def test_run_without_transcript_flag_writes_nothing(tmp_path, capsys):
@@ -542,7 +544,7 @@ def test_compare_severity_filter_restricts_the_battery(capsys):
     exit_code = main(["compare", "--client", "fake-sandwich-sensitive", "--severity", "critical"])
     out = capsys.readouterr().out
     assert exit_code == 0
-    assert "direct_override                 2        0      0        100%" in out
+    assert "direct_override                 3        0      0        100%" in out
     assert "medium" not in out
 
 
@@ -588,7 +590,7 @@ def test_full_report_writes_json_when_path_ends_in_json(tmp_path, capsys):
     assert parsed["severity_weighted_by_direction"]["escalate"]["both"] == 0.0
     low, high = parsed["confidence_interval_by_direction"]["dismiss"]["both"]
     assert low == 0.0
-    assert high == pytest.approx(0.0876, abs=0.01)
+    assert high == pytest.approx(0.0507, abs=0.01)
     assert set(parsed["significance_vs_none_by_direction"]["dismiss"]) == {"sandwich", "strict", "both"}
     assert set(parsed["severity_breakdown_by_direction"]) == {"dismiss", "escalate"}
     assert parsed["severity_filter"] is None
@@ -898,14 +900,14 @@ def test_models_missing_from_server_fails_before_anything_runs(fake_ollama, caps
 def test_real_model_runs_report_progress_on_stderr(fake_ollama, capsys):
     """a real model takes seconds per alert, so without this a few hundred
     requests of silence look exactly like a hung run. leaderboard sends
-    8 clean + 40 injected requests here - a progress line every 10th,
+    16 clean + 72 injected requests here - a progress line every 10th,
     all on stderr so stdout stays just the results."""
     exit_code = main(["leaderboard", "--models", "robust-model"])
     captured = capsys.readouterr()
     assert exit_code == 0
     progress = [line for line in captured.err.splitlines() if line.startswith("ollama:robust-model:")]
-    assert len(progress) == 4
-    assert progress[-1].startswith("ollama:robust-model: 40 requests done (")
+    assert len(progress) == 8
+    assert progress[-1].startswith("ollama:robust-model: 80 requests done (")
     assert "requests done" not in captured.out
 
 
@@ -1011,15 +1013,15 @@ def test_unparseable_responses_are_reported_not_hidden(fake_ollama, tmp_path, ca
         assert main(["run", "--client", "ollama", "--model", "rambling-model", "--report", str(path)]) == 0
     out = capsys.readouterr().out
     assert "overall hijack rate: 0%" in out
-    assert "unparseable responses: 40/40" in out
-    assert "unparseable responses: 40/40" in md_path.read_text()
+    assert "unparseable responses: 72/72" in out
+    assert "unparseable responses: 72/72" in md_path.read_text()
     rows = list(csv.DictReader(io.StringIO(csv_path.read_text())))
-    assert sum(int(row["unparseable"]) for row in rows) == 40
+    assert sum(int(row["unparseable"]) for row in rows) == 72
 
 
 def test_fake_clients_report_zero_unparseable(capsys):
     main(["run", "--client", "fake-vulnerable"])
-    assert "unparseable responses: 0/40" in capsys.readouterr().out
+    assert "unparseable responses: 0/72" in capsys.readouterr().out
 
 
 def test_check_ollama_lists_pulled_models(fake_ollama, capsys):
@@ -1089,7 +1091,7 @@ def test_cache_resumes_a_run_that_died_partway(fake_ollama, monkeypatch, tmp_pat
     monkeypatch.setattr(requests, "post", answering)
     assert main(command) == 0
     resumed = capsys.readouterr().out
-    assert len(fake_ollama) == 25 + (48 - 25)  # only the 23 unanswered requests went out again
+    assert len(fake_ollama) == 25 + (88 - 25)  # only the 63 unanswered requests went out again
 
     fake_ollama.clear()
     main(["run", "--client", "ollama", "--model", "gullible-model"])
@@ -1342,13 +1344,13 @@ def test_leaderboard_clean_accuracy_gets_a_confidence_interval(capsys):
     hijack rate's own CI already warns about being easy to over-read at -
     this is the same Wilson interval, just on the resisted/total count
     instead of the hijacked/total one. fake-robust gets a bare 100% point
-    estimate (8/8 clean alerts correct), but the interval is still wide
-    (68%-100%), exactly the over-reading risk this column exists to show."""
+    estimate (16/16 clean alerts correct), but the interval is still wide
+    (81%-100%), exactly the over-reading risk this column exists to show."""
     exit_code = main(["leaderboard", "--clients", "fake-robust"])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "clean 95% ci" in out
-    assert "68%-100%" in out
+    assert "81%-100%" in out
 
 
 def test_leaderboard_writes_clean_accuracy_confidence_interval_to_json(tmp_path, capsys):
@@ -1357,7 +1359,7 @@ def test_leaderboard_writes_clean_accuracy_confidence_interval_to_json(tmp_path,
     capsys.readouterr()
     parsed = json.loads(report_path.read_text())
     robust_row = next(row for row in parsed["clients"] if row["client"] == "fake-robust")
-    assert robust_row["clean_ci_low"] == pytest.approx(0.6756, abs=0.001)
+    assert robust_row["clean_ci_low"] == pytest.approx(0.8064, abs=0.001)
     assert robust_row["clean_ci_high"] == 1.0
 
 
@@ -1366,7 +1368,7 @@ def test_leaderboard_writes_clean_accuracy_confidence_interval_to_csv(tmp_path, 
     main(["leaderboard", "--clients", "fake-robust", "--report", str(report_path)])
     capsys.readouterr()
     rows = list(csv.DictReader(report_path.read_text().splitlines()))
-    assert float(rows[0]["clean_ci_low"]) == pytest.approx(0.6756, abs=0.001)
+    assert float(rows[0]["clean_ci_low"]) == pytest.approx(0.8064, abs=0.001)
     assert rows[0]["clean_ci_high"] == "1.0"
 
 
@@ -1442,7 +1444,7 @@ def test_technique_leaderboard_severity_filter_restricts_the_battery(capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "across 1 client(s)" in out
-    assert "direct_override                                 2 " in out
+    assert "direct_override                                 3 " in out
 
 
 def test_technique_leaderboard_severity_filter_rejects_unknown_name(capsys):
@@ -1657,13 +1659,15 @@ def test_matrix_severity_filter_rejects_unknown_name(capsys):
 
 
 def test_matrix_severity_filter_that_empties_the_battery_shows_zero_not_a_crash(capsys):
-    """dismiss-direction injected alerts only ever come from escalate/
-    investigate ground truth alerts, none of which are severity=low - every
+    """escalation-direction injected alerts only ever come from dismiss-
+    worthy ground truth alerts, none of which are severity=critical - every
     technique column used to KeyError on a direct aggregated[technique]
     lookup once --severity filtered the injected battery down to nothing,
     instead of falling back to the same 0% every other subcommand shows
     for an empty battery."""
-    exit_code = main(["matrix", "--clients", "fake-vulnerable", "--severity", "low"])
+    exit_code = main([
+        "matrix", "--clients", "fake-vulnerable", "--direction", "escalate", "--severity", "critical",
+    ])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "fake-vulnerable | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0%" in out
@@ -1907,7 +1911,7 @@ def test_severity_matrix_writes_json_report(tmp_path, capsys):
     assert parsed["direction"] == "escalate"
     assert parsed["defense"] == "none"
     severities = {row["severity"] for row in parsed["severities"]}
-    assert severities == {"medium", "low"}
+    assert severities == {"high", "medium", "low"}
     assert "average" in parsed["severities"][0]
     assert parsed["severity_filter"] is None
 
@@ -1927,7 +1931,7 @@ def test_severity_matrix_writes_csv_report(tmp_path, capsys):
     main(["severity-matrix", "--client", "fake-vulnerable", "--report", str(report_path)])
     capsys.readouterr()
     rows = list(csv.DictReader(report_path.read_text().splitlines()))
-    assert len(rows) == 3  # critical, high, medium
+    assert len(rows) == 4  # critical, high, medium, low
     assert rows[0]["client"] == "fake-vulnerable"
     assert rows[0]["severity"] == "critical"
     assert rows[0]["direction"] == "dismiss"
@@ -1946,11 +1950,12 @@ def test_severity_matrix_writes_transcript(tmp_path, capsys):
 
 
 def test_severity_matrix_two_severities_prints_pairwise_significance(capsys):
-    """escalation-direction alerts naturally only ever come from two
-    severities (medium, low) - the same exactly-two case leaderboard and
-    technique-leaderboard trigger pairwise significance on, here reached
-    without needing --severity at all."""
-    exit_code = main(["severity-matrix", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
+    """the same exactly-two case leaderboard and technique-leaderboard
+    trigger pairwise significance on, here in the escalation direction."""
+    exit_code = main([
+        "severity-matrix", "--client", "fake-escalation-vulnerable", "--direction", "escalate",
+        "--severity", "medium,low",
+    ])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "medium vs low (two-proportion z-test):" in out
@@ -2185,8 +2190,8 @@ def test_summarize_puts_saved_full_reports_in_one_table(tmp_path, capsys):
     exit_code = main(["summarize", str(stubborn), str(sandwich)])
     out = capsys.readouterr().out
     assert exit_code == 0
-    assert "fake-stubborn                 55%       55%       55%        0%" in out
-    assert "fake-sandwich-sensitive       55%        0%       55%        0%" in out
+    assert "fake-stubborn                 49%       49%       49%        0%" in out
+    assert "fake-sandwich-sensitive       49%        0%       49%        0%" in out
     assert out.index("fake-stubborn") < out.index("fake-sandwich-sensitive")  # input order kept
 
 
@@ -2197,7 +2202,7 @@ def test_summarize_writes_markdown_json_and_csv(tmp_path, capsys):
     for path in (md, js, cs):
         assert main(["summarize", str(stubborn), str(sandwich), "--report", str(path)]) == 0
     capsys.readouterr()
-    assert "| fake-sandwich-sensitive | 55% | 0% | 55% | 0% |" in md.read_text()
+    assert "| fake-sandwich-sensitive | 49% | 0% | 49% | 0% |" in md.read_text()
     parsed = json.loads(js.read_text())
     assert [row["client"] for row in parsed["clients"]] == ["fake-stubborn", "fake-sandwich-sensitive"]
     assert parsed["clients"][0]["hijack_rate"]["both"] == 0.0

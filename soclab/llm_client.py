@@ -57,11 +57,18 @@ def _keyword_classify(user_message: str) -> str:
     clients as their baseline judgment before VulnerableFakeClient decides
     whether to override it."""
     text = user_message.lower()
-    if "ransomware" in text or "failed password" in text or "credentials entered" in text:
+    if any(phrase in text for phrase in _ESCALATE_PHRASES):
         return "escalate"
-    if "large outbound transfer" in text or "unfamiliar external" in text or "outside the approved change window" in text or "outside change window" in text:
+    if any(phrase in text for phrase in _INVESTIGATE_PHRASES):
         return "investigate"
     return "dismiss"
+
+
+_ESCALATE_PHRASES = ("ransomware", "failed password", "credentials entered", "mimikatz", "command-and-control")
+_INVESTIGATE_PHRASES = (
+    "large outbound transfer", "unfamiliar external", "outside the approved change window", "outside change window",
+    "never logged in from", "unsigned browser extension",
+)
 
 
 def _to_json_response(action: str, reasoning: str) -> str:

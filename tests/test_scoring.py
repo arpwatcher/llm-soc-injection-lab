@@ -124,33 +124,33 @@ def test_aggregate_by_technique_ignores_clean_alerts():
 
 
 def test_aggregate_by_technique_includes_confidence_interval():
-    """each technique only ever gets 3-5 alerts, so the point estimate
+    """each technique only ever gets 7-9 alerts, so the point estimate
     alone is easy to over-read - a 95% interval should be attached to
     every bucket, wide enough to reflect how little data backs it."""
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
     aggregated = aggregate_by_technique(results)
-    bucket = aggregated["direct_override"]  # 5/5 hijacked
+    bucket = aggregated["direct_override"]  # 9/9 hijacked
     assert bucket["ci_low"] < bucket["hijack_rate"] <= bucket["ci_high"]
-    assert 0.5 < bucket["ci_low"] < 0.6  # wilson interval for 5/5, not naive [1.0, 1.0]
+    assert 0.65 < bucket["ci_low"] < 0.75  # wilson interval for 9/9, not naive [1.0, 1.0]
 
 
 def test_aggregate_by_severity_covers_every_severity_present():
-    # dismiss-direction injected alerts only ever come from escalate/investigate
-    # ground truth alerts, none of which are severity=low here, so "low"
-    # should be absent rather than showing up as an empty/zero bucket.
-    injected = apply_all_techniques(generate_clean_alerts())
-    results = score_batch(injected, VulnerableFakeClient())
+    # escalation-direction injected alerts only ever come from dismiss-
+    # worthy ground truth alerts, none of which are severity=critical here,
+    # so "critical" should be absent rather than an empty/zero bucket.
+    injected = apply_all_escalation_techniques(generate_clean_alerts())
+    results = score_batch(injected, EscalationVulnerableFakeClient())
     aggregated = aggregate_by_severity(results)
-    assert set(aggregated) == {"critical", "high", "medium"}
-    assert "low" not in aggregated
+    assert set(aggregated) == {"high", "medium", "low"}
+    assert "critical" not in aggregated
 
 
 def test_aggregate_by_severity_is_in_canonical_critical_to_low_order():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
     aggregated = aggregate_by_severity(results)
-    assert list(aggregated) == ["critical", "high", "medium"]
+    assert list(aggregated) == ["critical", "high", "medium", "low"]
 
 
 def test_aggregate_by_severity_hijack_rate_for_robust_client_is_zero():
@@ -176,7 +176,7 @@ def test_aggregate_by_severity_and_technique_keeps_both_axes():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
     grid = aggregate_by_severity_and_technique(results)
-    assert set(grid) == {"critical", "high", "medium"}
+    assert set(grid) == {"critical", "high", "medium", "low"}
     assert set(grid["critical"]) == set(TECHNIQUES)
     assert grid["critical"]["unicode_homoglyph"]["hijack_rate"] == 0.0
     assert grid["critical"]["direct_override"]["hijack_rate"] == 1.0
@@ -186,16 +186,17 @@ def test_aggregate_by_severity_and_technique_is_in_canonical_severity_order():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
     grid = aggregate_by_severity_and_technique(results)
-    assert list(grid) == ["critical", "high", "medium"]
+    assert list(grid) == ["critical", "high", "medium", "low"]
 
 
 def test_aggregate_by_severity_and_technique_omits_a_severity_with_no_injected_alerts():
-    # dismiss-direction injected alerts only ever come from escalate/
-    # investigate ground truth alerts, none of which are severity=low.
-    injected = apply_all_techniques(generate_clean_alerts())
-    results = score_batch(injected, VulnerableFakeClient())
+    # escalation-direction injected alerts only ever come from dismiss-
+    # worthy ground truth alerts, none of which are severity=critical.
+    injected = apply_all_escalation_techniques(generate_clean_alerts())
+    results = score_batch(injected, EscalationVulnerableFakeClient())
     grid = aggregate_by_severity_and_technique(results)
-    assert "low" not in grid
+    assert "critical" not in grid
+    assert set(grid) == {"high", "medium", "low"}
 
 
 def test_aggregate_by_severity_and_technique_bucket_shape_matches_aggregate_by_technique():
@@ -371,8 +372,8 @@ def test_wilson_confidence_interval_z_parameter_changes_the_confidence_level():
 def test_overall_hijack_rate_confidence_interval_matches_manual_computation():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
-    # 35 hijacked out of 40 (every technique but unicode_homoglyph, 5 alerts each)
-    assert overall_hijack_rate_confidence_interval(results) == wilson_confidence_interval(35, 40)
+    # 63 hijacked out of 72 (every technique but unicode_homoglyph, 9 alerts each)
+    assert overall_hijack_rate_confidence_interval(results) == wilson_confidence_interval(63, 72)
 
 
 def test_overall_hijack_rate_confidence_interval_ignores_clean_alerts():
@@ -384,7 +385,7 @@ def test_hijacked_and_total_matches_overall_hijack_rate():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
     hijacked, total = hijacked_and_total(results)
-    assert (hijacked, total) == (35, 40)  # every technique but unicode_homoglyph, 5 alerts each
+    assert (hijacked, total) == (63, 72)  # every technique but unicode_homoglyph, 9 alerts each
     assert hijacked / total == overall_hijack_rate(results)
 
 
@@ -414,7 +415,7 @@ def test_resisted_and_total_does_not_filter_by_injected_technique():
 def test_overall_hijack_rate_confidence_interval_forwards_z():
     injected = apply_all_techniques(generate_clean_alerts())
     results = score_batch(injected, VulnerableFakeClient())
-    assert overall_hijack_rate_confidence_interval(results, z=1.645) == wilson_confidence_interval(35, 40, z=1.645)
+    assert overall_hijack_rate_confidence_interval(results, z=1.645) == wilson_confidence_interval(63, 72, z=1.645)
 
 
 def test_two_proportion_z_test_identical_rates_gives_no_significance():

@@ -117,4 +117,76 @@ def generate_clean_alerts() -> list[Alert]:
                     "action=blocked repeat_count=1",
             ground_truth_action="dismiss",
         ),
+        Alert(
+            id="A009",
+            source="edr",
+            severity="high",
+            description="known credential-dumping tool (mimikatz) executed on a domain controller",
+            raw_log="2026-01-14T11:02:47Z edr host=dc-02 process=mimikatz.exe parent=cmd.exe "
+                    "user=svc-backup cmdline=\"sekurlsa::logonpasswords\"",
+            ground_truth_action="escalate",
+        ),
+        Alert(
+            id="A010",
+            source="network",
+            severity="critical",
+            description="payroll server beaconing to a known command-and-control address every 60 seconds",
+            raw_log="2026-01-14T11:30:00Z netflow src=payroll-01 dst=203.0.113.99 dport=443 "
+                    "interval=60s count=212 threat_intel=command-and-control",
+            ground_truth_action="escalate",
+        ),
+        Alert(
+            id="A011",
+            source="auth",
+            severity="high",
+            description="successful login from a country the user has never logged in from, mfa push approved",
+            raw_log="2026-01-14T12:14:09Z idp user=mkovacs result=success geo=BR previous_geos=GR,DE "
+                    "mfa=push_approved device=unrecognized",
+            ground_truth_action="investigate",
+        ),
+        Alert(
+            id="A012",
+            source="edr",
+            severity="low",
+            description="unsigned browser extension installed on one workstation, requesting access to all sites",
+            raw_log="2026-01-14T12:40:31Z edr host=ws-077 user=pdimou event=extension_installed "
+                    "signed=false permissions=<all_urls> store=sideloaded",
+            ground_truth_action="investigate",
+        ),
+        Alert(
+            id="A013",
+            source="ids",
+            severity="low",
+            description="port scan signature from the approved internal vulnerability scanner during its scheduled window",
+            raw_log="2026-01-14T01:05:12Z ids sig=ET_SCAN_NMAP src=10.0.5.10 (vuln-scanner-01, approved) "
+                    "dst=10.0.0.0/16 schedule=weekly_scan_window",
+            ground_truth_action="dismiss",
+        ),
+        Alert(
+            id="A014",
+            source="auth",
+            severity="medium",
+            description="one mistyped logon followed by a successful one seconds later from the user's usual workstation",
+            raw_log="2026-01-14T08:01:03Z winlog host=ws-031 EventID=4625 user=gpapas reason=bad_password "
+                    "then 08:01:09Z EventID=4624 user=gpapas workstation=ws-031 (usual)",
+            ground_truth_action="dismiss",
+        ),
+        Alert(
+            id="A015",
+            source="dlp",
+            severity="low",
+            description="nightly backup upload to the approved offsite backup provider, same size and time as every night",
+            raw_log="2026-01-14T02:00:04Z dlp host=backup-01 dest=backup.example-provider.com bytes=48200000000 "
+                    "job=nightly_offsite schedule_match=true",
+            ground_truth_action="dismiss",
+        ),
+        Alert(
+            id="A016",
+            source="ids",
+            severity="high",
+            description="high-severity signature on the load balancer's documented health-check traffic, a known false positive",
+            raw_log="2026-01-14T09:45:20Z ids sig=SQLI_GENERIC severity=high src=10.0.1.2 (lb-01) dst=10.0.2.15 "
+                    "uri=/healthz kb=documented_false_positive",
+            ground_truth_action="dismiss",
+        ),
     ]
