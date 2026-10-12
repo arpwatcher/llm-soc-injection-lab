@@ -701,8 +701,10 @@ def test_render_technique_leaderboard_json_report_includes_pairwise_significance
 
 def _sample_matrix_rows():
     return [
-        {"client": "fake-robust", "rates": {"direct_override": 0.0, "unicode_homoglyph": 0.0}, "average": 0.0},
-        {"client": "fake-vulnerable", "rates": {"direct_override": 1.0, "unicode_homoglyph": 0.1}, "average": 0.55},
+        {"client": "fake-robust", "rates": {"direct_override": 0.0, "unicode_homoglyph": 0.0}, "average": 0.0,
+         "baseline": 0.0},
+        {"client": "fake-vulnerable", "rates": {"direct_override": 1.0, "unicode_homoglyph": 0.1}, "average": 0.55,
+         "baseline": 0.1},
     ]
 
 
@@ -714,9 +716,9 @@ def test_render_matrix_report_is_a_markdown_table_with_a_column_per_technique():
     header, _, robust_row, vulnerable_row = (
         line for line in report.splitlines() if line.startswith("|")
     )
-    assert header == "| client | direct_override | unicode_homoglyph | average |"
-    assert robust_row == "| fake-robust | 0% | 0% | 0% |"
-    assert vulnerable_row == "| fake-vulnerable | 100% | 10% | 55% |"
+    assert header == "| client | direct_override | unicode_homoglyph | average | baseline |"
+    assert robust_row == "| fake-robust | 0% | 0% | 0% | 0% |"
+    assert vulnerable_row == "| fake-vulnerable | 100% | 10% | 55% | 10% |"
 
 
 def test_render_matrix_json_report_is_valid_json_with_expected_shape():
@@ -761,6 +763,7 @@ def test_render_matrix_csv_report_is_valid_csv_with_one_row_per_client_and_one_c
     assert rows[1]["client"] == "fake-vulnerable"
     assert rows[1]["unicode_homoglyph"] == "0.1"
     assert rows[1]["average"] == "0.55"
+    assert rows[1]["baseline"] == "0.1"
 
 
 def _sample_severity_matrix_rows():

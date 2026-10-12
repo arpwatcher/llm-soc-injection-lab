@@ -979,32 +979,41 @@ def cmd_matrix(args):
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "matrix")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
     for _, client in clients:
-        _expect_requests(client, len(injected_alerts))
+        _expect_requests(client, len(clean_alerts) + len(injected_alerts))
     technique_names = _technique_names_for_direction(args.techniques, args.direction)
 
     rows = []
     results_by_client = {}
     for name, client in clients:
+        # the no-injection baseline: every cell is a hijack rate on these
+        # same alerts, so whatever the model already answers with no
+        # injection at all is part of every cell rather than the attack's
+        # doing - each direction is named after its attack's target action
+        baseline, eligible = baseline_and_total(score_batch(clean_alerts, client, defense=args.defense), args.direction)
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         aggregated = aggregate_by_technique(results)
         # a technique can be entirely absent from aggregated if --severity
         # filtered out every alert it would otherwise have applied to (e.g.
-        # --severity low under the default dismiss direction, where no
-        # escalate/investigate alert is low-severity) - 0% there, same
-        # "empty battery" convention every other subcommand's hijack rate
-        # falls back to, rather than a bare KeyError.
+        # --severity critical under --direction escalate, where no
+        # dismiss-worthy alert is critical) - 0% there, same "empty
+        # battery" convention every other subcommand's hijack rate falls
+        # back to, rather than a bare KeyError.
         rates = {technique: aggregated.get(technique, {}).get("hijack_rate", 0.0) for technique in technique_names}
-        rows.append({"client": name, "rates": rates, "average": sum(rates.values()) / len(technique_names)})
+        rows.append({
+            "client": name, "rates": rates, "average": sum(rates.values()) / len(technique_names),
+            "baseline": baseline / eligible if eligible else 0.0,
+        })
     rows.sort(key=lambda row: row["average"])
 
     print(f"direction={args.direction} defense={args.defense}\n")
     _print_severity_filter(requested_severities)
-    print("client | " + " | ".join(technique_names) + " | average")
+    print("client | " + " | ".join(technique_names) + " | average | baseline")
     for row in rows:
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
-        print(f"{row['client']} | {cells} | {row['average']:.0%}")
+        print(f"{row['client']} | {cells} | {row['average']:.0%} | {row['baseline']:.0%}")
 
     if args.report:
         _write_report(

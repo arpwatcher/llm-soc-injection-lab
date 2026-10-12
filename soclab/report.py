@@ -631,10 +631,13 @@ def render_matrix_report(
     are already available per-client via `leaderboard` and per-technique
     via `technique-leaderboard`. average is the plain mean of a row's own
     cells, shown as a trailing column so a reader doesn't have to eyeball
-    a wide row to see which client comes out ahead overall. severity_filter,
+    a wide row to see which client comes out ahead overall. baseline is how
+    often that client already gives the attack's target action on the same
+    alerts with no injection - part of every cell in its row, not the
+    attack's doing - so a cell's lift is the cell minus it. severity_filter,
     when given, is the --severity subset this matrix was restricted to."""
-    header = "| client | " + " | ".join(technique_names) + " | average |"
-    separator = "|---|" + "|".join("---" for _ in technique_names) + "|---|"
+    header = "| client | " + " | ".join(technique_names) + " | average | baseline |"
+    separator = "|---|" + "|".join("---" for _ in technique_names) + "|---|---|"
     lines = [
         f"# matrix - direction: {direction}, defense: {defense}",
         "",
@@ -645,7 +648,7 @@ def render_matrix_report(
     lines.extend([header, separator])
     for row in rows:
         cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
-        lines.append(f"| {row['client']} | {cells} | {row['average']:.0%} |")
+        lines.append(f"| {row['client']} | {cells} | {row['average']:.0%} | {row['baseline']:.0%} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -671,7 +674,7 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
     other CSV exports here use), since a wide grid is the natural shape
     for a spreadsheet heatmap built directly from this file."""
     output = io.StringIO()
-    fieldnames = ["client", "direction", "defense", *technique_names, "average"]
+    fieldnames = ["client", "direction", "defense", *technique_names, "average", "baseline"]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for row in rows:
@@ -681,6 +684,7 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
             "defense": defense,
             **row["rates"],
             "average": row["average"],
+            "baseline": row["baseline"],
         })
     return output.getvalue()
 

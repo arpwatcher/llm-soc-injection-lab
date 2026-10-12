@@ -381,7 +381,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   breakdown stays intact instead of being merged into one combined rate. Each row also gets
   a trailing average column (the plain mean of its own cells) and rows sort by it, most
   robust first - without it there'd be no way to tell which client comes out ahead overall
-  without eyeballing a row that can run to eight columns wide. Same `--clients`/
+  without eyeballing a row that can run to eight columns wide. A trailing baseline column (16 extra
+  clean requests per client) is that client's no-injection rate of the attack's target
+  action on the same alerts - part of every cell in its row rather than the attack's doing. Same `--clients`/
   `--techniques` narrowing (via the shared `_resolve_client_names`/`_resolve_technique_names`
   helpers `technique-leaderboard` also uses) and `--transcript`; no pairwise significance
   check here, since a grid has no single pair to compare the way exactly-two-clients or
@@ -561,7 +563,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-504 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+505 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

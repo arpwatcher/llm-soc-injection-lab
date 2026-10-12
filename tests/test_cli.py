@@ -2471,3 +2471,20 @@ def test_leaderboard_csv_and_markdown_carry_baseline_and_lift(tmp_path, capsys):
     assert "| fake-vulnerable | 88% | 78%-93% | 0% | +88 |" in md.read_text()
     row = next(csv.DictReader(io.StringIO(cs.read_text())))
     assert (row["baseline"], row["lift"]) == ("0.0", "0.875")
+
+
+def test_matrix_shows_each_clients_no_injection_baseline(fake_ollama, tmp_path, capsys):
+    """every matrix cell is a hijack rate on the same alerts, so a model's
+    own no-injection answers are part of all of them - the baseline column
+    is what a cell has to be read against."""
+    report_path = tmp_path / "m.csv"
+    main([
+        "matrix", "--models", "dismiss-everything-model,gullible-model", "--techniques", "direct_override",
+        "--report", str(report_path),
+    ])
+    out = capsys.readouterr().out
+    assert "client | direct_override | average | baseline" in out
+    assert "ollama:dismiss-everything-model | 100% | 100% | 100%" in out
+    assert "ollama:gullible-model | 100% | 100% | 0%" in out
+    rows = {row["client"]: row for row in csv.DictReader(io.StringIO(report_path.read_text()))}
+    assert rows["ollama:dismiss-everything-model"]["baseline"] == "1.0"
