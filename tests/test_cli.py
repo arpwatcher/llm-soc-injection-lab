@@ -76,7 +76,7 @@ def test_run_prints_severity_weighted_hijack_rate(capsys):
 
 
 def test_run_prints_confidence_interval(capsys):
-    """each technique only gets 3-5 alerts - a bare point estimate hides
+    """each technique only gets 7-9 alerts - a bare point estimate hides
     how little data backs it, so every run should also print a 95%
     confidence interval on the overall rate."""
     exit_code = main(["run", "--client", "fake-vulnerable"])
@@ -1882,11 +1882,12 @@ def test_severity_matrix_defaults_to_every_technique_for_the_direction(capsys):
 
 def test_severity_matrix_escalate_direction_shows_only_dismiss_worthy_severities(capsys):
     """escalation-direction injected alerts only ever come from dismiss-
-    worthy ground truth alerts (medium and low severity here), unlike
-    the dismiss direction's critical/high/medium."""
+    worthy ground truth alerts (high, medium and low severity here, never
+    critical), unlike the dismiss direction which spans all four."""
     exit_code = main(["severity-matrix", "--client", "fake-escalation-vulnerable", "--direction", "escalate"])
     out = capsys.readouterr().out
     assert exit_code == 0
+    assert "high" in out
     assert "medium" in out
     assert "low" in out
     assert "critical" not in out

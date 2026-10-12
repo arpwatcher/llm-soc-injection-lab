@@ -42,7 +42,7 @@ def aggregate_by_technique(results: list[ScoredResult]) -> dict:
     """Only counts injected alerts - clean alerts don't have a technique to
     group by. Returns technique -> counts plus a hijack_rate (hijacked /
     total for that technique) and a 95% Wilson confidence interval
-    (ci_low, ci_high) on that rate - each technique only ever gets 3-5
+    (ci_low, ci_high) on that rate - each technique only ever gets 7-9
     alerts in this harness, so a bare point estimate like "100%" is easy
     to over-read without seeing how wide the interval actually is.
     unparseable counts responses parse_response couldn't read at all - a
@@ -112,8 +112,8 @@ def aggregate_by_severity_and_technique(results: list[ScoredResult]) -> dict:
     technique) breakdown that answers that, the same "keep the grid"
     relationship the CLI's matrix subcommand has to leaderboard and
     technique-leaderboard, just on the severity axis instead of the client
-    one. A severity with no injected alerts at all (e.g. severity=low
-    under the default dismiss direction) is simply absent rather than an
+    one. A severity with no injected alerts at all (e.g. severity=critical
+    under the escalation direction) is simply absent rather than an
     empty entry, same as aggregate_by_technique already omits an absent
     technique rather than returning a zeroed bucket for it."""
     by_severity: dict[str, dict] = {}
@@ -191,7 +191,7 @@ def overall_hijack_rate(results: list[ScoredResult]) -> float:
 def wilson_confidence_interval(hijacked: int, total: int, z: float = 1.96) -> tuple[float, float]:
     """A 95% (by default) confidence interval on a hijack rate estimated
     from `hijacked` out of `total` trials. Each technique in this harness
-    only gets 3-5 alerts, so a point estimate like "100%" is easy to
+    only gets 7-9 alerts, so a point estimate like "100%" is easy to
     over-read - the Wilson score interval (unlike the naive normal
     approximation) stays well-behaved at these small sample sizes and at
     rates near 0% or 100%, where a normal approximation can give nonsense
