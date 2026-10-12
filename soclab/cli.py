@@ -900,15 +900,23 @@ def cmd_technique_leaderboard(args):
     injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "technique-leaderboard")
     injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
     for _, client in clients:
-        _expect_requests(client, len(injected_alerts))
+        _expect_requests(client, len(clean_alerts) + len(injected_alerts))
     results_by_client = {}
     combined_results = []
+    combined_clean_results = []
     for name, client in clients:
+        combined_clean_results.extend(score_batch(clean_alerts, client, defense=args.defense))
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         combined_results.extend(results)
     aggregated = aggregate_by_technique(combined_results)
+    # every technique runs on the same alerts against the same clients, so
+    # they share one no-injection baseline - pooled across the clients the
+    # same way the rates above are (each direction is named after its
+    # attack's target action)
+    baseline = _baseline_entry(combined_clean_results, combined_results, args.direction)
 
     requested = _resolve_technique_names(args.techniques, aggregated, f"direction={args.direction}")
     if requested is not None:
@@ -925,6 +933,7 @@ def cmd_technique_leaderboard(args):
         ci = f"{bucket['ci_low']:.0%}-{bucket['ci_high']:.0%}"
         print(f"{technique:<40} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
               f"{bucket['hijack_rate']:>11.0%} {ci:>15}")
+    print(f"\n{baseline_line(baseline)} (all techniques together)")
 
     pairwise_significance = None
     if len(rows) == 2:
@@ -944,11 +953,11 @@ def cmd_technique_leaderboard(args):
             args.report,
             markdown_content=render_technique_leaderboard_report(
                 rows, args.direction, args.defense, len(clients), pairwise_significance=pairwise_significance,
-                severity_filter=requested_severities,
+                severity_filter=requested_severities, baseline=baseline,
             ),
             json_content=render_technique_leaderboard_json_report(
                 rows, args.direction, args.defense, len(clients), pairwise_significance=pairwise_significance,
-                severity_filter=requested_severities,
+                severity_filter=requested_severities, baseline=baseline,
             ),
             csv_content=render_technique_leaderboard_csv_report(rows, args.direction, args.defense),
             message=f"\nwrote technique leaderboard to {args.report}",

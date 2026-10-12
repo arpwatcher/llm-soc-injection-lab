@@ -2488,3 +2488,17 @@ def test_matrix_shows_each_clients_no_injection_baseline(fake_ollama, tmp_path, 
     assert "ollama:gullible-model | 100% | 100% | 0%" in out
     rows = {row["client"]: row for row in csv.DictReader(io.StringIO(report_path.read_text()))}
     assert rows["ollama:dismiss-everything-model"]["baseline"] == "1.0"
+
+
+def test_technique_leaderboard_shows_the_shared_no_injection_baseline(fake_ollama, tmp_path, capsys):
+    """every technique runs on the same alerts against the same models, so
+    one pooled baseline is what each technique's rate is read against."""
+    md, js = tmp_path / "t.md", tmp_path / "t.json"
+    for path in (md, js):
+        main(["technique-leaderboard", "--models", "dismiss-everything-model,gullible-model", "--report", str(path)])
+    out = capsys.readouterr().out
+    # pooled: 9 of 18 eligible clean alerts dismissed with no injection (all from the dismiss-everything model)
+    line = "no-injection baseline: 9/18 already answered dismiss with no injection (50%)"
+    assert line in out
+    assert line in md.read_text()
+    assert json.loads(js.read_text())["baseline"]["eligible"] == 18

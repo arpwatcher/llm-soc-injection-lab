@@ -534,6 +534,7 @@ _TECHNIQUE_LEADERBOARD_CSV_FIELDS = [
 def render_technique_leaderboard_report(
     rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
     pairwise_significance: dict | None = None, severity_filter: list | None = None,
+    baseline: dict | None = None,
 ) -> str:
     """rows: list of (technique, bucket) pairs from aggregate_by_technique's
     output over every compared client's results concatenated together -
@@ -564,6 +565,10 @@ def render_technique_leaderboard_report(
             f"{bucket['hijack_rate']:.0%} | {bucket['ci_low']:.0%}-{bucket['ci_high']:.0%} |"
         )
     lines.append("")
+    if baseline is not None:
+        # one baseline for the whole table - every technique runs on the
+        # same alerts against the same clients
+        lines.extend([f"{baseline_line(baseline)} (all techniques together)", ""])
     if pairwise_significance is not None:
         p_value = pairwise_significance["p_value"]
         verdict = "significant" if is_significant(p_value) else "not significant"
@@ -578,6 +583,7 @@ def render_technique_leaderboard_report(
 def render_technique_leaderboard_json_report(
     rows: list[tuple[str, dict]], direction: str, defense: str, client_count: int,
     pairwise_significance: dict | None = None, severity_filter: list | None = None,
+    baseline: dict | None = None,
 ) -> str:
     """Same data as render_technique_leaderboard_report, as JSON instead of a document."""
     payload = {
@@ -587,6 +593,7 @@ def render_technique_leaderboard_json_report(
         "severity_filter": severity_filter,
         "techniques": [{"technique": technique, **bucket} for technique, bucket in rows],
         "pairwise_significance": pairwise_significance,
+        "baseline": baseline,
     }
     return json.dumps(payload, indent=2)
 
