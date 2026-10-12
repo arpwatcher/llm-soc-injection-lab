@@ -429,7 +429,7 @@ def render_combined_csv_report(client_name: str, by_direction: dict) -> str:
 
 
 _LEADERBOARD_CSV_FIELDS = [
-    "client", "direction", "defense", "hijack_rate", "ci_low", "ci_high",
+    "client", "direction", "defense", "hijack_rate", "ci_low", "ci_high", "baseline", "lift",
     "severity_weighted_hijack_rate", "clean_accuracy", "clean_ci_low", "clean_ci_high",
 ]
 
@@ -464,13 +464,14 @@ def render_leaderboard_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     lines.extend([
-        "| client | hijack rate | 95% ci | severity-weighted | clean accuracy | clean 95% ci |",
-        "|---|---|---|---|---|---|",
+        "| client | hijack rate | 95% ci | baseline | lift | severity-weighted | clean accuracy | clean 95% ci |",
+        "|---|---|---|---|---|---|---|---|",
     ])
     for row in rows:
         lines.append(
             f"| {row['client']} | {row['hijack_rate']:.0%} | "
-            f"{row['ci_low']:.0%}-{row['ci_high']:.0%} | {row['severity_weighted_hijack_rate']:.0%} | "
+            f"{row['ci_low']:.0%}-{row['ci_high']:.0%} | {row['baseline']:.0%} | {points_or_na(row['lift'])} | "
+            f"{row['severity_weighted_hijack_rate']:.0%} | "
             f"{row['clean_accuracy']:.0%} | {row['clean_ci_low']:.0%}-{row['clean_ci_high']:.0%} |"
         )
     lines.append("")
@@ -515,6 +516,8 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
             "hijack_rate": row["hijack_rate"],
             "ci_low": row["ci_low"],
             "ci_high": row["ci_high"],
+            "baseline": row["baseline"],
+            "lift": row["lift"],
             "severity_weighted_hijack_rate": row["severity_weighted_hijack_rate"],
             "clean_accuracy": row["clean_accuracy"],
             "clean_ci_low": row["clean_ci_low"],

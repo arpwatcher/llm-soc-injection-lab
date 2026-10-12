@@ -2438,3 +2438,36 @@ def test_summarize_shows_na_lift_for_a_report_saved_before_the_baseline_existed(
     assert main(["summarize", str(path)]) == 0
     lift_table = capsys.readouterr().out.split("in points")[1]
     assert "n/a" in lift_table
+
+
+def test_leaderboard_shows_baseline_and_lift_per_client(fake_ollama, tmp_path, capsys):
+    """ranked by raw hijack rate, a model that dismisses everything comes
+    out as the most hijacked - but its baseline is just as high, so the
+    injection's lift is nothing. a model the attack really talks round
+    has a low baseline and a big lift."""
+    report_path = tmp_path / "lb.json"
+    exit_code = main([
+        "leaderboard", "--models", "dismiss-everything-model,gullible-model", "--sort-by", "lift",
+        "--report", str(report_path),
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    rows = {row["client"]: row for row in json.loads(report_path.read_text())["clients"]}
+    lazy, gullible = rows["ollama:dismiss-everything-model"], rows["ollama:gullible-model"]
+    assert (lazy["hijack_rate"], lazy["baseline"], lazy["lift"]) == (1.0, 1.0, 0.0)
+    assert (gullible["baseline"], gullible["lift"]) == (0.0, gullible["hijack_rate"])
+    # sorted by lift, lowest first: the model the injection did nothing to leads
+    table = [line for line in out.splitlines() if line.startswith("ollama:") and " vs " not in line]
+    assert table[0].startswith("ollama:dismiss-everything-model")
+    assert "baseline   lift" in out
+
+
+def test_leaderboard_csv_and_markdown_carry_baseline_and_lift(tmp_path, capsys):
+    md, cs = tmp_path / "lb.md", tmp_path / "lb.csv"
+    main(["leaderboard", "--clients", "fake-vulnerable", "--report", str(md)])
+    main(["leaderboard", "--clients", "fake-vulnerable", "--report", str(cs)])
+    capsys.readouterr()
+    assert "| baseline | lift |" in md.read_text()
+    assert "| fake-vulnerable | 88% | 78%-93% | 0% | +88 |" in md.read_text()
+    row = next(csv.DictReader(io.StringIO(cs.read_text())))
+    assert (row["baseline"], row["lift"]) == ("0.0", "0.875")

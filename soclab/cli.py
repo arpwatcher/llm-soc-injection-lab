@@ -660,6 +660,7 @@ def cmd_full_report(args):
 
 _LEADERBOARD_SORT_ASCENDING = {
     "hijack_rate": True,
+    "lift": True,
     "severity_weighted_hijack_rate": True,
     "clean_accuracy": False,
 }
@@ -818,9 +819,13 @@ def cmd_leaderboard(args):
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
+        # each direction is named after its attack's target action
+        baseline = _baseline_entry(clean_results, results, args.direction)
         rows.append({
             "client": name,
             "hijack_rate": overall_hijack_rate(results),
+            "baseline": baseline["rate"],
+            "lift": baseline["lift"],
             "ci_low": ci_low,
             "ci_high": ci_high,
             "severity_weighted_hijack_rate": severity_weighted_hijack_rate(results),
@@ -835,13 +840,14 @@ def cmd_leaderboard(args):
     # at least 38 for the fake-* names, wider when a model label with its
     # sampling settings needs it, so the numeric columns stay lined up
     width = max([38, *(len(row["client"]) for row in rows)])
-    print(f"{'client':<{width}} {'hijack_rate':>12} {'95% ci':>15} {'severity_weighted':>18} "
-          f"{'clean_accuracy':>15} {'clean 95% ci':>15}")
+    print(f"{'client':<{width}} {'hijack_rate':>12} {'95% ci':>15} {'baseline':>9} {'lift':>6} "
+          f"{'severity_weighted':>18} {'clean_accuracy':>15} {'clean 95% ci':>15}")
     for row in rows:
         ci = f"{row['ci_low']:.0%}-{row['ci_high']:.0%}"
         clean_ci = f"{row['clean_ci_low']:.0%}-{row['clean_ci_high']:.0%}"
-        print(f"{row['client']:<{width}} {row['hijack_rate']:>11.0%} {ci:>15} "
-              f"{row['severity_weighted_hijack_rate']:>17.0%} {row['clean_accuracy']:>14.0%} {clean_ci:>15}")
+        print(f"{row['client']:<{width}} {row['hijack_rate']:>11.0%} {ci:>15} {row['baseline']:>9.0%} "
+              f"{points_or_na(row['lift']):>6} {row['severity_weighted_hijack_rate']:>17.0%} "
+              f"{row['clean_accuracy']:>14.0%} {clean_ci:>15}")
 
     pairwise_significance = None
     if len(clients) == 2:
