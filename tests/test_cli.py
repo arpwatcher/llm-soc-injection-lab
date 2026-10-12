@@ -7,6 +7,7 @@ import sys
 import pytest
 import requests
 
+import soclab.cli as cli_module
 from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
 from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
 
@@ -2502,3 +2503,21 @@ def test_technique_leaderboard_shows_the_shared_no_injection_baseline(fake_ollam
     assert line in out
     assert line in md.read_text()
     assert json.loads(js.read_text())["baseline"]["eligible"] == 18
+
+
+def test_check_ollama_estimates_how_long_a_full_report_takes(fake_ollama, monkeypatch, capsys):
+    """a full-report against a real model is long enough that it's worth
+    knowing up front - the one request check-ollama already sends is a
+    sample of the model's pace."""
+    clock = iter([100.0, 103.0])
+    monkeypatch.setattr(cli_module.time, "monotonic", lambda: next(clock))
+    assert main(["check-ollama", "--model", "robust-model"]) == 0
+    out = capsys.readouterr().out
+    # 3s a request: 576 requests is 28.8 min, the 288 of --defenses both 14.4
+    assert "that took 3.0s - at that pace a full-report is 576 requests, about 29 min (14 min with --defenses both)" in out
+    assert "an upper bound" in out
+
+
+@pytest.mark.parametrize("seconds, expected", [(20, "20s"), (89, "1 min"), (3000, "50 min"), (3700, "1h 02min")])
+def test_duration_formatting(seconds, expected):
+    assert cli_module._duration(seconds) == expected

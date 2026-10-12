@@ -1152,7 +1152,9 @@ def cmd_check_ollama(args):
         return
     _check_models_pulled([args.model], server)
     alert = generate_clean_alerts()[0]
+    started = time.monotonic()
     decision = analyze(alert, server)
+    seconds = time.monotonic() - started
     if decision.parse_error:
         raise ValueError(
             f"{args.model} answered alert {alert.id} in a form parse_response can't read: {decision.raw_response!r}"
@@ -1162,6 +1164,21 @@ def cmd_check_ollama(args):
         f"{args.model} answered alert {alert.id} with action={decision.action} "
         f"(expected {alert.ground_truth_action}, {verdict}): {decision.reasoning}"
     )
+    per_defense = len(generate_clean_alerts()) + sum(len(_injected_alerts_for(d)) for d in DIRECTIONS)
+    print(
+        f"that took {seconds:.1f}s - at that pace a full-report is {per_defense * len(DEFENSES)} requests, about "
+        f"{_duration(per_defense * len(DEFENSES) * seconds)} ({_duration(per_defense * 2 * seconds)} with "
+        f"--defenses both). an upper bound: this first request also loaded the model into memory"
+    )
+
+
+def _duration(seconds: float) -> str:
+    minutes = round(seconds / 60)
+    if minutes < 1:
+        return f"{round(seconds)}s"
+    if minutes < 60:
+        return f"{minutes} min"
+    return f"{minutes // 60}h {minutes % 60:02d}min"
 
 
 def _load_full_report(path: str) -> dict:

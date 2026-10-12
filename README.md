@@ -311,7 +311,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   mistaken for one at the model's default. `soclab check-ollama [--model M]` is the seconds-long check to
   run before any of that: the server answers, which models are pulled, and - with
   `--model` - one real alert sent to that model, showing whether its answer parses and
-  what it decided, so a broken setup fails here rather than partway into a long run.
+  what it decided, so a broken setup fails here rather than partway into a long run. It also
+  times that request and estimates a full-report from it (an upper bound - the first
+  request also loads the model into memory).
   `--cache FILE` (every command that can run a real model) saves each answer to a json
   file the moment it arrives and reuses whatever is already in it, so a run that dies
   partway - one request timing out, the laptop sleeping, ctrl-c - resumes from where it
@@ -528,7 +530,8 @@ listens on `localhost:11434` once the app is running, or after `ollama serve`):
 ```
 ollama pull llama3.2:3b && ollama pull mistral:7b && ollama pull qwen2.5:7b
 
-# 1. seconds-long check: server up, models pulled, one alert answered and parsed
+# 1. seconds-long check: server up, models pulled, one alert answered and parsed,
+#    plus an estimate of how long step 2 will take with this model
 python -m soclab.cli check-ollama --model llama3.2:3b
 
 # 2. one full-report per model - pinned temperature/seed so the run can be repeated,
@@ -565,7 +568,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-506 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+511 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
