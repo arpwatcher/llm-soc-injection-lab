@@ -333,7 +333,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   files - one per model - and puts them in one table: hijack rate per defense (both
   directions combined), clean-alert accuracy per defense, and the injection lift over the
   no-injection baseline per defense (pooled across both directions the same way the hijack
-  rate is), a row per report in the order
+  rate is), and how many of the 16 techniques (both directions) had a significant paired
+  McNemar lift per defense, a row per report in the order
   given, with the same `--report` md/json/csv choice as everything else (csv in long form, one
   row per model and defense). That's the cross-model headline result, which full-report,
   being single-client, can't give on its own. It refuses reports run with different
@@ -587,7 +588,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-528 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+530 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

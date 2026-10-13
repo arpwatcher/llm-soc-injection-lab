@@ -896,6 +896,15 @@ def render_summary_report(rows: list[dict], defenses: list[str], severity_filter
     lines.append("|---|" + "|".join("---" for _ in defenses) + "|")
     for row in rows:
         lines.append(f"| {row['client']} | " + " | ".join(points_or_na(row["lift"][d]) for d in defenses) + " |")
+    if any("significant" in row for row in rows):
+        lines.extend([
+            "", f"## techniques with a significant lift (both directions, paired McNemar, p<{SIGNIFICANCE_ALPHA})", "",
+        ])
+        lines.append("| client | " + " | ".join(defenses) + " |")
+        lines.append("|---|" + "|".join("---" for _ in defenses) + "|")
+        for row in rows:
+            cells = " | ".join(row.get("significant", {}).get(d) or "n/a" for d in defenses)
+            lines.append(f"| {row['client']} | {cells} |")
     lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
     return "\n".join(lines)
 
@@ -910,7 +919,9 @@ def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
     (client, defense), the shape a spreadsheet pivot or a plotting
     library's grouped bar chart takes directly."""
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["client", "defense", "hijack_rate", "clean_accuracy", "lift", "source"])
+    writer = csv.DictWriter(
+        output, fieldnames=["client", "defense", "hijack_rate", "clean_accuracy", "lift", "significant_techniques", "source"],
+    )
     writer.writeheader()
     for row in rows:
         for defense in defenses:
@@ -923,6 +934,7 @@ def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
                     else row["clean_accuracy"][defense]
                 ),
                 "lift": "" if row["lift"][defense] is None else row["lift"][defense],
+                "significant_techniques": row.get("significant", {}).get(defense) or "",
                 "source": row["source"],
             })
     return output.getvalue()

@@ -1284,6 +1284,17 @@ def _combined_lift(report: dict, defense: str) -> float | None:
     return report["summary_by_defense"][defense] - rate
 
 
+def _significant_techniques(report: dict, defense: str) -> str | None:
+    """"14/16" - how many techniques, across both directions, had a paired
+    McNemar test clear significance under that defense. None for a defense
+    the report didn't run, or a report saved before the test existed."""
+    by_direction = report.get("technique_lift_by_direction")
+    if not by_direction or defense not in report["summary_by_defense"]:
+        return None
+    lifts = [entry for by_defense in by_direction.values() for entry in by_defense[defense].values()]
+    return f"{sum(1 for entry in lifts if is_significant(entry['p_value']))}/{len(lifts)}"
+
+
 def cmd_summarize(args):
     """One table across several saved full-report json files - the
     cross-model headline result (how much does each defense help, per
@@ -1320,6 +1331,7 @@ def cmd_summarize(args):
                 if report.get("clean_accuracy_by_defense") else None
             ),
             "lift": {d: _combined_lift(report, d) for d in defenses},
+            "significant": {d: _significant_techniques(report, d) for d in defenses},
         }
         for path, report in reports
     ]
@@ -1341,6 +1353,10 @@ def cmd_summarize(args):
     print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
     for row in rows:
         print(f"{row['client']:<{width}} " + " ".join(f"{points_or_na(row['lift'][d]):>9}" for d in defenses))
+    print(f"\ntechniques with a significant lift (both directions, paired McNemar, p<{SIGNIFICANCE_ALPHA})")
+    print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
+    for row in rows:
+        print(f"{row['client']:<{width}} " + " ".join(f"{row['significant'][d] or 'n/a':>9}" for d in defenses))
 
     if args.report:
         _write_report(

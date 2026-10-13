@@ -2424,7 +2424,8 @@ def test_summarize_shows_the_injection_lift_per_model(fake_ollama, tmp_path, cap
     capsys.readouterr()
     assert main(["summarize", str(stubborn), str(lazy)]) == 0
     lift_table = capsys.readouterr().out.split("injection lift over the no-injection baseline, in points")[1]
-    rows = {line.split()[0]: line.split()[1:] for line in lift_table.strip().splitlines()[1:]}
+    lift_table = lift_table.strip().split("\n\n")[0]  # just this table, not the sections after it
+    rows = {line.split()[0]: line.split()[1:] for line in lift_table.splitlines()[1:]}
     assert rows["fake-stubborn"] == ["+49", "+49", "+49", "+0"]
     # dismisses all 9 eligible alerts and escalates none of the 7 benign ones, injected or not:
     # pooled hijack 72/128 vs pooled baseline 9/16 - the same 56%, so no lift at all
@@ -2623,3 +2624,34 @@ def test_leaderboard_counts_techniques_with_a_significant_lift(fake_ollama, tmp_
     assert "| significant techniques |" in md.read_text()
     csv_rows = {r["client"]: r for r in csv.DictReader(io.StringIO(cs.read_text()))}
     assert (csv_rows["ollama:gullible-model"]["significant_techniques"], csv_rows["ollama:gullible-model"]["techniques"]) == ("7", "8")
+
+
+def test_summarize_counts_significant_techniques_per_model_and_defense(fake_ollama, tmp_path, capsys):
+    stubborn = _saved_full_report(tmp_path, "fake-stubborn")
+    lazy = tmp_path / "lazy.json"
+    main(["full-report", "--client", "ollama", "--model", "dismiss-everything-model", "--report", str(lazy)])
+    md, cs = tmp_path / "s.md", tmp_path / "s.csv"
+    capsys.readouterr()
+    assert main(["summarize", str(stubborn), str(lazy)]) == 0
+    table = capsys.readouterr().out.split("techniques with a significant lift")[1]
+    rows = {line.split()[0]: line.split()[1:] for line in table.strip().splitlines()[2:]}
+    # stubborn: 7 dismiss techniques under none/sandwich/strict, nothing escalates it; nothing under both
+    assert rows["fake-stubborn"] == ["7/16", "7/16", "7/16", "0/16"]
+    assert rows["ollama:dismiss-everything-model"] == ["0/16", "0/16", "0/16", "0/16"]
+    main(["summarize", str(stubborn), str(lazy), "--report", str(md)])
+    main(["summarize", str(stubborn), str(lazy), "--report", str(cs)])
+    capsys.readouterr()
+    assert "| fake-stubborn | 7/16 | 7/16 | 7/16 | 0/16 |" in md.read_text()
+    csv_rows = {(r["client"], r["defense"]): r for r in csv.DictReader(io.StringIO(cs.read_text()))}
+    assert csv_rows[("fake-stubborn", "none")]["significant_techniques"] == "7/16"
+
+
+def test_summarize_shows_na_significance_for_a_report_saved_before_the_test_existed(tmp_path, capsys):
+    path = _saved_full_report(tmp_path, "fake-stubborn")
+    report = json.loads(path.read_text())
+    del report["technique_lift_by_direction"]
+    path.write_text(json.dumps(report))
+    capsys.readouterr()
+    assert main(["summarize", str(path)]) == 0
+    table = capsys.readouterr().out.split("techniques with a significant lift")[1]
+    assert table.strip().splitlines()[2].split()[1:] == ["n/a"] * 4
