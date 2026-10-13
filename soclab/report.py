@@ -510,8 +510,8 @@ def render_leaderboard_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     lines.extend([
-        "| client | hijack rate | 95% ci | baseline | lift | significant techniques | severity-weighted | "
-        "clean accuracy | clean 95% ci |",
+        ("| client | hijack rate | 95% ci | baseline | lift | significant techniques | severity-weighted | "
+         "clean accuracy | clean 95% ci |"),
         "|---|---|---|---|---|---|---|---|---|",
     ])
     for row in rows:
