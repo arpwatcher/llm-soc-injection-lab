@@ -565,6 +565,7 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
 
 _TECHNIQUE_LEADERBOARD_CSV_FIELDS = [
     "technique", "direction", "defense", "hijacked", "resisted", "other", "total", "hijack_rate", "ci_low", "ci_high",
+    "lift", "p_value",
 ]
 
 
@@ -593,13 +594,15 @@ def render_technique_leaderboard_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     lines.extend([
-        "| technique | hijacked | resisted | other | hijack rate | 95% ci |",
-        "|---|---|---|---|---|---|",
+        "| technique | hijacked | resisted | other | hijack rate | 95% ci | lift | p |",
+        "|---|---|---|---|---|---|---|---|",
     ])
     for technique, bucket in rows:
+        p_value = bucket.get("p_value")
         lines.append(
             f"| {technique} | {bucket['hijacked']} | {bucket['resisted']} | {bucket['other']} | "
-            f"{bucket['hijack_rate']:.0%} | {bucket['ci_low']:.0%}-{bucket['ci_high']:.0%} |"
+            f"{bucket['hijack_rate']:.0%} | {bucket['ci_low']:.0%}-{bucket['ci_high']:.0%} | "
+            f"{points_or_na(bucket.get('lift'))} | {'n/a' if p_value is None else f'{p_value:.4f}'} |"
         )
     lines.append("")
     if baseline is not None:
@@ -655,6 +658,8 @@ def render_technique_leaderboard_csv_report(rows: list[tuple[str, dict]], direct
             "hijack_rate": bucket["hijack_rate"],
             "ci_low": bucket["ci_low"],
             "ci_high": bucket["ci_high"],
+            "lift": bucket.get("lift", ""),
+            "p_value": bucket.get("p_value", ""),
         })
     return output.getvalue()
 

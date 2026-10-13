@@ -76,6 +76,7 @@ from soclab.scoring import (
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
     paired_lift_by_technique,
+    pooled_paired_lift,
     resisted_and_total,
     score_batch,
     severity_weighted_hijack_rate,
@@ -955,14 +956,25 @@ def cmd_technique_leaderboard(args):
     for _, client in clients:
         _expect_requests(client, len(clean_alerts) + len(injected_alerts))
     results_by_client = {}
+    clean_by_client = {}
     combined_results = []
     combined_clean_results = []
     for name, client in clients:
-        combined_clean_results.extend(score_batch(clean_alerts, client, defense=args.defense))
+        clean_by_client[name] = score_batch(clean_alerts, client, defense=args.defense)
+        combined_clean_results.extend(clean_by_client[name])
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         combined_results.extend(results)
     aggregated = aggregate_by_technique(combined_results)
+    # each technique's lift and paired test, pooled across the clients -
+    # pairing stays inside each client, so every pair is a distinct
+    # (client, alert)
+    lifts = pooled_paired_lift(
+        [(clean_by_client[name], results_by_client[name]) for name in results_by_client], args.direction,
+    )
+    for technique, bucket in aggregated.items():
+        bucket["lift"] = lifts[technique]["lift"]
+        bucket["p_value"] = lifts[technique]["p_value"]
     # every technique runs on the same alerts against the same clients, so
     # they share one no-injection baseline - pooled across the clients the
     # same way the rates above are (each direction is named after its
@@ -979,11 +991,12 @@ def cmd_technique_leaderboard(args):
 
     print(f"direction={args.direction} defense={args.defense} across {len(clients)} client(s)\n")
     _print_severity_filter(requested_severities)
-    print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15}")
+    print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15} "
+          f"{'lift':>6} {'p':>8}")
     for technique, bucket in rows:
         ci = f"{bucket['ci_low']:.0%}-{bucket['ci_high']:.0%}"
         print(f"{technique:<40} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
-              f"{bucket['hijack_rate']:>11.0%} {ci:>15}")
+              f"{bucket['hijack_rate']:>11.0%} {ci:>15} {points_or_na(bucket['lift']):>6} {bucket['p_value']:>8.4f}")
     print(f"\n{baseline_line(baseline)} (all techniques together)")
 
     pairwise_significance = None

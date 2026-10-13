@@ -379,7 +379,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   ones stop and the safe ones begin - useful for a thesis table that should only list the
   techniques that actually work. Every technique runs on the same alerts against the same clients, so
   they share one no-injection baseline (pooled across the clients, 16 extra clean requests
-  each), printed and saved under the table - each technique's rate is read against it. With exactly
+  each), printed and saved under the table - each technique's rate is read against it. Each
+  technique also gets its lift and the paired McNemar p-value pooled across the clients
+  (`pooled_paired_lift` - pairing stays inside each client since alert ids repeat across
+  them, so every pair is a distinct client and alert and the test on the summed counts holds). With exactly
   two techniques ranked (via `--techniques`, `--min-rate`, or because the battery itself only
   has two), also
   runs a two-proportion z-test between them, the technique-axis mirror of `leaderboard`'s own
@@ -581,7 +584,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-523 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+527 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

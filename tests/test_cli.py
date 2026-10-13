@@ -2591,3 +2591,20 @@ def test_matrix_report_carries_significance_marks_and_p_values(tmp_path, capsys)
     row = next(csv.DictReader(io.StringIO(cs.read_text())))
     assert float(row["direct_override p"]) == pytest.approx(2 / 512)
     assert row["unicode_homoglyph p"] == "1.0"
+
+
+def test_technique_leaderboard_pools_the_paired_test_across_models(fake_ollama, tmp_path, capsys):
+    """pooled across a model that dismisses everything and one the attack
+    really moves, direct_override's hijack rate is 100% - but only the
+    second model's 9 alerts switched answers because of it, so the lift is
+    50 points, not 100."""
+    md, js, cs = tmp_path / "t.md", tmp_path / "t.json", tmp_path / "t.csv"
+    for path in (md, js, cs):
+        main(["technique-leaderboard", "--models", "dismiss-everything-model,gullible-model", "--report", str(path)])
+    capsys.readouterr()
+    override = next(t for t in json.loads(js.read_text())["techniques"] if t["technique"] == "direct_override")
+    assert (override["hijack_rate"], override["lift"]) == (1.0, 0.5)
+    assert override["p_value"] == pytest.approx(2 / 512)
+    assert "| direct_override | 18 | 0 | 0 | 100% | 82%-100% | +50 | 0.0039 |" in md.read_text()
+    row = next(r for r in csv.DictReader(io.StringIO(cs.read_text())) if r["technique"] == "direct_override")
+    assert (row["lift"], float(row["p_value"])) == ("0.5", pytest.approx(2 / 512))
