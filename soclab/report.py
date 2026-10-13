@@ -659,6 +659,20 @@ def render_technique_leaderboard_csv_report(rows: list[tuple[str, dict]], direct
     return output.getvalue()
 
 
+MATRIX_LEGEND = (
+    "* = that technique's lift over the client's own no-injection baseline is significant "
+    f"(paired exact McNemar test, p<{SIGNIFICANCE_ALPHA})"
+)
+
+
+def matrix_cell(row: dict, technique: str) -> str:
+    """A matrix cell's hijack rate, starred when its paired test says the
+    technique really moved that client. A row with no p_values (built by
+    hand, or saved before the test existed) just shows the rate."""
+    p_value = row.get("p_values", {}).get(technique, 1.0)
+    return f"{row['rates'][technique]:.0%}" + ("*" if is_significant(p_value) else "")
+
+
 def render_matrix_report(
     rows: list[dict], technique_names: list[str], direction: str, defense: str,
     severity_filter: list | None = None,
@@ -691,9 +705,9 @@ def render_matrix_report(
         lines.append("")
     lines.extend([header, separator])
     for row in rows:
-        cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
+        cells = " | ".join(matrix_cell(row, technique) for technique in technique_names)
         lines.append(f"| {row['client']} | {cells} | {row['average']:.0%} | {row['baseline']:.0%} |")
-    lines.append("")
+    lines.extend(["", MATRIX_LEGEND, ""])
     return "\n".join(lines)
 
 
@@ -718,7 +732,10 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
     other CSV exports here use), since a wide grid is the natural shape
     for a spreadsheet heatmap built directly from this file."""
     output = io.StringIO()
-    fieldnames = ["client", "direction", "defense", *technique_names, "average", "baseline"]
+    fieldnames = [
+        "client", "direction", "defense", *technique_names, "average", "baseline",
+        *(f"{technique} p" for technique in technique_names),
+    ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for row in rows:
@@ -729,6 +746,7 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
             **row["rates"],
             "average": row["average"],
             "baseline": row["baseline"],
+            **{f"{technique} p": row.get("p_values", {}).get(technique, "") for technique in technique_names},
         })
     return output.getvalue()
 

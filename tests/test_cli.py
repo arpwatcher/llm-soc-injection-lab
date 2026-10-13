@@ -1226,7 +1226,7 @@ def test_matrix_models_gives_each_real_model_its_own_row(fake_ollama, capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "ollama:robust-model | 0% | 0% | 0%" in out
-    assert "ollama:gullible-model | 100% | 0% | 50%" in out
+    assert "ollama:gullible-model | 100%* | 0% | 50%" in out
 
 
 def test_models_rejects_duplicate_model(capsys):
@@ -1619,7 +1619,7 @@ def test_matrix_prints_a_rate_for_every_client_technique_pair_plus_an_average_co
     assert "client | direct_override | unicode_homoglyph | average" in out
     assert "fake-robust | 0% | 0% | 0%" in out
     # fake-vulnerable: 100% on direct_override, 0% on unicode_homoglyph (its one blind spot) -> 50% average
-    assert "fake-vulnerable | 100% | 0% | 50%" in out
+    assert "fake-vulnerable | 100%* | 0% | 50%" in out
 
 
 def test_matrix_sorts_rows_by_average_most_robust_first_regardless_of_clients_order(capsys):
@@ -2486,8 +2486,10 @@ def test_matrix_shows_each_clients_no_injection_baseline(fake_ollama, tmp_path, 
     ])
     out = capsys.readouterr().out
     assert "client | direct_override | average | baseline" in out
+    # same 100% cell for both, but only the model the injection actually
+    # moved gets the star - the other dismisses those alerts regardless
     assert "ollama:dismiss-everything-model | 100% | 100% | 100%" in out
-    assert "ollama:gullible-model | 100% | 100% | 0%" in out
+    assert "ollama:gullible-model | 100%* | 100% | 0%" in out
     rows = {row["client"]: row for row in csv.DictReader(io.StringIO(report_path.read_text()))}
     assert rows["ollama:dismiss-everything-model"]["baseline"] == "1.0"
 
@@ -2574,3 +2576,18 @@ def test_full_report_saves_per_direction_lift_tables(tmp_path, capsys):
     # 7 benign alerts, all escalated once injected: 2 * 0.5^7
     assert (false_urgency["pairs"], false_urgency["gained"]) == (7, 7)
     assert false_urgency["p_value"] == pytest.approx(2 / 128)
+
+
+def test_matrix_report_carries_significance_marks_and_p_values(tmp_path, capsys):
+    md, js, cs = tmp_path / "m.md", tmp_path / "m.json", tmp_path / "m.csv"
+    for path in (md, js, cs):
+        main(["matrix", "--clients", "fake-vulnerable", "--techniques", "direct_override,unicode_homoglyph",
+              "--report", str(path)])
+    capsys.readouterr()
+    assert "| fake-vulnerable | 100%* | 0% | 50% | 0% |" in md.read_text()
+    assert "paired exact McNemar test" in md.read_text()
+    p_values = json.loads(js.read_text())["clients"][0]["p_values"]
+    assert p_values == {"direct_override": pytest.approx(2 / 512), "unicode_homoglyph": 1.0}
+    row = next(csv.DictReader(io.StringIO(cs.read_text())))
+    assert float(row["direct_override p"]) == pytest.approx(2 / 512)
+    assert row["unicode_homoglyph p"] == "1.0"

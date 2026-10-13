@@ -32,8 +32,10 @@ from soclab.llm_client import (
     VulnerableFakeClient,
 )
 from soclab.report import (
+    MATRIX_LEGEND,
     baseline_line,
     combined_rate_by_defense,
+    matrix_cell,
     percent_or_na,
     points_or_na,
     rate_by_defense,
@@ -1049,10 +1051,12 @@ def cmd_matrix(args):
         # same alerts, so whatever the model already answers with no
         # injection at all is part of every cell rather than the attack's
         # doing - each direction is named after its attack's target action
-        baseline, eligible = baseline_and_total(score_batch(clean_alerts, client, defense=args.defense), args.direction)
+        clean_results = score_batch(clean_alerts, client, defense=args.defense)
+        baseline, eligible = baseline_and_total(clean_results, args.direction)
         results = score_batch(injected_alerts, client, defense=args.defense)
         results_by_client[name] = results
         aggregated = aggregate_by_technique(results)
+        lifts = paired_lift_by_technique(clean_results, results, args.direction)
         # a technique can be entirely absent from aggregated if --severity
         # filtered out every alert it would otherwise have applied to (e.g.
         # --severity critical under --direction escalate, where no
@@ -1063,6 +1067,9 @@ def cmd_matrix(args):
         rows.append({
             "client": name, "rates": rates, "average": sum(rates.values()) / len(technique_names),
             "baseline": baseline / eligible if eligible else 0.0,
+            # each cell's own paired test: did this technique move this
+            # client off its own no-injection answers, beyond chance
+            "p_values": {technique: lifts.get(technique, {}).get("p_value", 1.0) for technique in technique_names},
         })
     rows.sort(key=lambda row: row["average"])
 
@@ -1070,8 +1077,9 @@ def cmd_matrix(args):
     _print_severity_filter(requested_severities)
     print("client | " + " | ".join(technique_names) + " | average | baseline")
     for row in rows:
-        cells = " | ".join(f"{row['rates'][technique]:.0%}" for technique in technique_names)
+        cells = " | ".join(matrix_cell(row, technique) for technique in technique_names)
         print(f"{row['client']} | {cells} | {row['average']:.0%} | {row['baseline']:.0%}")
+    print(MATRIX_LEGEND)
 
     if args.report:
         _write_report(
