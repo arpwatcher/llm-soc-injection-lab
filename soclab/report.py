@@ -467,8 +467,17 @@ def render_combined_csv_report(client_name: str, by_direction: dict) -> str:
 
 _LEADERBOARD_CSV_FIELDS = [
     "client", "direction", "defense", "hijack_rate", "ci_low", "ci_high", "baseline", "lift",
+    "significant_techniques", "techniques",
     "severity_weighted_hijack_rate", "clean_accuracy", "clean_ci_low", "clean_ci_high",
 ]
+
+
+def _significant_count(row: dict) -> str:
+    """"7/8" - how many techniques' paired tests cleared significance for
+    that client; n/a for a row built without them."""
+    if "significant_techniques" not in row:
+        return "n/a"
+    return f"{row['significant_techniques']}/{row['techniques']}"
 
 
 def render_leaderboard_report(
@@ -501,13 +510,15 @@ def render_leaderboard_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     lines.extend([
-        "| client | hijack rate | 95% ci | baseline | lift | severity-weighted | clean accuracy | clean 95% ci |",
-        "|---|---|---|---|---|---|---|---|",
+        "| client | hijack rate | 95% ci | baseline | lift | significant techniques | severity-weighted | "
+        "clean accuracy | clean 95% ci |",
+        "|---|---|---|---|---|---|---|---|---|",
     ])
     for row in rows:
         lines.append(
             f"| {row['client']} | {row['hijack_rate']:.0%} | "
             f"{row['ci_low']:.0%}-{row['ci_high']:.0%} | {row['baseline']:.0%} | {points_or_na(row['lift'])} | "
+            f"{_significant_count(row)} | "
             f"{row['severity_weighted_hijack_rate']:.0%} | "
             f"{row['clean_accuracy']:.0%} | {row['clean_ci_low']:.0%}-{row['clean_ci_high']:.0%} |"
         )
@@ -555,6 +566,8 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
             "ci_high": row["ci_high"],
             "baseline": row["baseline"],
             "lift": row["lift"],
+            "significant_techniques": row.get("significant_techniques", ""),
+            "techniques": row.get("techniques", ""),
             "severity_weighted_hijack_rate": row["severity_weighted_hijack_rate"],
             "clean_accuracy": row["clean_accuracy"],
             "clean_ci_low": row["clean_ci_low"],

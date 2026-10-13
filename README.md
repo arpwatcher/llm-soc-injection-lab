@@ -355,6 +355,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   Each row also has the no-injection baseline and the injection lift over it - ranked by raw
   hijack rate, a model that dismisses everything comes out as the most hijacked though its
   baseline is just as high and the attack moved it not at all.
+  A significant-techniques column (`7/8`) counts how many techniques' paired McNemar tests
+  cleared p<0.05 for that client - a count rather than one pooled test, since pooling
+  techniques would reuse each clean answer once per technique.
   `--sort-by hijack_rate|lift|severity_weighted_hijack_rate|clean_accuracy` picks which column
   ranks the table (default hijack_rate) - always most-robust-first regardless of column,
   since higher is better for clean_accuracy but lower is better for the other two. With
@@ -584,7 +587,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-527 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+528 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

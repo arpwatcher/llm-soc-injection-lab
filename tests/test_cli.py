@@ -2608,3 +2608,18 @@ def test_technique_leaderboard_pools_the_paired_test_across_models(fake_ollama, 
     assert "| direct_override | 18 | 0 | 0 | 100% | 82%-100% | +50 | 0.0039 |" in md.read_text()
     row = next(r for r in csv.DictReader(io.StringIO(cs.read_text())) if r["technique"] == "direct_override")
     assert (row["lift"], float(row["p_value"])) == ("0.5", pytest.approx(2 / 512))
+
+
+def test_leaderboard_counts_techniques_with_a_significant_lift(fake_ollama, tmp_path, capsys):
+    """per model, how many techniques' paired tests cleared p<0.05 - the
+    model that dismisses everything has the higher hijack rate and none."""
+    md, cs = tmp_path / "lb.md", tmp_path / "lb.csv"
+    for path in (md, cs):
+        main(["leaderboard", "--models", "dismiss-everything-model,gullible-model", "--report", str(path)])
+    out = capsys.readouterr().out
+    rows = {line.split()[0]: line.split() for line in out.splitlines() if line.startswith("ollama:") and " vs " not in line}
+    assert rows["ollama:dismiss-everything-model"][5] == "0/8"
+    assert rows["ollama:gullible-model"][5] == "7/8"
+    assert "| significant techniques |" in md.read_text()
+    csv_rows = {r["client"]: r for r in csv.DictReader(io.StringIO(cs.read_text()))}
+    assert (csv_rows["ollama:gullible-model"]["significant_techniques"], csv_rows["ollama:gullible-model"]["techniques"]) == ("7", "8")

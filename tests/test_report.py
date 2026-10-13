@@ -592,7 +592,7 @@ def test_render_leaderboard_csv_report_is_valid_csv_with_expected_shape():
 def test_render_leaderboard_report_includes_clean_accuracy_confidence_interval():
     report = render_leaderboard_report(_sample_leaderboard_rows(), direction="dismiss", defense="none")
     assert "clean 95% ci" in report
-    assert "| fake-robust | 0% | 0%-9% | 0% | +0 | 0% | 100% | 68%-100% |" in report
+    assert "| fake-robust | 0% | 0%-9% | 0% | +0 | n/a | 0% | 100% | 68%-100% |" in report
 
 
 def test_render_leaderboard_transcript_is_valid_json_keyed_by_client():
