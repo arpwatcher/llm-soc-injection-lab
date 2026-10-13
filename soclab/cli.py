@@ -61,6 +61,7 @@ from soclab.report import (
     render_technique_leaderboard_json_report,
     render_technique_leaderboard_report,
     render_transcript,
+    technique_lift_rows,
 )
 from soclab.scoring import (
     SIGNIFICANCE_ALPHA,
@@ -72,6 +73,7 @@ from soclab.scoring import (
     is_significant,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
+    paired_lift_by_technique,
     resisted_and_total,
     score_batch,
     severity_weighted_hijack_rate,
@@ -246,6 +248,25 @@ def _baseline_by_defense(clean_results_by_defense: dict, results_by_defense: dic
         defense: _baseline_entry(clean_results_by_defense[defense], results_by_defense[defense], target_action)
         for defense in results_by_defense
     }
+
+
+def _print_technique_lift(lifts: dict) -> None:
+    print("\nper-technique lift, each injected alert paired with its clean answer (exact McNemar test):")
+    print(f"{'technique':<36} {'hijack_rate':>12} {'baseline':>9} {'lift':>6} {'p':>8}")
+    for technique, rate, baseline, lift, p_value, verdict in technique_lift_rows(lifts):
+        print(f"{technique:<36} {rate:>11.0%} {baseline:>9.0%} {lift:>6} {p_value:>8.4f}  {verdict}")
+
+
+def _print_significant_lift_counts(lifts_by_defense: dict, heading: str) -> None:
+    """compare/full-report run every defense, so a full per-technique table
+    for each would bury the terminal - one line per defense here, the
+    tables themselves go into the saved report."""
+    print(heading)
+    for defense, lifts in lifts_by_defense.items():
+        significant = sum(1 for entry in lifts.values() if is_significant(entry["p_value"]))
+        print(f"  defense={defense}: {significant}/{len(lifts)} techniques with a significant lift "
+              f"(p<{SIGNIFICANCE_ALPHA})")
+    print()
 
 
 def _print_baseline_summary(baseline_by_defense: dict, heading: str) -> None:
@@ -464,6 +485,8 @@ def cmd_run(args):
     # each direction is named after its attack's target action
     baseline = _baseline_entry(clean_results, injected_results, args.direction)
     print(baseline_line(baseline))
+    technique_lift = paired_lift_by_technique(clean_results, injected_results, args.direction)
+    _print_technique_lift(technique_lift)
 
     if args.report:
         severity_weighted = {args.defense: severity_weighted_hijack_rate(injected_results)}
@@ -471,6 +494,7 @@ def cmd_run(args):
         severity_breakdown_by_defense = {args.defense: severity_breakdown}
         clean_accuracy_by_defense = {args.defense: clean_correct / clean_total if clean_total else 0.0}
         baseline_by_defense = {args.defense: baseline}
+        technique_lift_by_defense = {args.defense: technique_lift}
         _write_report(
             args.report,
             markdown_content=render_markdown_report(
@@ -480,6 +504,7 @@ def cmd_run(args):
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 baseline_by_defense=baseline_by_defense,
+                technique_lift_by_defense=technique_lift_by_defense,
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
@@ -489,6 +514,7 @@ def cmd_run(args):
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 baseline_by_defense=baseline_by_defense,
+                technique_lift_by_defense=technique_lift_by_defense,
                 severity_filter=requested_severities,
             ),
             csv_content=render_csv_report(_client_label(args), {args.defense: aggregated}, direction=args.direction),
@@ -531,6 +557,13 @@ def cmd_compare(args):
     )
     baseline_by_defense = _baseline_by_defense(clean_results_by_defense, results_by_defense, args.direction)
     _print_baseline_summary(baseline_by_defense, "summary: injection lift over the no-injection baseline")
+    technique_lift_by_defense = {
+        defense: paired_lift_by_technique(clean_results_by_defense[defense], results, args.direction)
+        for defense, results in results_by_defense.items()
+    }
+    _print_significant_lift_counts(
+        technique_lift_by_defense, "per-technique lift, paired by alert (exact McNemar test) - tables in --report:",
+    )
 
     if args.report:
         _write_report(
@@ -543,6 +576,7 @@ def cmd_compare(args):
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 baseline_by_defense=baseline_by_defense,
+                technique_lift_by_defense=technique_lift_by_defense,
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
@@ -553,6 +587,7 @@ def cmd_compare(args):
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 baseline_by_defense=baseline_by_defense,
+                technique_lift_by_defense=technique_lift_by_defense,
                 severity_filter=requested_severities,
             ),
             csv_content=render_csv_report(_client_label(args), per_defense, direction=args.direction),
@@ -623,6 +658,18 @@ def cmd_full_report(args):
         _print_baseline_summary(
             baseline_by_defense, f"summary: injection lift over the no-injection baseline, direction={direction}",
         )
+    technique_lift_by_direction = {
+        direction: {
+            defense: paired_lift_by_technique(clean_results_by_defense[defense], results, direction)
+            for defense, results in results_by_direction[direction].items()
+        }
+        for direction in DIRECTIONS
+    }
+    for direction, lifts_by_defense in technique_lift_by_direction.items():
+        _print_significant_lift_counts(
+            lifts_by_defense,
+            f"per-technique lift, paired by alert (exact McNemar test), direction={direction} - tables in the report:",
+        )
 
     _write_report(
         args.report,
@@ -634,6 +681,7 @@ def cmd_full_report(args):
             severity_breakdown_by_direction=severity_breakdown_by_direction,
             clean_accuracy_by_defense=clean_accuracy_by_defense,
             baseline_by_direction=baseline_by_direction,
+            technique_lift_by_direction=technique_lift_by_direction,
             severity_filter=requested_severities,
         ),
         json_content=render_combined_json_report(
@@ -644,6 +692,7 @@ def cmd_full_report(args):
             severity_breakdown_by_direction=severity_breakdown_by_direction,
             clean_accuracy_by_defense=clean_accuracy_by_defense,
             baseline_by_direction=baseline_by_direction,
+            technique_lift_by_direction=technique_lift_by_direction,
             severity_filter=requested_severities,
         ),
         csv_content=render_combined_csv_report(_client_label(args), by_direction),

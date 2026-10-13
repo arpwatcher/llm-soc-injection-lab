@@ -120,6 +120,30 @@ def baseline_line(entry: dict) -> str:
     )
 
 
+def technique_lift_rows(lifts: dict) -> list[tuple]:
+    """(technique, hijack rate, baseline, lift, p-value, verdict) per
+    technique from scoring.paired_lift_by_technique - the shape both the
+    terminal table and the markdown one print."""
+    return [
+        (technique, entry["injected_rate"], entry["baseline_rate"], points_or_na(entry["lift"]),
+         entry["p_value"], "significant" if is_significant(entry["p_value"]) else "not significant")
+        for technique, entry in lifts.items()
+    ]
+
+
+def _render_technique_lift_table(lifts: dict) -> list[str]:
+    lines = [
+        "per-technique lift, each injected alert paired with its clean answer (exact McNemar test):",
+        "",
+        "| technique | hijack rate | baseline | lift | p | |",
+        "|---|---|---|---|---|---|",
+    ]
+    for technique, rate, baseline, lift, p_value, verdict in technique_lift_rows(lifts):
+        lines.append(f"| {technique} | {rate:.0%} | {baseline:.0%} | {lift} | {p_value:.4f} | {verdict} |")
+    lines.append("")
+    return lines
+
+
 def _render_defense_sections(
     per_defense: dict,
     severity_weighted_by_defense: dict | None = None,
@@ -128,6 +152,7 @@ def _render_defense_sections(
     heading_level: str = "##",
     severity_breakdown_by_defense: dict | None = None,
     baseline_by_defense: dict | None = None,
+    technique_lift_by_defense: dict | None = None,
 ) -> list[str]:
     """per_defense maps defense name -> aggregate_by_technique() output for
     that defense, e.g. {"none": {...}, "sandwich": {...}}. Shared by both
@@ -176,6 +201,9 @@ def _render_defense_sections(
         lines.append(f"unparseable responses: {unparseable}/{sum(bucket['total'] for bucket in aggregated.values())}")
         if baseline_by_defense is not None and defense in baseline_by_defense:
             lines.append(baseline_line(baseline_by_defense[defense]))
+        if technique_lift_by_defense is not None and defense in technique_lift_by_defense:
+            lines.append("")
+            lines.extend(_render_technique_lift_table(technique_lift_by_defense[defense]))
         if confidence_interval_by_defense is not None:
             ci_low, ci_high = confidence_interval_by_defense[defense]
             lines.append(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
@@ -201,6 +229,7 @@ def render_markdown_report(
     severity_breakdown_by_defense: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
     baseline_by_defense: dict | None = None,
+    technique_lift_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """per_defense maps defense name -> aggregate_by_technique() output for
@@ -236,6 +265,7 @@ def render_markdown_report(
         significance_by_defense=significance_by_defense,
         severity_breakdown_by_defense=severity_breakdown_by_defense,
         baseline_by_defense=baseline_by_defense,
+        technique_lift_by_defense=technique_lift_by_defense,
     ))
     return "\n".join(lines)
 
@@ -250,6 +280,7 @@ def render_json_report(
     severity_breakdown_by_defense: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
     baseline_by_defense: dict | None = None,
+    technique_lift_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_markdown_report, as JSON instead of a document -
@@ -266,6 +297,7 @@ def render_json_report(
         "severity_breakdown_by_defense": severity_breakdown_by_defense,
         "clean_accuracy_by_defense": clean_accuracy_by_defense,
         "baseline_by_defense": baseline_by_defense,
+        "technique_lift_by_defense": technique_lift_by_defense,
         "per_defense": per_defense,
     }
     return json.dumps(payload, indent=2)
@@ -298,6 +330,7 @@ def render_combined_report(
     severity_breakdown_by_direction: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
     baseline_by_direction: dict | None = None,
+    technique_lift_by_direction: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
@@ -338,6 +371,7 @@ def render_combined_report(
         significance = significance_by_direction[direction] if significance_by_direction else None
         severity_breakdown = severity_breakdown_by_direction[direction] if severity_breakdown_by_direction else None
         baseline = baseline_by_direction[direction] if baseline_by_direction else None
+        technique_lift = technique_lift_by_direction[direction] if technique_lift_by_direction else None
         lines.extend(_render_defense_sections(
             per_defense,
             severity_weighted_by_defense=severity_weighted,
@@ -346,6 +380,7 @@ def render_combined_report(
             heading_level="##",
             severity_breakdown_by_defense=severity_breakdown,
             baseline_by_defense=baseline,
+            technique_lift_by_defense=technique_lift,
         ))
     return "\n".join(lines)
 
@@ -359,6 +394,7 @@ def render_combined_json_report(
     severity_breakdown_by_direction: dict | None = None,
     clean_accuracy_by_defense: dict | None = None,
     baseline_by_direction: dict | None = None,
+    technique_lift_by_direction: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
@@ -372,6 +408,7 @@ def render_combined_json_report(
         "severity_breakdown_by_direction": severity_breakdown_by_direction,
         "clean_accuracy_by_defense": clean_accuracy_by_defense,
         "baseline_by_direction": baseline_by_direction,
+        "technique_lift_by_direction": technique_lift_by_direction,
         "by_direction": by_direction,
     }
     return json.dumps(payload, indent=2)

@@ -32,6 +32,7 @@ from soclab.report import (
     render_technique_leaderboard_json_report,
     render_technique_leaderboard_report,
     render_transcript,
+    technique_lift_rows,
 )
 from soclab.scoring import ScoredResult
 
@@ -911,3 +912,14 @@ def test_render_summary_report_has_a_lift_table():
     rows = list(csv.DictReader(io.StringIO(render_summary_csv_report(_summary_rows(), ["none", "both"]))))
     assert rows[0]["lift"] == "0.4"
     assert rows[2]["lift"] == ""
+
+
+def test_technique_lift_rows_formats_each_technique():
+    lifts = {
+        "a": {"injected_rate": 1.0, "baseline_rate": 0.0, "lift": 1.0, "p_value": 0.0039},
+        "b": {"injected_rate": 0.5, "baseline_rate": 0.25, "lift": 0.25, "p_value": 0.5},
+    }
+    assert technique_lift_rows(lifts) == [
+        ("a", 1.0, 0.0, "+100", 0.0039, "significant"),
+        ("b", 0.5, 0.25, "+25", 0.5, "not significant"),
+    ]

@@ -120,6 +120,14 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   everything scores a 100% dismiss "hijack rate" while the injection did nothing; `run`,
   `compare` and `full-report` print and save `no-injection baseline: 9/9 ... (100%) -
   injection lift +0 points` alongside it, the lift being the part the injection caused.
+  Whether a lift is real or chance is `paired_lift_by_technique` plus an exact McNemar test
+  (`mcnemar_exact_p_value`): each injected alert is paired with the same alert's clean answer,
+  and only the alerts that switched answers count - how many switched to the attack's target
+  once injected versus away from it. Per technique on purpose: within one technique every pair
+  is a different alert, so the pairs are independent (pooling techniques would reuse each clean
+  answer eight times). With 9 alerts a clean 9-of-9 sweep is p=0.0039, with the escalation
+  side's 7 it's p=0.016. `run` prints the per-technique table; `compare` and `full-report`
+  print how many techniques cleared p<0.05 per defense and save the full tables in the report.
   Also computes a
   severity-weighted hijack rate (critical alerts weighted higher than low ones) alongside
   the flat one - a client that mostly resists on low-severity alerts but caves on critical
@@ -556,7 +564,8 @@ python -m soclab.cli technique-leaderboard --models llama3.2:3b,mistral:7b,qwen2
 
 Worth reporting alongside the hijack rates: the injection lift over the no-injection baseline
 (the hijack rate minus how often the model already gave that answer without any injection -
-the part the attack actually caused), the `unparseable responses: N/M` line (a model
+the part the attack actually caused) with each technique's exact McNemar p-value (whether
+that lift is more than chance), the `unparseable responses: N/M` line (a model
 that breaks its answer format can't be scored as hijacked on those alerts, so a high count
 makes its hijack rate look better than it is) and clean-alert accuracy (a defense that hurts
 the model on alerts that were never attacked has a real cost). `--host` (or `$OLLAMA_HOST`)
@@ -568,7 +577,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-511 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+522 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
