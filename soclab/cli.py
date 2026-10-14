@@ -254,10 +254,11 @@ def _baseline_by_defense(clean_results_by_defense: dict, results_by_defense: dic
 
 
 def _print_technique_lift(lifts: dict) -> None:
-    print("\nper-technique lift, each injected alert paired with its clean answer (exact McNemar test):")
-    print(f"{'technique':<36} {'hijack_rate':>12} {'baseline':>9} {'lift':>6} {'p':>8}")
-    for technique, rate, baseline, lift, p_value, verdict in technique_lift_rows(lifts):
-        print(f"{technique:<36} {rate:>11.0%} {baseline:>9.0%} {lift:>6} {p_value:>8.4f}  {verdict}")
+    print("\nper-technique lift, each injected alert paired with its clean answer "
+          "(exact McNemar test, Holm-adjusted across the techniques):")
+    print(f"{'technique':<36} {'hijack_rate':>12} {'baseline':>9} {'lift':>6} {'p':>8} {'p_holm':>8}")
+    for technique, rate, baseline, lift, p_value, p_holm, verdict in technique_lift_rows(lifts):
+        print(f"{technique:<36} {rate:>11.0%} {baseline:>9.0%} {lift:>6} {p_value:>8.4f} {p_holm:>8.4f}  {verdict}")
 
 
 def _print_significant_lift_counts(lifts_by_defense: dict, heading: str) -> None:
@@ -266,9 +267,9 @@ def _print_significant_lift_counts(lifts_by_defense: dict, heading: str) -> None
     tables themselves go into the saved report."""
     print(heading)
     for defense, lifts in lifts_by_defense.items():
-        significant = sum(1 for entry in lifts.values() if is_significant(entry["p_value"]))
+        significant = sum(1 for entry in lifts.values() if is_significant(entry["p_holm"]))
         print(f"  defense={defense}: {significant}/{len(lifts)} techniques with a significant lift "
-              f"(p<{SIGNIFICANCE_ALPHA})")
+              f"(Holm-adjusted p<{SIGNIFICANCE_ALPHA})")
     print()
 
 
@@ -881,7 +882,7 @@ def cmd_leaderboard(args):
             "hijack_rate": overall_hijack_rate(results),
             "baseline": baseline["rate"],
             "lift": baseline["lift"],
-            "significant_techniques": sum(1 for entry in lifts.values() if is_significant(entry["p_value"])),
+            "significant_techniques": sum(1 for entry in lifts.values() if is_significant(entry["p_holm"])),
             "techniques": len(lifts),
             "ci_low": ci_low,
             "ci_high": ci_high,
@@ -981,6 +982,7 @@ def cmd_technique_leaderboard(args):
     for technique, bucket in aggregated.items():
         bucket["lift"] = lifts[technique]["lift"]
         bucket["p_value"] = lifts[technique]["p_value"]
+        bucket["p_holm"] = lifts[technique]["p_holm"]
     # every technique runs on the same alerts against the same clients, so
     # they share one no-injection baseline - pooled across the clients the
     # same way the rates above are (each direction is named after its
@@ -998,11 +1000,12 @@ def cmd_technique_leaderboard(args):
     print(f"direction={args.direction} defense={args.defense} across {len(clients)} client(s)\n")
     _print_severity_filter(requested_severities)
     print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15} "
-          f"{'lift':>6} {'p':>8}")
+          f"{'lift':>6} {'p':>8} {'p_holm':>8}")
     for technique, bucket in rows:
         ci = f"{bucket['ci_low']:.0%}-{bucket['ci_high']:.0%}"
         print(f"{technique:<40} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
-              f"{bucket['hijack_rate']:>11.0%} {ci:>15} {points_or_na(bucket['lift']):>6} {bucket['p_value']:>8.4f}")
+              f"{bucket['hijack_rate']:>11.0%} {ci:>15} {points_or_na(bucket['lift']):>6} {bucket['p_value']:>8.4f} "
+              f"{bucket['p_holm']:>8.4f}")
     print(f"\n{baseline_line(baseline)} (all techniques together)")
 
     pairwise_significance = None
@@ -1089,6 +1092,7 @@ def cmd_matrix(args):
             # each cell's own paired test: did this technique move this
             # client off its own no-injection answers, beyond chance
             "p_values": {technique: lifts.get(technique, {}).get("p_value", 1.0) for technique in technique_names},
+            "p_holm": {technique: lifts.get(technique, {}).get("p_holm", 1.0) for technique in technique_names},
         })
     rows.sort(key=lambda row: row["average"])
 
@@ -1292,7 +1296,9 @@ def _significant_techniques(report: dict, defense: str) -> str | None:
     if not by_direction or defense not in report["summary_by_defense"]:
         return None
     lifts = [entry for by_defense in by_direction.values() for entry in by_defense[defense].values()]
-    return f"{sum(1 for entry in lifts if is_significant(entry['p_value']))}/{len(lifts)}"
+    if any("p_holm" not in entry for entry in lifts):
+        return None  # saved before the Holm adjustment existed
+    return f"{sum(1 for entry in lifts if is_significant(entry['p_holm']))}/{len(lifts)}"
 
 
 def cmd_summarize(args):

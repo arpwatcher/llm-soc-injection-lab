@@ -2530,11 +2530,11 @@ def test_duration_formatting(seconds, expected):
 def test_run_prints_a_per_technique_paired_lift_table(capsys):
     main(["run", "--client", "fake-vulnerable"])
     out = capsys.readouterr().out
-    table = out.split("per-technique lift, each injected alert paired with its clean answer (exact McNemar test):")[1]
+    table = out.split("(exact McNemar test, Holm-adjusted across the techniques):")[1]
     rows = {line.split()[0]: line.split()[1:] for line in table.strip().splitlines()[1:]}
-    # all 9 alerts flipped to dismiss once injected: 2 * 0.5^9
-    assert rows["direct_override"] == ["100%", "0%", "+100", "0.0039", "significant"]
-    assert rows["unicode_homoglyph"] == ["0%", "0%", "+0", "1.0000", "not", "significant"]
+    # all 9 alerts flipped to dismiss once injected: 2 * 0.5^9, and x8 after Holm over the 8 techniques
+    assert rows["direct_override"] == ["100%", "0%", "+100", "0.0039", "0.0312", "significant"]
+    assert rows["unicode_homoglyph"] == ["0%", "0%", "+0", "1.0000", "1.0000", "not", "significant"]
 
 
 def test_a_model_that_already_dismisses_everything_shows_no_significant_lift(fake_ollama, tmp_path, capsys):
@@ -2554,16 +2554,16 @@ def test_run_markdown_report_carries_the_lift_table(tmp_path, capsys):
     main(["run", "--client", "fake-vulnerable", "--report", str(report_path)])
     capsys.readouterr()
     content = report_path.read_text()
-    assert "| technique | hijack rate | baseline | lift | p | |" in content
-    assert "| direct_override | 100% | 0% | +100 | 0.0039 | significant |" in content
+    assert "| technique | hijack rate | baseline | lift | p | p (holm) | |" in content
+    assert "| direct_override | 100% | 0% | +100 | 0.0039 | 0.0312 | significant |" in content
 
 
 def test_compare_prints_significant_lift_counts_and_saves_the_tables(tmp_path, capsys):
     report_path = tmp_path / "r.md"
     main(["compare", "--client", "fake-stubborn", "--defenses", "both", "--report", str(report_path)])
     out = capsys.readouterr().out
-    assert "defense=none: 7/8 techniques with a significant lift (p<0.05)" in out
-    assert "defense=both: 0/8 techniques with a significant lift (p<0.05)" in out
+    assert "defense=none: 7/8 techniques with a significant lift (Holm-adjusted p<0.05)" in out
+    assert "defense=both: 0/8 techniques with a significant lift (Holm-adjusted p<0.05)" in out
     assert report_path.read_text().count("per-technique lift, each injected alert paired") == 2
 
 
@@ -2650,6 +2650,23 @@ def test_summarize_shows_na_significance_for_a_report_saved_before_the_test_exis
     path = _saved_full_report(tmp_path, "fake-stubborn")
     report = json.loads(path.read_text())
     del report["technique_lift_by_direction"]
+    path.write_text(json.dumps(report))
+    capsys.readouterr()
+    assert main(["summarize", str(path)]) == 0
+    table = capsys.readouterr().out.split("techniques with a significant lift")[1]
+    assert table.strip().splitlines()[2].split()[1:] == ["n/a"] * 4
+
+
+def test_summarize_shows_na_significance_for_a_report_saved_before_holm(tmp_path, capsys):
+    """a report from before the Holm adjustment only has raw p-values -
+    counting those as significant would be the uncorrected judgment the
+    adjustment exists to replace, so it shows n/a instead."""
+    path = _saved_full_report(tmp_path, "fake-stubborn")
+    report = json.loads(path.read_text())
+    for by_defense in report["technique_lift_by_direction"].values():
+        for lifts in by_defense.values():
+            for entry in lifts.values():
+                del entry["p_holm"]
     path.write_text(json.dumps(report))
     capsys.readouterr()
     assert main(["summarize", str(path)]) == 0

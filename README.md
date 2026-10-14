@@ -126,8 +126,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   once injected versus away from it. Per technique on purpose: within one technique every pair
   is a different alert, so the pairs are independent (pooling techniques would reuse each clean
   answer eight times). With 9 alerts a clean 9-of-9 sweep is p=0.0039, with the escalation
-  side's 7 it's p=0.016. `run` prints the per-technique table; `compare` and `full-report`
-  print how many techniques cleared p<0.05 per defense and save the full tables in the report.
+  side's 7 it's p=0.016. Eight techniques per direction means eight tests, and at p<0.05
+  there's about a one-in-three chance one clears by luck alone, so each p-value also gets a Holm adjustment
+  across its direction's techniques (`holm_adjusted`, saved as `p_holm`) and "significant"
+  is judged on that. Holm multiplies the smallest p by 8, the next by 7 and so on, so it
+  stays exact without being as blunt as Bonferroni. `run` prints the per-technique table;
+  `compare` and `full-report` print how many techniques cleared the adjusted p<0.05 per
+  defense and save the full tables in the report.
   Also computes a
   severity-weighted hijack rate (critical alerts weighted higher than low ones) alongside
   the flat one - a client that mostly resists on low-severity alerts but caves on critical
@@ -357,8 +362,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   hijack rate, a model that dismisses everything comes out as the most hijacked though its
   baseline is just as high and the attack moved it not at all.
   A significant-techniques column (`7/8`) counts how many techniques' paired McNemar tests
-  cleared p<0.05 for that client - a count rather than one pooled test, since pooling
-  techniques would reuse each clean answer once per technique.
+  cleared the Holm-adjusted p<0.05 for that client - a count rather than one pooled test,
+  since pooling techniques would reuse each clean answer once per technique.
   `--sort-by hijack_rate|lift|severity_weighted_hijack_rate|clean_accuracy` picks which column
   ranks the table (default hijack_rate) - always most-robust-first regardless of column,
   since higher is better for clean_accuracy but lower is better for the other two. With
@@ -404,9 +409,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   clean requests per client) is that client's no-injection rate of the attack's target
   action on the same alerts - part of every cell in its row rather than the attack's doing. A
   cell is starred when its own paired test (that technique against that client's own clean
-  answers, exact McNemar) says the technique really moved the client - two cells can both
+  answers, exact McNemar, Holm-adjusted across the row) says the technique really moved the
+  client - two cells can both
   read 100% while only one is starred, if the other client gives that answer regardless; the
-  p-values go into the json and csv (a `<technique> p` column each). Same `--clients`/
+  p-values go into the json and csv (`<technique> p` and `<technique> p_holm` columns). Same `--clients`/
   `--techniques` narrowing (via the shared `_resolve_client_names`/`_resolve_technique_names`
   helpers `technique-leaderboard` also uses) and `--transcript`; no pairwise significance
   check here, since a grid has no single pair to compare the way exactly-two-clients or
@@ -588,7 +594,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-530 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+534 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

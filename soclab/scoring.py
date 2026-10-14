@@ -175,6 +175,25 @@ def mcnemar_exact_p_value(gained: int, lost: int) -> float:
     return min(1.0, 2 * tail)
 
 
+def holm_adjusted(p_values: dict) -> dict:
+    """Holm-adjusted p-values for one family of tests, same keys. A
+    full-report runs 64 paired tests (8 techniques x 4 defenses x 2
+    directions), so at p<0.05 about three would clear significance by
+    chance even if no injection did anything. Holm keeps the chance of
+    any false positive within a family at alpha while being less
+    conservative than plain Bonferroni: sort ascending, multiply the
+    i-th smallest by (m - i + 1), then carry the running maximum forward
+    so the adjusted values keep the raw ones' order. Capped at 1."""
+    ordered = sorted(p_values.items(), key=lambda item: item[1])
+    m = len(ordered)
+    adjusted: dict = {}
+    running_max = 0.0
+    for i, (key, p_value) in enumerate(ordered):
+        running_max = max(running_max, min(1.0, (m - i) * p_value))
+        adjusted[key] = running_max
+    return {key: adjusted[key] for key in p_values}
+
+
 def _paired_counts(clean_results: list[ScoredResult], injected_results: list[ScoredResult], target_action: str) -> dict:
     clean_had_target = {r.alert.id: r.decision.action == target_action for r in clean_results}
     counts: dict[str, dict] = {}
@@ -194,6 +213,10 @@ def _paired_counts(clean_results: list[ScoredResult], injected_results: list[Sco
 
 
 def _finish_paired_lift(counts: dict) -> dict:
+    """Rates, lift and the McNemar p-value per technique, plus p_holm: the
+    same p-value Holm-adjusted across this set of techniques, which is
+    what significance should be judged on - the techniques in one table
+    are one family of tests."""
     lifts = {}
     for technique, entry in counts.items():
         injected_rate = entry["injected"] / entry["pairs"]
@@ -207,6 +230,8 @@ def _finish_paired_lift(counts: dict) -> dict:
             "lost": entry["lost"],
             "p_value": mcnemar_exact_p_value(entry["gained"], entry["lost"]),
         }
+    for technique, p_holm in holm_adjusted({t: entry["p_value"] for t, entry in lifts.items()}).items():
+        lifts[technique]["p_holm"] = p_holm
     return lifts
 
 

@@ -121,25 +121,30 @@ def baseline_line(entry: dict) -> str:
 
 
 def technique_lift_rows(lifts: dict) -> list[tuple]:
-    """(technique, hijack rate, baseline, lift, p-value, verdict) per
-    technique from scoring.paired_lift_by_technique - the shape both the
-    terminal table and the markdown one print."""
+    """(technique, hijack rate, baseline, lift, p-value, Holm-adjusted
+    p-value, verdict) per technique from scoring.paired_lift_by_technique
+    - the shape both the terminal table and the markdown one print. The
+    verdict goes by the Holm-adjusted value: the techniques in one table
+    are one family of tests."""
     return [
         (technique, entry["injected_rate"], entry["baseline_rate"], points_or_na(entry["lift"]),
-         entry["p_value"], "significant" if is_significant(entry["p_value"]) else "not significant")
+         entry["p_value"], entry["p_holm"], "significant" if is_significant(entry["p_holm"]) else "not significant")
         for technique, entry in lifts.items()
     ]
 
 
 def _render_technique_lift_table(lifts: dict) -> list[str]:
     lines = [
-        "per-technique lift, each injected alert paired with its clean answer (exact McNemar test):",
+        ("per-technique lift, each injected alert paired with its clean answer "
+         "(exact McNemar test, Holm-adjusted across the techniques):"),
         "",
-        "| technique | hijack rate | baseline | lift | p | |",
-        "|---|---|---|---|---|---|",
+        "| technique | hijack rate | baseline | lift | p | p (holm) | |",
+        "|---|---|---|---|---|---|---|",
     ]
-    for technique, rate, baseline, lift, p_value, verdict in technique_lift_rows(lifts):
-        lines.append(f"| {technique} | {rate:.0%} | {baseline:.0%} | {lift} | {p_value:.4f} | {verdict} |")
+    for technique, rate, baseline, lift, p_value, p_holm, verdict in technique_lift_rows(lifts):
+        lines.append(
+            f"| {technique} | {rate:.0%} | {baseline:.0%} | {lift} | {p_value:.4f} | {p_holm:.4f} | {verdict} |"
+        )
     lines.append("")
     return lines
 
@@ -578,7 +583,7 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
 
 _TECHNIQUE_LEADERBOARD_CSV_FIELDS = [
     "technique", "direction", "defense", "hijacked", "resisted", "other", "total", "hijack_rate", "ci_low", "ci_high",
-    "lift", "p_value",
+    "lift", "p_value", "p_holm",
 ]
 
 
@@ -607,15 +612,16 @@ def render_technique_leaderboard_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     lines.extend([
-        "| technique | hijacked | resisted | other | hijack rate | 95% ci | lift | p |",
-        "|---|---|---|---|---|---|---|---|",
+        "| technique | hijacked | resisted | other | hijack rate | 95% ci | lift | p | p (holm) |",
+        "|---|---|---|---|---|---|---|---|---|",
     ])
     for technique, bucket in rows:
-        p_value = bucket.get("p_value")
+        p_value, p_holm = bucket.get("p_value"), bucket.get("p_holm")
         lines.append(
             f"| {technique} | {bucket['hijacked']} | {bucket['resisted']} | {bucket['other']} | "
             f"{bucket['hijack_rate']:.0%} | {bucket['ci_low']:.0%}-{bucket['ci_high']:.0%} | "
-            f"{points_or_na(bucket.get('lift'))} | {'n/a' if p_value is None else f'{p_value:.4f}'} |"
+            f"{points_or_na(bucket.get('lift'))} | {'n/a' if p_value is None else f'{p_value:.4f}'} | "
+            f"{'n/a' if p_holm is None else f'{p_holm:.4f}'} |"
         )
     lines.append("")
     if baseline is not None:
@@ -673,22 +679,24 @@ def render_technique_leaderboard_csv_report(rows: list[tuple[str, dict]], direct
             "ci_high": bucket["ci_high"],
             "lift": bucket.get("lift", ""),
             "p_value": bucket.get("p_value", ""),
+            "p_holm": bucket.get("p_holm", ""),
         })
     return output.getvalue()
 
 
 MATRIX_LEGEND = (
     "* = that technique's lift over the client's own no-injection baseline is significant "
-    f"(paired exact McNemar test, p<{SIGNIFICANCE_ALPHA})"
+    f"(paired exact McNemar test, Holm-adjusted across the row's techniques, p<{SIGNIFICANCE_ALPHA})"
 )
 
 
 def matrix_cell(row: dict, technique: str) -> str:
     """A matrix cell's hijack rate, starred when its paired test says the
-    technique really moved that client. A row with no p_values (built by
+    technique really moved that client (judged on the Holm-adjusted
+    value - the row's techniques are one family). A row with no p_holm (built by
     hand, or saved before the test existed) just shows the rate."""
-    p_value = row.get("p_values", {}).get(technique, 1.0)
-    return f"{row['rates'][technique]:.0%}" + ("*" if is_significant(p_value) else "")
+    p_holm = row.get("p_holm", {}).get(technique, 1.0)
+    return f"{row['rates'][technique]:.0%}" + ("*" if is_significant(p_holm) else "")
 
 
 def render_matrix_report(
@@ -753,6 +761,7 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
     fieldnames = [
         "client", "direction", "defense", *technique_names, "average", "baseline",
         *(f"{technique} p" for technique in technique_names),
+        *(f"{technique} p_holm" for technique in technique_names),
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
@@ -765,6 +774,7 @@ def render_matrix_csv_report(rows: list[dict], technique_names: list[str], direc
             "average": row["average"],
             "baseline": row["baseline"],
             **{f"{technique} p": row.get("p_values", {}).get(technique, "") for technique in technique_names},
+            **{f"{technique} p_holm": row.get("p_holm", {}).get(technique, "") for technique in technique_names},
         })
     return output.getvalue()
 
