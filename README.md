@@ -397,9 +397,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   techniques that actually work. Every technique runs on the same alerts against the same clients, so
   they share one no-injection baseline (pooled across the clients, 18 extra clean requests
   each), printed and saved under the table - each technique's rate is read against it. Each
-  technique also gets its lift and the paired McNemar p-value pooled across the clients
-  (`pooled_paired_lift` - pairing stays inside each client since alert ids repeat across
-  them, so every pair is a distinct client and alert and the test on the summed counts holds). With exactly
+  technique also gets its lift, the lift's paired interval and the McNemar p-value pooled
+  across the clients (`pooled_paired_lift` - pairing stays inside each client since alert ids
+  repeat across them, so every pair is a distinct client and alert and the test on the summed
+  counts holds); more clients means more pairs, so the interval narrows as models are added
+  (two models are 18 pairs: one flipped on all 9 alerts and one unmoved comes out +50, +23 to +71). With exactly
   two techniques ranked (via `--techniques`, `--min-rate`, or because the battery itself only
   has two), also
   runs a two-proportion z-test between them, the technique-axis mirror of `leaderboard`'s own

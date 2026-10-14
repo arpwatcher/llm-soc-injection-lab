@@ -2607,9 +2607,13 @@ def test_technique_leaderboard_pools_the_paired_test_across_models(fake_ollama, 
     override = next(t for t in json.loads(js.read_text())["techniques"] if t["technique"] == "direct_override")
     assert (override["hijack_rate"], override["lift"]) == (1.0, 0.5)
     assert override["p_value"] == pytest.approx(2 / 512)
-    assert "| direct_override | 18 | 0 | 0 | 100% | 82%-100% | +50 | 0.0039 |" in md.read_text()
+    # 18 pairs, 9 gained and 9 already dismissed - the interval is for the pooled lift, not either model's
+    assert (override["lift_ci_low"], override["lift_ci_high"]) == (pytest.approx(0.2263, abs=1e-4),
+                                                                   pytest.approx(0.7097, abs=1e-4))
+    assert "| direct_override | 18 | 0 | 0 | 100% | 82%-100% | +50 | +23 to +71 | 0.0039 |" in md.read_text()
     row = next(r for r in csv.DictReader(io.StringIO(cs.read_text())) if r["technique"] == "direct_override")
     assert (row["lift"], float(row["p_value"])) == ("0.5", pytest.approx(2 / 512))
+    assert float(row["lift_ci_low"]) == pytest.approx(0.2263, abs=1e-4)
 
 
 def test_leaderboard_counts_techniques_with_a_significant_lift(fake_ollama, tmp_path, capsys):

@@ -932,6 +932,6 @@ def test_technique_leaderboard_renderers_show_na_without_lift_data():
     rows = [("direct_override", {"hijacked": 1, "resisted": 0, "other": 0, "total": 1, "hijack_rate": 1.0,
                                  "ci_low": 0.2, "ci_high": 1.0})]
     report = render_technique_leaderboard_report(rows, "dismiss", "none", 1)
-    assert "| direct_override | 1 | 0 | 0 | 100% | 20%-100% | n/a | n/a |" in report
+    assert "| direct_override | 1 | 0 | 0 | 100% | 20%-100% | n/a | n/a | n/a | n/a |" in report
     csv_row = next(csv.DictReader(io.StringIO(render_technique_leaderboard_csv_report(rows, "dismiss", "none"))))
-    assert (csv_row["lift"], csv_row["p_value"]) == ("", "")
+    assert (csv_row["lift"], csv_row["lift_ci_low"], csv_row["p_value"]) == ("", "", "")

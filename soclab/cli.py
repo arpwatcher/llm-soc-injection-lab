@@ -35,6 +35,7 @@ from soclab.report import (
     MATRIX_LEGEND,
     baseline_line,
     combined_rate_by_defense,
+    lift_interval,
     matrix_cell,
     percent_or_na,
     points_or_na,
@@ -983,6 +984,8 @@ def cmd_technique_leaderboard(args):
     )
     for technique, bucket in aggregated.items():
         bucket["lift"] = lifts[technique]["lift"]
+        bucket["lift_ci_low"] = lifts[technique]["lift_ci_low"]
+        bucket["lift_ci_high"] = lifts[technique]["lift_ci_high"]
         bucket["p_value"] = lifts[technique]["p_value"]
         bucket["p_holm"] = lifts[technique]["p_holm"]
     # every technique runs on the same alerts against the same clients, so
@@ -1002,12 +1005,13 @@ def cmd_technique_leaderboard(args):
     print(f"direction={args.direction} defense={args.defense} across {len(clients)} client(s)\n")
     _print_severity_filter(requested_severities)
     print(f"{'technique':<40} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12} {'95% ci':>15} "
-          f"{'lift':>6} {'p':>8} {'p_holm':>8}")
+          f"{'lift':>6} {'lift 95% ci':>14} {'p':>8} {'p_holm':>8}")
     for technique, bucket in rows:
         ci = f"{bucket['ci_low']:.0%}-{bucket['ci_high']:.0%}"
+        interval = lift_interval(bucket["lift_ci_low"], bucket["lift_ci_high"])
         print(f"{technique:<40} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
-              f"{bucket['hijack_rate']:>11.0%} {ci:>15} {points_or_na(bucket['lift']):>6} {bucket['p_value']:>8.4f} "
-              f"{bucket['p_holm']:>8.4f}")
+              f"{bucket['hijack_rate']:>11.0%} {ci:>15} {points_or_na(bucket['lift']):>6} {interval:>14} "
+              f"{bucket['p_value']:>8.4f} {bucket['p_holm']:>8.4f}")
     print(f"\n{baseline_line(baseline)} (all techniques together)")
 
     pairwise_significance = None

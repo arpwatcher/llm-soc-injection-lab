@@ -590,7 +590,7 @@ def render_leaderboard_csv_report(rows: list[dict], direction: str, defense: str
 
 _TECHNIQUE_LEADERBOARD_CSV_FIELDS = [
     "technique", "direction", "defense", "hijacked", "resisted", "other", "total", "hijack_rate", "ci_low", "ci_high",
-    "lift", "p_value", "p_holm",
+    "lift", "lift_ci_low", "lift_ci_high", "p_value", "p_holm",
 ]
 
 
@@ -619,15 +619,16 @@ def render_technique_leaderboard_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
     lines.extend([
-        "| technique | hijacked | resisted | other | hijack rate | 95% ci | lift | p | p (holm) |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| technique | hijacked | resisted | other | hijack rate | 95% ci | lift | lift 95% ci | p | p (holm) |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ])
     for technique, bucket in rows:
         p_value, p_holm = bucket.get("p_value"), bucket.get("p_holm")
+        interval = "n/a" if "lift_ci_low" not in bucket else lift_interval(bucket["lift_ci_low"], bucket["lift_ci_high"])
         lines.append(
             f"| {technique} | {bucket['hijacked']} | {bucket['resisted']} | {bucket['other']} | "
             f"{bucket['hijack_rate']:.0%} | {bucket['ci_low']:.0%}-{bucket['ci_high']:.0%} | "
-            f"{points_or_na(bucket.get('lift'))} | {'n/a' if p_value is None else f'{p_value:.4f}'} | "
+            f"{points_or_na(bucket.get('lift'))} | {interval} | {'n/a' if p_value is None else f'{p_value:.4f}'} | "
             f"{'n/a' if p_holm is None else f'{p_holm:.4f}'} |"
         )
     lines.append("")
@@ -685,6 +686,8 @@ def render_technique_leaderboard_csv_report(rows: list[tuple[str, dict]], direct
             "ci_low": bucket["ci_low"],
             "ci_high": bucket["ci_high"],
             "lift": bucket.get("lift", ""),
+            "lift_ci_low": bucket.get("lift_ci_low", ""),
+            "lift_ci_high": bucket.get("lift_ci_high", ""),
             "p_value": bucket.get("p_value", ""),
             "p_holm": bucket.get("p_holm", ""),
         })
