@@ -1,6 +1,8 @@
 import pytest
 
 from soclab.alerts import SEVERITIES, Alert, generate_clean_alerts
+from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES
+from soclab.scoring import holm_adjusted, is_significant, mcnemar_exact_p_value
 
 
 def test_generate_clean_alerts_returns_multiple_alerts():
@@ -27,13 +29,25 @@ def test_each_technique_gets_enough_alerts_in_both_directions():
     """each technique runs once per eligible alert, so these are the sample
     sizes behind every per-technique hijack rate. at the original 5 and 3,
     a perfect 3/3 came with a 95% interval of 44%-100% - too wide to say
-    much about a real model; 9 and 7 narrow that to 70% and 65% at the
-    low end."""
+    much about a real model; 9 narrows that to 70% at the low end."""
     alerts = generate_clean_alerts()
     dismiss_direction = sum(1 for a in alerts if a.ground_truth_action != "dismiss")
     escalate_direction = sum(1 for a in alerts if a.ground_truth_action == "dismiss")
     assert dismiss_direction >= 9
-    assert escalate_direction >= 7
+    assert escalate_direction >= 9
+
+
+@pytest.mark.parametrize("target, techniques", [("dismiss", TECHNIQUES), ("escalate", ESCALATION_TECHNIQUES)])
+def test_a_perfect_sweep_survives_the_holm_adjustment_in_both_directions(target, techniques):
+    """a technique that flips every eligible alert is the strongest result
+    the battery can produce - if even that isn't significant once Holm
+    multiplies it by the number of techniques, nothing in that direction
+    can be. the escalation side's old 7 alerts failed this (8 x 2/128 =
+    0.125), which is why it has 9 now."""
+    eligible = sum(1 for a in generate_clean_alerts() if (a.ground_truth_action != "dismiss") == (target == "dismiss"))
+    perfect = mcnemar_exact_p_value(gained=eligible, lost=0)
+    adjusted = holm_adjusted({technique: perfect for technique in techniques})
+    assert all(is_significant(p) for p in adjusted.values())
 
 
 def test_both_directions_span_several_severities():

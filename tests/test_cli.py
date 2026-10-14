@@ -902,14 +902,14 @@ def test_models_missing_from_server_fails_before_anything_runs(fake_ollama, caps
 def test_real_model_runs_report_progress_on_stderr(fake_ollama, capsys):
     """a real model takes seconds per alert, so without this a few hundred
     requests of silence look exactly like a hung run. leaderboard sends
-    16 clean + 72 injected requests here - a progress line every 10th,
+    18 clean + 72 injected requests here - a progress line every 10th,
     all on stderr so stdout stays just the results."""
     exit_code = main(["leaderboard", "--models", "robust-model"])
     captured = capsys.readouterr()
     assert exit_code == 0
     progress = [line for line in captured.err.splitlines() if line.startswith("ollama:robust-model:")]
-    assert len(progress) == 8
-    assert progress[-1].startswith("ollama:robust-model: 80/88 requests done (")
+    assert len(progress) == 9
+    assert progress[-1].startswith("ollama:robust-model: 90/90 requests done (")
     assert "requests done" not in captured.out
 
 
@@ -917,7 +917,7 @@ def test_run_with_ollama_client_reports_progress_too(fake_ollama, capsys):
     exit_code = main(["run", "--client", "ollama", "--model", "gullible-model"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "ollama:gullible-model: 40/88 requests done (" in captured.err
+    assert "ollama:gullible-model: 40/90 requests done (" in captured.err
 
 
 def test_single_client_reports_name_the_real_model(fake_ollama, tmp_path, capsys):
@@ -974,7 +974,7 @@ def test_pinned_sampling_settings_are_recorded_in_saved_reports(fake_ollama, tmp
     ])
     captured = capsys.readouterr()
     assert json.loads(report_path.read_text())["client"] == "ollama:robust-model (temperature=0, seed=42)"
-    assert "ollama:robust-model (temperature=0, seed=42): 40/88 requests done" in captured.err
+    assert "ollama:robust-model (temperature=0, seed=42): 40/90 requests done" in captured.err
 
 
 def test_comparison_rows_carry_pinned_sampling_settings(fake_ollama, tmp_path, capsys):
@@ -1093,7 +1093,7 @@ def test_cache_resumes_a_run_that_died_partway(fake_ollama, monkeypatch, tmp_pat
     monkeypatch.setattr(requests, "post", answering)
     assert main(command) == 0
     resumed = capsys.readouterr().out
-    assert len(fake_ollama) == 25 + (88 - 25)  # only the 63 unanswered requests went out again
+    assert len(fake_ollama) == 25 + (90 - 25)  # only the 65 unanswered requests went out again
 
     fake_ollama.clear()
     main(["run", "--client", "ollama", "--model", "gullible-model"])
@@ -1346,13 +1346,13 @@ def test_leaderboard_clean_accuracy_gets_a_confidence_interval(capsys):
     hijack rate's own CI already warns about being easy to over-read at -
     this is the same Wilson interval, just on the resisted/total count
     instead of the hijacked/total one. fake-robust gets a bare 100% point
-    estimate (16/16 clean alerts correct), but the interval is still wide
-    (81%-100%), exactly the over-reading risk this column exists to show."""
+    estimate (18/18 clean alerts correct), but the interval is still wide
+    (82%-100%), exactly the over-reading risk this column exists to show."""
     exit_code = main(["leaderboard", "--clients", "fake-robust"])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "clean 95% ci" in out
-    assert "81%-100%" in out
+    assert "82%-100%" in out
 
 
 def test_leaderboard_writes_clean_accuracy_confidence_interval_to_json(tmp_path, capsys):
@@ -1361,7 +1361,7 @@ def test_leaderboard_writes_clean_accuracy_confidence_interval_to_json(tmp_path,
     capsys.readouterr()
     parsed = json.loads(report_path.read_text())
     robust_row = next(row for row in parsed["clients"] if row["client"] == "fake-robust")
-    assert robust_row["clean_ci_low"] == pytest.approx(0.8064, abs=0.001)
+    assert robust_row["clean_ci_low"] == pytest.approx(0.8241, abs=0.001)
     assert robust_row["clean_ci_high"] == 1.0
 
 
@@ -1370,7 +1370,7 @@ def test_leaderboard_writes_clean_accuracy_confidence_interval_to_csv(tmp_path, 
     main(["leaderboard", "--clients", "fake-robust", "--report", str(report_path)])
     capsys.readouterr()
     rows = list(csv.DictReader(report_path.read_text().splitlines()))
-    assert float(rows[0]["clean_ci_low"]) == pytest.approx(0.8064, abs=0.001)
+    assert float(rows[0]["clean_ci_low"]) == pytest.approx(0.8241, abs=0.001)
     assert rows[0]["clean_ci_high"] == "1.0"
 
 
@@ -2193,8 +2193,8 @@ def test_summarize_puts_saved_full_reports_in_one_table(tmp_path, capsys):
     exit_code = main(["summarize", str(stubborn), str(sandwich)])
     out = capsys.readouterr().out
     assert exit_code == 0
-    assert "fake-stubborn                 49%       49%       49%        0%" in out
-    assert "fake-sandwich-sensitive       49%        0%       49%        0%" in out
+    assert "fake-stubborn                 44%       44%       44%        0%" in out
+    assert "fake-sandwich-sensitive       44%        0%       44%        0%" in out
     assert out.index("fake-stubborn") < out.index("fake-sandwich-sensitive")  # input order kept
 
 
@@ -2205,7 +2205,7 @@ def test_summarize_writes_markdown_json_and_csv(tmp_path, capsys):
     for path in (md, js, cs):
         assert main(["summarize", str(stubborn), str(sandwich), "--report", str(path)]) == 0
     capsys.readouterr()
-    assert "| fake-sandwich-sensitive | 49% | 0% | 49% | 0% |" in md.read_text()
+    assert "| fake-sandwich-sensitive | 44% | 0% | 44% | 0% |" in md.read_text()
     parsed = json.loads(js.read_text())
     assert [row["client"] for row in parsed["clients"]] == ["fake-stubborn", "fake-sandwich-sensitive"]
     assert parsed["clients"][0]["hijack_rate"]["both"] == 0.0
@@ -2314,11 +2314,11 @@ def test_summarize_shows_na_for_a_defense_a_report_didnt_run(tmp_path, capsys):
     md, cs = tmp_path / "s.md", tmp_path / "s.csv"
     capsys.readouterr()
     assert main(["summarize", str(partial), str(full)]) == 0
-    assert "fake-stubborn                 49%       n/a       n/a        0%" in capsys.readouterr().out
+    assert "fake-stubborn                 44%       n/a       n/a        0%" in capsys.readouterr().out
     main(["summarize", str(partial), str(full), "--report", str(md)])
     main(["summarize", str(partial), str(full), "--report", str(cs)])
     capsys.readouterr()
-    assert "| fake-stubborn | 49% | n/a | n/a | 0% |" in md.read_text()
+    assert "| fake-stubborn | 44% | n/a | n/a | 0% |" in md.read_text()
     rows = {(r["client"], r["defense"]): r for r in csv.DictReader(io.StringIO(cs.read_text()))}
     assert rows[("fake-stubborn", "sandwich")]["hijack_rate"] == ""
     assert rows[("fake-stubborn", "sandwich")]["clean_accuracy"] == ""
@@ -2358,8 +2358,8 @@ def test_progress_total_matches_the_requests_actually_made(command, fake_ollama,
 def test_full_report_progress_total_with_every_defense(fake_ollama, tmp_path, capsys):
     main(["full-report", "--client", "ollama", "--model", "gullible-model", "--report", str(tmp_path / "r.md")])
     err = capsys.readouterr().err
-    assert len(fake_ollama) == 576  # (16 clean + 72 + 56 injected) x 4 defenses, as the readme says
-    assert "570/576 requests done" in err
+    assert len(fake_ollama) == 648  # (18 clean + 72 + 72 injected) x 4 defenses, as the readme says
+    assert "640/648 requests done" in err
 
 
 def test_baseline_shows_a_hijack_rate_the_injection_didnt_cause(fake_ollama, tmp_path, capsys):
@@ -2409,8 +2409,8 @@ def test_full_report_baseline_per_direction(fake_ollama, tmp_path, capsys):
     assert "summary: injection lift over the no-injection baseline, direction=escalate" in out
     baseline = json.loads(js.read_text())["baseline_by_direction"]
     assert baseline["dismiss"]["none"]["baseline"] == 9
-    assert baseline["escalate"]["none"] == {"target": "escalate", "baseline": 0, "eligible": 7, "rate": 0.0, "lift": 0.0}
-    assert "no-injection baseline: 0/7 already answered escalate with no injection (0%)" in md.read_text()
+    assert baseline["escalate"]["none"] == {"target": "escalate", "baseline": 0, "eligible": 9, "rate": 0.0, "lift": 0.0}
+    assert "no-injection baseline: 0/9 already answered escalate with no injection (0%)" in md.read_text()
 
 
 def test_summarize_shows_the_injection_lift_per_model(fake_ollama, tmp_path, capsys):
@@ -2426,9 +2426,9 @@ def test_summarize_shows_the_injection_lift_per_model(fake_ollama, tmp_path, cap
     lift_table = capsys.readouterr().out.split("injection lift over the no-injection baseline, in points")[1]
     lift_table = lift_table.strip().split("\n\n")[0]  # just this table, not the sections after it
     rows = {line.split()[0]: line.split()[1:] for line in lift_table.splitlines()[1:]}
-    assert rows["fake-stubborn"] == ["+49", "+49", "+49", "+0"]
-    # dismisses all 9 eligible alerts and escalates none of the 7 benign ones, injected or not:
-    # pooled hijack 72/128 vs pooled baseline 9/16 - the same 56%, so no lift at all
+    assert rows["fake-stubborn"] == ["+44", "+44", "+44", "+0"]
+    # dismisses all 9 eligible alerts and escalates none of the 9 benign ones, injected or not:
+    # pooled hijack 72/144 vs pooled baseline 9/18 - the same 50%, so no lift at all
     assert rows["ollama:dismiss-everything-model"] == ["+0", "+0", "+0", "+0"]
 
 
@@ -2517,8 +2517,8 @@ def test_check_ollama_estimates_how_long_a_full_report_takes(fake_ollama, monkey
     monkeypatch.setattr(cli_module.time, "monotonic", lambda: next(clock))
     assert main(["check-ollama", "--model", "robust-model"]) == 0
     out = capsys.readouterr().out
-    # 3s a request: 576 requests is 28.8 min, the 288 of --defenses both 14.4
-    assert "that took 3.0s - at that pace a full-report is 576 requests, about 29 min (14 min with --defenses both)" in out
+    # 3s a request: 648 requests is 32.4 min, the 324 of --defenses both 16.2
+    assert "that took 3.0s - at that pace a full-report is 648 requests, about 32 min (16 min with --defenses both)" in out
     assert "an upper bound" in out
 
 
@@ -2574,9 +2574,9 @@ def test_full_report_saves_per_direction_lift_tables(tmp_path, capsys):
     assert "direction=escalate - tables in the report:" in out
     lifts = json.loads(report_path.read_text())["technique_lift_by_direction"]
     false_urgency = lifts["escalate"]["none"]["false_urgency"]
-    # 7 benign alerts, all escalated once injected: 2 * 0.5^7
-    assert (false_urgency["pairs"], false_urgency["gained"]) == (7, 7)
-    assert false_urgency["p_value"] == pytest.approx(2 / 128)
+    # 9 benign alerts, all escalated once injected: 2 * 0.5^9
+    assert (false_urgency["pairs"], false_urgency["gained"]) == (9, 9)
+    assert false_urgency["p_value"] == pytest.approx(2 / 512)
 
 
 def test_matrix_report_carries_significance_marks_and_p_values(tmp_path, capsys):

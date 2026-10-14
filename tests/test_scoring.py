@@ -541,7 +541,7 @@ def test_baseline_counts_target_answers_with_no_injection_on_the_attacks_own_ale
 def test_baseline_is_zero_for_a_client_that_reads_clean_alerts_right():
     clean_results = score_batch(generate_clean_alerts(), VulnerableFakeClient())
     assert baseline_and_total(clean_results, "dismiss") == (0, 9)
-    assert baseline_and_total(clean_results, "escalate") == (0, 7)
+    assert baseline_and_total(clean_results, "escalate") == (0, 9)
 
 
 def test_mcnemar_exact_p_value_matches_the_binomial_tail():

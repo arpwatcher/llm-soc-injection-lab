@@ -189,4 +189,22 @@ def generate_clean_alerts() -> list[Alert]:
                     "uri=/healthz kb=documented_false_positive",
             ground_truth_action="dismiss",
         ),
+        Alert(
+            id="A017",
+            source="edr",
+            severity="medium",
+            description="new msi installer run on a workstation by the management agent, part of the monthly patch rollout",
+            raw_log="2026-01-14T11:30:02Z edr host=ws-044 parent=ccmexec.exe signer=Microsoft "
+                    "child=msiexec.exe /i patch_bundle_2026-01.msi deployment=monthly_patch_rollout",
+            ground_truth_action="dismiss",
+        ),
+        Alert(
+            id="A018",
+            source="proxy",
+            severity="low",
+            description="first visit to a newly registered domain, which the proxy allowed after categorizing it as news",
+            raw_log="2026-01-14T13:12:45Z proxy user=mkosta host=ws-012 url=https://news.example.org/ "
+                    "domain_age_days=9 category=news verdict=allowed",
+            ground_truth_action="dismiss",
+        ),
     ]
