@@ -1365,7 +1365,7 @@ def cmd_summarize(args):
     print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
     for row in rows:
         print(f"{row['client']:<{width}} " + " ".join(f"{points_or_na(row['lift'][d]):>9}" for d in defenses))
-    print(f"\ntechniques with a significant lift (both directions, paired McNemar, p<{SIGNIFICANCE_ALPHA})")
+    print(f"\ntechniques with a significant lift (both directions, paired McNemar, Holm-adjusted p<{SIGNIFICANCE_ALPHA})")
     print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
     for row in rows:
         print(f"{row['client']:<{width}} " + " ".join(f"{row['significant'][d] or 'n/a':>9}" for d in defenses))

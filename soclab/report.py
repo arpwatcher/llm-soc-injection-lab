@@ -918,7 +918,7 @@ def render_summary_report(rows: list[dict], defenses: list[str], severity_filter
         lines.append(f"| {row['client']} | " + " | ".join(points_or_na(row["lift"][d]) for d in defenses) + " |")
     if any("significant" in row for row in rows):
         lines.extend([
-            "", f"## techniques with a significant lift (both directions, paired McNemar, p<{SIGNIFICANCE_ALPHA})", "",
+            "", f"## techniques with a significant lift (both directions, paired McNemar, Holm-adjusted p<{SIGNIFICANCE_ALPHA})", "",
         ])
         lines.append("| client | " + " | ".join(defenses) + " |")
         lines.append("|---|" + "|".join("---" for _ in defenses) + "|")

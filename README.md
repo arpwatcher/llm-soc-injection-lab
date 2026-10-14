@@ -347,7 +347,8 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   directions combined), clean-alert accuracy per defense, and the injection lift over the
   no-injection baseline per defense (pooled across both directions the same way the hijack
   rate is), and how many of the 16 techniques (both directions) had a significant paired
-  McNemar lift per defense, a row per report in the order
+  McNemar lift per defense after the Holm adjustment (a report saved before that existed has
+  only raw p-values and shows n/a there), a row per report in the order
   given, with the same `--report` md/json/csv choice as everything else (csv in long form, one
   row per model and defense). That's the cross-model headline result, which full-report,
   being single-client, can't give on its own. It refuses reports run with different

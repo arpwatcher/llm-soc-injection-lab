@@ -2639,6 +2639,7 @@ def test_summarize_counts_significant_techniques_per_model_and_defense(fake_olla
     capsys.readouterr()
     assert main(["summarize", str(stubborn), str(lazy)]) == 0
     table = capsys.readouterr().out.split("techniques with a significant lift")[1]
+    assert table.startswith(" (both directions, paired McNemar, Holm-adjusted p<0.05)")
     rows = {line.split()[0]: line.split()[1:] for line in table.strip().splitlines()[2:]}
     # stubborn: 7 dismiss techniques under none/sandwich/strict, nothing escalates it; nothing under both
     assert rows["fake-stubborn"] == ["7/16", "7/16", "7/16", "0/16"]
@@ -2647,6 +2648,7 @@ def test_summarize_counts_significant_techniques_per_model_and_defense(fake_olla
     main(["summarize", str(stubborn), str(lazy), "--report", str(cs)])
     capsys.readouterr()
     assert "| fake-stubborn | 7/16 | 7/16 | 7/16 | 0/16 |" in md.read_text()
+    assert "## techniques with a significant lift (both directions, paired McNemar, Holm-adjusted p<0.05)" in md.read_text()
     csv_rows = {(r["client"], r["defense"]): r for r in csv.DictReader(io.StringIO(cs.read_text()))}
     assert csv_rows[("fake-stubborn", "none")]["significant_techniques"] == "7/16"
 
