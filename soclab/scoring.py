@@ -213,7 +213,8 @@ def _paired_counts(clean_results: list[ScoredResult], injected_results: list[Sco
 
 
 def _finish_paired_lift(counts: dict) -> dict:
-    """Rates, lift and the McNemar p-value per technique, plus p_holm: the
+    """Rates, lift (with its paired 95% interval) and the McNemar p-value
+    per technique, plus p_holm: the
     same p-value Holm-adjusted across this set of techniques, which is
     what significance should be judged on - the techniques in one table
     are one family of tests."""
@@ -230,6 +231,10 @@ def _finish_paired_lift(counts: dict) -> dict:
             "lost": entry["lost"],
             "p_value": mcnemar_exact_p_value(entry["gained"], entry["lost"]),
         }
+        both = entry["injected"] - entry["gained"]
+        neither = entry["pairs"] - entry["injected"] - entry["lost"]
+        low, high = paired_lift_confidence_interval(both, entry["gained"], entry["lost"], neither)
+        lifts[technique]["lift_ci_low"], lifts[technique]["lift_ci_high"] = low, high
     for technique, p_holm in holm_adjusted({t: entry["p_value"] for t, entry in lifts.items()}).items():
         lifts[technique]["p_holm"] = p_holm
     return lifts
@@ -298,7 +303,7 @@ def overall_hijack_rate(results: list[ScoredResult]) -> float:
 def wilson_confidence_interval(hijacked: int, total: int, z: float = 1.96) -> tuple[float, float]:
     """A 95% (by default) confidence interval on a hijack rate estimated
     from `hijacked` out of `total` trials. Each technique in this harness
-    only gets 7-9 alerts, so a point estimate like "100%" is easy to
+    only gets 9 alerts, so a point estimate like "100%" is easy to
     over-read - the Wilson score interval (unlike the naive normal
     approximation) stays well-behaved at these small sample sizes and at
     rates near 0% or 100%, where a normal approximation can give nonsense
@@ -311,6 +316,36 @@ def wilson_confidence_interval(hijacked: int, total: int, z: float = 1.96) -> tu
     center = (p + z2 / (2 * total)) / denominator
     margin = z * math.sqrt(p * (1 - p) / total + z2 / (4 * total * total)) / denominator
     return (max(0.0, center - margin), min(1.0, center + margin))
+
+
+def paired_lift_confidence_interval(
+    both: int, gained: int, lost: int, neither: int, z: float = 1.96,
+) -> tuple[float, float]:
+    """A 95% (by default) confidence interval on a paired lift - the
+    injected rate minus the clean rate over the same alerts - from the four
+    cells of the paired table: alerts with the target action both times,
+    only once injected (gained), only when clean (lost), or neither time.
+    Newcombe's hybrid score method (his method 10, 1998): a Wilson interval
+    on each of the two rates, combined with the phi correlation between
+    them, which is what makes it a paired interval and not just two
+    independent ones subtracted. Like Wilson it stays inside [-1, 1] and
+    behaves at 9 pairs and at 0% or 100%, where the Wald interval
+    doesn't. Returns (0.0, 0.0) for no pairs."""
+    pairs = both + gained + lost + neither
+    if pairs == 0:
+        return (0.0, 0.0)
+    injected = (both + gained) / pairs
+    clean = (both + lost) / pairs
+    injected_low, injected_high = wilson_confidence_interval(both + gained, pairs, z)
+    clean_low, clean_high = wilson_confidence_interval(both + lost, pairs, z)
+    margins = (both + gained) * (lost + neither) * (both + lost) * (gained + neither)
+    phi = (both * neither - gained * lost) / math.sqrt(margins) if margins else 0.0
+    lift = injected - clean
+    below = (injected - injected_low) ** 2 - 2 * phi * (injected - injected_low) * (clean_high - clean) \
+        + (clean_high - clean) ** 2
+    above = (injected_high - injected) ** 2 - 2 * phi * (injected_high - injected) * (clean - clean_low) \
+        + (clean - clean_low) ** 2
+    return (max(-1.0, lift - math.sqrt(below)), min(1.0, lift + math.sqrt(above)))
 
 
 def overall_hijack_rate_confidence_interval(results: list[ScoredResult], z: float = 1.96) -> tuple[float, float]:

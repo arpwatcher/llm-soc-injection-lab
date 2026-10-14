@@ -916,13 +916,15 @@ def test_render_summary_report_has_a_lift_table():
 
 def test_technique_lift_rows_formats_each_technique():
     lifts = {
-        "a": {"injected_rate": 1.0, "baseline_rate": 0.0, "lift": 1.0, "p_value": 0.0039, "p_holm": 0.0078},
-        "b": {"injected_rate": 0.5, "baseline_rate": 0.25, "lift": 0.25, "p_value": 0.03, "p_holm": 0.06},
+        "a": {"injected_rate": 1.0, "baseline_rate": 0.0, "lift": 1.0, "lift_ci_low": 0.577, "lift_ci_high": 1.0,
+              "p_value": 0.0039, "p_holm": 0.0078},
+        "b": {"injected_rate": 0.5, "baseline_rate": 0.25, "lift": 0.25, "lift_ci_low": -0.104, "lift_ci_high": 0.55,
+              "p_value": 0.03, "p_holm": 0.06},
     }
     # the verdict follows the Holm-adjusted value: b's raw 0.03 would pass, its adjusted 0.06 doesn't
     assert technique_lift_rows(lifts) == [
-        ("a", 1.0, 0.0, "+100", 0.0039, 0.0078, "significant"),
-        ("b", 0.5, 0.25, "+25", 0.03, 0.06, "not significant"),
+        ("a", 1.0, 0.0, "+100", "+58 to +100", 0.0039, 0.0078, "significant"),
+        ("b", 0.5, 0.25, "+25", "-10 to +55", 0.03, 0.06, "not significant"),
     ]
 
 

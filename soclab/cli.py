@@ -256,9 +256,11 @@ def _baseline_by_defense(clean_results_by_defense: dict, results_by_defense: dic
 def _print_technique_lift(lifts: dict) -> None:
     print("\nper-technique lift, each injected alert paired with its clean answer "
           "(exact McNemar test, Holm-adjusted across the techniques):")
-    print(f"{'technique':<36} {'hijack_rate':>12} {'baseline':>9} {'lift':>6} {'p':>8} {'p_holm':>8}")
-    for technique, rate, baseline, lift, p_value, p_holm, verdict in technique_lift_rows(lifts):
-        print(f"{technique:<36} {rate:>11.0%} {baseline:>9.0%} {lift:>6} {p_value:>8.4f} {p_holm:>8.4f}  {verdict}")
+    print(f"{'technique':<36} {'hijack_rate':>12} {'baseline':>9} {'lift':>6} {'lift 95% ci':>14} {'p':>8} "
+          f"{'p_holm':>8}")
+    for technique, rate, baseline, lift, interval, p_value, p_holm, verdict in technique_lift_rows(lifts):
+        print(f"{technique:<36} {rate:>11.0%} {baseline:>9.0%} {lift:>6} {interval:>14} {p_value:>8.4f} "
+              f"{p_holm:>8.4f}  {verdict}")
 
 
 def _print_significant_lift_counts(lifts_by_defense: dict, heading: str) -> None:

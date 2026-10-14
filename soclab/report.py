@@ -120,15 +120,21 @@ def baseline_line(entry: dict) -> str:
     )
 
 
+def lift_interval(low: float, high: float) -> str:
+    """a lift's 95% interval in the same signed points as the lift itself."""
+    return f"{low * 100:+.0f} to {high * 100:+.0f}"
+
+
 def technique_lift_rows(lifts: dict) -> list[tuple]:
-    """(technique, hijack rate, baseline, lift, p-value, Holm-adjusted
-    p-value, verdict) per technique from scoring.paired_lift_by_technique
-    - the shape both the terminal table and the markdown one print. The
-    verdict goes by the Holm-adjusted value: the techniques in one table
-    are one family of tests."""
+    """(technique, hijack rate, baseline, lift, lift interval, p-value,
+    Holm-adjusted p-value, verdict) per technique from
+    scoring.paired_lift_by_technique - the shape both the terminal table
+    and the markdown one print. The verdict goes by the Holm-adjusted
+    value: the techniques in one table are one family of tests."""
     return [
         (technique, entry["injected_rate"], entry["baseline_rate"], points_or_na(entry["lift"]),
-         entry["p_value"], entry["p_holm"], "significant" if is_significant(entry["p_holm"]) else "not significant")
+         lift_interval(entry["lift_ci_low"], entry["lift_ci_high"]), entry["p_value"], entry["p_holm"],
+         "significant" if is_significant(entry["p_holm"]) else "not significant")
         for technique, entry in lifts.items()
     ]
 
@@ -138,12 +144,13 @@ def _render_technique_lift_table(lifts: dict) -> list[str]:
         ("per-technique lift, each injected alert paired with its clean answer "
          "(exact McNemar test, Holm-adjusted across the techniques):"),
         "",
-        "| technique | hijack rate | baseline | lift | p | p (holm) | |",
-        "|---|---|---|---|---|---|---|",
+        "| technique | hijack rate | baseline | lift | lift 95% ci | p | p (holm) | |",
+        "|---|---|---|---|---|---|---|---|",
     ]
-    for technique, rate, baseline, lift, p_value, p_holm, verdict in technique_lift_rows(lifts):
+    for technique, rate, baseline, lift, interval, p_value, p_holm, verdict in technique_lift_rows(lifts):
         lines.append(
-            f"| {technique} | {rate:.0%} | {baseline:.0%} | {lift} | {p_value:.4f} | {p_holm:.4f} | {verdict} |"
+            f"| {technique} | {rate:.0%} | {baseline:.0%} | {lift} | {interval} | {p_value:.4f} | {p_holm:.4f} "
+            f"| {verdict} |"
         )
     lines.append("")
     return lines

@@ -2533,8 +2533,9 @@ def test_run_prints_a_per_technique_paired_lift_table(capsys):
     table = out.split("(exact McNemar test, Holm-adjusted across the techniques):")[1]
     rows = {line.split()[0]: line.split()[1:] for line in table.strip().splitlines()[1:]}
     # all 9 alerts flipped to dismiss once injected: 2 * 0.5^9, and x8 after Holm over the 8 techniques
-    assert rows["direct_override"] == ["100%", "0%", "+100", "0.0039", "0.0312", "significant"]
-    assert rows["unicode_homoglyph"] == ["0%", "0%", "+0", "1.0000", "1.0000", "not", "significant"]
+    assert rows["direct_override"] == ["100%", "0%", "+100", "+58", "to", "+100", "0.0039", "0.0312", "significant"]
+    # unchanged on all 9 alerts, and still the interval can't rule out a 30-point lift either way
+    assert rows["unicode_homoglyph"] == ["0%", "0%", "+0", "-30", "to", "+30", "1.0000", "1.0000", "not", "significant"]
 
 
 def test_a_model_that_already_dismisses_everything_shows_no_significant_lift(fake_ollama, tmp_path, capsys):
@@ -2554,8 +2555,8 @@ def test_run_markdown_report_carries_the_lift_table(tmp_path, capsys):
     main(["run", "--client", "fake-vulnerable", "--report", str(report_path)])
     capsys.readouterr()
     content = report_path.read_text()
-    assert "| technique | hijack rate | baseline | lift | p | p (holm) | |" in content
-    assert "| direct_override | 100% | 0% | +100 | 0.0039 | 0.0312 | significant |" in content
+    assert "| technique | hijack rate | baseline | lift | lift 95% ci | p | p (holm) | |" in content
+    assert "| direct_override | 100% | 0% | +100 | +58 to +100 | 0.0039 | 0.0312 | significant |" in content
 
 
 def test_compare_prints_significant_lift_counts_and_saves_the_tables(tmp_path, capsys):
