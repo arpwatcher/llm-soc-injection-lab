@@ -390,13 +390,23 @@ def test_render_markdown_report_includes_significance_when_given():
     # "none" itself never gets an entry - nothing to compare it against itself.
     report = render_markdown_report(
         "fake-vulnerable", {"none": _sample_aggregate(), "sandwich": _sample_aggregate()},
-        significance_by_defense={"sandwich": (2.5, 0.0124)},
+        significance_by_defense={"sandwich": (2.5, 0.0124, 0.0372)},
     )
     assert "## defense: none" in report
     none_section = report.split("## defense: none")[1].split("## defense: sandwich")[0]
     assert "significance vs none" not in none_section
     sandwich_section = report.split("## defense: sandwich")[1]
-    assert "significance vs none (two-proportion z-test): p=0.0124 (significant at p<0.05)" in sandwich_section
+    assert "significance vs none (two-proportion z-test): p=0.0124, Holm-adjusted 0.0372 (significant at p<0.05)" in sandwich_section
+
+
+def test_markdown_significance_verdict_follows_the_holm_adjusted_value():
+    """sandwich, strict and both are each tested against none - three tests,
+    so a raw 0.03 that's 0.09 after Holm isn't called significant."""
+    report = render_markdown_report(
+        "fake-vulnerable", {"none": _sample_aggregate(), "sandwich": _sample_aggregate()},
+        significance_by_defense={"sandwich": (2.2, 0.03, 0.09)},
+    )
+    assert "p=0.0300, Holm-adjusted 0.0900 (not significant at p<0.05)" in report
 
 
 def test_render_markdown_report_omits_significance_when_not_given():
@@ -406,25 +416,25 @@ def test_render_markdown_report_omits_significance_when_not_given():
 
 def test_render_json_report_includes_significance_when_given():
     report = render_json_report(
-        "fake-vulnerable", {"none": _sample_aggregate()}, significance_by_defense={"sandwich": (2.5, 0.0124)},
+        "fake-vulnerable", {"none": _sample_aggregate()}, significance_by_defense={"sandwich": (2.5, 0.0124, 0.0372)},
     )
-    assert json.loads(report)["significance_vs_none_by_defense"] == {"sandwich": [2.5, 0.0124]}
+    assert json.loads(report)["significance_vs_none_by_defense"] == {"sandwich": [2.5, 0.0124, 0.0372]}
 
 
 def test_render_combined_report_includes_significance_when_given():
     by_direction = {"dismiss": {"none": _sample_aggregate(), "sandwich": _sample_aggregate()}}
-    significance_by_direction = {"dismiss": {"sandwich": (2.5, 0.0124)}}
+    significance_by_direction = {"dismiss": {"sandwich": (2.5, 0.0124, 0.0372)}}
     report = render_combined_report("fake-stubborn", by_direction, significance_by_direction=significance_by_direction)
-    assert "significance vs none (two-proportion z-test): p=0.0124 (significant at p<0.05)" in report
+    assert "significance vs none (two-proportion z-test): p=0.0124, Holm-adjusted 0.0372 (significant at p<0.05)" in report
 
 
 def test_render_combined_json_report_includes_significance_when_given():
     by_direction = {"dismiss": {"none": _sample_aggregate()}}
-    significance_by_direction = {"dismiss": {"sandwich": (2.5, 0.0124)}}
+    significance_by_direction = {"dismiss": {"sandwich": (2.5, 0.0124, 0.0372)}}
     report = render_combined_json_report(
         "fake-stubborn", by_direction, significance_by_direction=significance_by_direction,
     )
-    assert json.loads(report)["significance_vs_none_by_direction"] == {"dismiss": {"sandwich": [2.5, 0.0124]}}
+    assert json.loads(report)["significance_vs_none_by_direction"] == {"dismiss": {"sandwich": [2.5, 0.0124, 0.0372]}}
 
 
 def test_render_combined_report_includes_confidence_interval_when_given():

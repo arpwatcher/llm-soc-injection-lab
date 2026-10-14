@@ -279,7 +279,9 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   [--transcript FILE]` runs it under all four defenses back to back, prints the same
   defense-summary table straight to the terminal, followed by a two-proportion z-test
   comparing each defense's hijack rate against `none` (is the difference actually
-  significant, or could it be noise from a small sample), and optionally writes the
+  significant, or could it be noise from a small sample) - three tests against one baseline,
+  so the verdict goes by the Holm-adjusted p-value there too, saved as `[z, p, p_holm]` per
+  defense - and optionally writes the
   comparison and/or transcript (each entry tagged with which defense it came from).
   `--defenses both` (or any comma-separated subset, on `compare` and `full-report`) runs just
   those plus `none` - always kept, since it's the baseline every significance test compares
@@ -617,7 +619,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-540 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+542 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

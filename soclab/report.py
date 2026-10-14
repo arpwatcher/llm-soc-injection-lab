@@ -222,10 +222,11 @@ def _render_defense_sections(
         if severity_weighted_by_defense is not None:
             lines.append(f"severity-weighted hijack rate: {severity_weighted_by_defense[defense]:.0%}")
         if significance_by_defense is not None and defense in significance_by_defense:
-            _, p_value = significance_by_defense[defense]
-            verdict = "significant" if is_significant(p_value) else "not significant"
+            _, p_value, p_holm = significance_by_defense[defense]
+            verdict = "significant" if is_significant(p_holm) else "not significant"
             lines.append(
-                f"significance vs none (two-proportion z-test): p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})"
+                f"significance vs none (two-proportion z-test): p={p_value:.4f}, Holm-adjusted {p_holm:.4f} "
+                f"({verdict} at p<{SIGNIFICANCE_ALPHA})"
             )
         lines.append("")
     return lines

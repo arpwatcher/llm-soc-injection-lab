@@ -73,6 +73,7 @@ from soclab.scoring import (
     aggregate_by_technique,
     baseline_and_total,
     hijacked_and_total,
+    holm_adjusted,
     is_significant,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
@@ -286,17 +287,22 @@ def _print_baseline_summary(baseline_by_defense: dict, heading: str) -> None:
 
 
 def _significance_vs_baseline(results_by_defense: dict, baseline: str) -> dict:
-    """defense name -> (z, p_value) for a two-proportion z-test of that
-    defense's overall hijack rate against the baseline's (defense=none),
-    for every defense except the baseline itself. Computed once here so
-    both the terminal printout and the written report render from the
-    same numbers instead of recomputing them separately."""
+    """defense name -> (z, p_value, p_holm) for a two-proportion z-test of
+    that defense's overall hijack rate against the baseline's
+    (defense=none), for every defense except the baseline itself. The
+    defenses compared against the same baseline are one family of tests
+    (three of them on a full run), so p_holm is the Holm-adjusted value
+    and the verdict goes by it. Computed once here so both the terminal
+    printout and the written report render from the same numbers instead
+    of recomputing them separately."""
     baseline_hijacked, baseline_total = hijacked_and_total(results_by_defense[baseline])
-    return {
+    tests = {
         defense: two_proportion_z_test(baseline_hijacked, baseline_total, *hijacked_and_total(results))
         for defense, results in results_by_defense.items()
         if defense != baseline
     }
+    adjusted = holm_adjusted({defense: p_value for defense, (_, p_value) in tests.items()})
+    return {defense: (z, p_value, adjusted[defense]) for defense, (z, p_value) in tests.items()}
 
 
 def _print_significance_vs_baseline(significance: dict, baseline: str):
@@ -310,9 +316,10 @@ def _print_significance_vs_baseline(significance: dict, baseline: str):
         # --defenses none: nothing to compare the baseline against
         return
     print(f"significance vs defense={baseline} (two-proportion z-test):")
-    for defense, (_, p_value) in significance.items():
-        verdict = "significant" if is_significant(p_value) else "not significant"
-        print(f"  {baseline} vs {defense}: p={p_value:.4f} ({verdict} at p<{SIGNIFICANCE_ALPHA})")
+    for defense, (_, p_value, p_holm) in significance.items():
+        verdict = "significant" if is_significant(p_holm) else "not significant"
+        print(f"  {baseline} vs {defense}: p={p_value:.4f}, Holm-adjusted {p_holm:.4f} "
+              f"({verdict} at p<{SIGNIFICANCE_ALPHA})")
     print()
 
 

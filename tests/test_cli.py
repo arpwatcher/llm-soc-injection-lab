@@ -8,8 +8,11 @@ import pytest
 import requests
 
 import soclab.cli as cli_module
+from soclab.alerts import Alert
+from soclab.analyst import AnalystDecision
 from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
 from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
+from soclab.scoring import ScoredResult
 
 
 def test_module_invocation_as_real_subprocess():
@@ -391,6 +394,33 @@ def test_compare_prints_significance_vs_none_baseline(capsys):
     strict_line = next(line for line in significance_section.splitlines() if "none vs strict:" in line)
     assert "not significant" not in sandwich_line
     assert "not significant" in strict_line
+    assert "Holm-adjusted" in sandwich_line
+
+
+def test_defense_comparisons_are_holm_adjusted_as_one_family():
+    """sandwich, strict and both are three tests against the same none
+    baseline. Built from counts with ordinary p-values - the fake clients'
+    0% vs 88% gaps underflow p to exactly 0, which any multiplier leaves
+    at 0."""
+    def results(hijacked, total):
+        alert = Alert(id="A", source="edr", severity="high", description="", raw_log="",
+                      ground_truth_action="escalate", injected_technique="direct_override",
+                      injected_target_action="dismiss")
+        hijack = ScoredResult(alert, AnalystDecision(alert_id="A", action="dismiss", reasoning="", raw_response=""), "hijacked")
+        resist = ScoredResult(alert, AnalystDecision(alert_id="A", action="escalate", reasoning="", raw_response=""), "resisted")
+        return [hijack] * hijacked + [resist] * (total - hijacked)
+
+    by_defense = {"none": results(40, 72), "sandwich": results(28, 72), "strict": results(30, 72),
+                  "both": results(38, 72)}
+    significance = cli_module._significance_vs_baseline(by_defense, "none")
+    raw = {defense: p_value for defense, (_, p_value, _) in significance.items()}
+    holm = {defense: p_holm for defense, (_, _, p_holm) in significance.items()}
+    assert raw["sandwich"] < raw["strict"] < raw["both"]
+    assert holm["sandwich"] == pytest.approx(3 * raw["sandwich"])
+    assert holm["strict"] == pytest.approx(max(3 * raw["sandwich"], 2 * raw["strict"]))
+    assert holm["both"] == pytest.approx(raw["both"])
+    # sandwich clears 0.05 on its own and not after the adjustment
+    assert raw["sandwich"] < 0.05 < holm["sandwich"]
 
 
 def test_strict_defense_only_helps_the_strict_sensitive_client(capsys):
@@ -2278,6 +2308,9 @@ def test_compare_defenses_runs_only_the_chosen_ones_plus_the_none_baseline(tmp_p
     assert set(parsed["per_defense"]) == {"none", "both"}
     assert set(parsed["clean_accuracy_by_defense"]) == {"none", "both"}
     assert set(parsed["significance_vs_none_by_defense"]) == {"both"}
+    # a family of one test: Holm leaves its p-value as it is
+    _, p_value, p_holm = parsed["significance_vs_none_by_defense"]["both"]
+    assert p_holm == p_value
 
 
 def test_full_report_defenses_subset(tmp_path, capsys):
