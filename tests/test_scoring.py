@@ -13,6 +13,7 @@ from soclab.injections import (
 from soclab.llm_client import (
     EscalationVulnerableFakeClient,
     RobustFakeClient,
+    SandwichSensitiveFakeClient,
     ScriptedLLMClient,
     VulnerableFakeClient,
 )
@@ -24,6 +25,7 @@ from soclab.scoring import (
     aggregate_by_technique,
     baseline_and_total,
     classify_outcome,
+    defense_effect_by_technique,
     hijacked_and_total,
     holm_adjusted,
     is_significant,
@@ -678,3 +680,46 @@ def test_paired_lift_entries_carry_their_interval():
     assert lifts["direct_override"]["lift_ci_low"] == pytest.approx(0.5769, abs=1e-4)
     assert lifts["direct_override"]["lift_ci_high"] == 1.0
     assert lifts["unicode_homoglyph"]["lift_ci_low"] == pytest.approx(-0.2992, abs=1e-4)
+
+
+def _scripted(actions: list[str]) -> ScriptedLLMClient:
+    return ScriptedLLMClient([f'{{"action": "{action}", "reasoning": "r"}}' for action in actions])
+
+
+def test_defense_effect_counts_what_the_defense_stopped_per_technique():
+    """sandwich-sensitive caves to 7 of the 8 techniques with no defense and
+    to none of them under sandwich: all 9 alerts stopped for each of the 7,
+    a perfect paired result that survives Holm over the 8."""
+    alerts = apply_all_techniques(generate_clean_alerts())
+    client = SandwichSensitiveFakeClient()
+    effects = defense_effect_by_technique(score_batch(alerts, client), score_batch(alerts, client, "sandwich"))
+    override = effects["direct_override"]
+    assert (override["stopped"], override["introduced"], override["pairs"]) == (9, 0, 9)
+    assert (override["none_rate"], override["defense_rate"], override["change"]) == (1.0, 0.0, -1.0)
+    assert override["change_ci_high"] == pytest.approx(-0.5769, abs=1e-4)
+    assert override["p_holm"] == pytest.approx(8 * 2 / 512)
+    # never hijacked in the first place, so nothing for the defense to stop
+    assert effects["unicode_homoglyph"]["stopped"] == 0
+    assert effects["unicode_homoglyph"]["p_value"] == 1.0
+
+
+def test_defense_effect_shows_a_defense_that_makes_things_worse():
+    """the pairing runs both ways - a defense that gets a model hijacked on
+    alerts it used to handle shows up as introduced, a positive change."""
+    alert = apply_all_techniques(generate_clean_alerts()[:1])[0]
+    assert alert.injected_target_action == "dismiss"
+    right = alert.ground_truth_action
+    without = score_batch([alert], _scripted([right]))
+    with_defense = score_batch([alert], _scripted(["dismiss"]))
+    effect = defense_effect_by_technique(without, with_defense)[alert.injected_technique]
+    assert (effect["stopped"], effect["introduced"], effect["change"]) == (0, 1, 1.0)
+
+
+def test_defense_effect_only_pairs_injected_alerts_present_in_both_runs():
+    alerts = apply_all_techniques(generate_clean_alerts())
+    clean = generate_clean_alerts()
+    client = VulnerableFakeClient()
+    without = score_batch(clean + alerts, client)
+    with_defense = score_batch(clean + alerts[:3], client, "sandwich")
+    effects = defense_effect_by_technique(without, with_defense)
+    assert sum(entry["pairs"] for entry in effects.values()) == 3

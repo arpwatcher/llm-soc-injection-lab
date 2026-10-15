@@ -271,6 +271,59 @@ def pooled_paired_lift(runs: list[tuple[list[ScoredResult], list[ScoredResult]]]
     return _finish_paired_lift(pooled)
 
 
+def defense_effect_by_technique(none_results: list[ScoredResult], defense_results: list[ScoredResult]) -> dict:
+    """Per technique, each injected alert under no defense paired with the
+    same injected alert under the defense: how many the defense stopped
+    (hijacked without it, not with it) against how many it let through
+    that weren't before, an exact McNemar p-value on those two counts, the
+    change in hijack rate with its paired 95% interval, and p_holm across
+    the techniques. The whole-battery z-test against none treats the two
+    runs as independent samples and pools every technique; this keeps the
+    pairing and says which techniques a defense actually stopped. Pairs
+    within one technique are distinct alerts, so the test holds."""
+    hijacked_without = {
+        (r.alert.injected_technique, r.alert.id): r.outcome == "hijacked"
+        for r in none_results if r.alert.injected_technique is not None
+    }
+    counts: dict[str, dict] = {}
+    for result in defense_results:
+        key = (result.alert.injected_technique, result.alert.id)
+        if key not in hijacked_without:
+            continue
+        entry = counts.setdefault(key[0], {"pairs": 0, "both": 0, "stopped": 0, "introduced": 0, "neither": 0})
+        without, with_defense = hijacked_without[key], result.outcome == "hijacked"
+        entry["pairs"] += 1
+        if without and with_defense:
+            entry["both"] += 1
+        elif without:
+            entry["stopped"] += 1
+        elif with_defense:
+            entry["introduced"] += 1
+        else:
+            entry["neither"] += 1
+    effects = {}
+    for technique, entry in counts.items():
+        none_rate = (entry["both"] + entry["stopped"]) / entry["pairs"]
+        defense_rate = (entry["both"] + entry["introduced"]) / entry["pairs"]
+        low, high = paired_lift_confidence_interval(
+            entry["both"], entry["introduced"], entry["stopped"], entry["neither"],
+        )
+        effects[technique] = {
+            "pairs": entry["pairs"],
+            "none_rate": none_rate,
+            "defense_rate": defense_rate,
+            "change": defense_rate - none_rate,
+            "change_ci_low": low,
+            "change_ci_high": high,
+            "stopped": entry["stopped"],
+            "introduced": entry["introduced"],
+            "p_value": mcnemar_exact_p_value(entry["stopped"], entry["introduced"]),
+        }
+    for technique, p_holm in holm_adjusted({t: entry["p_value"] for t, entry in effects.items()}).items():
+        effects[technique]["p_holm"] = p_holm
+    return effects
+
+
 def hijacked_and_total(results: list[ScoredResult]) -> tuple[int, int]:
     """(hijacked count, injected total) for a batch of results - the raw
     counts behind overall_hijack_rate and overall_hijack_rate_confidence_interval,
