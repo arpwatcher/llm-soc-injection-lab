@@ -14,7 +14,7 @@ test:
 
 coverage:
 	python -m coverage run --branch -m pytest -q
-	python -m coverage report -m
+	python -m coverage report -m --fail-under=100
 
 # checks pinned dependencies against known vulnerability databases - kept
 # separate from `check` since it needs network access (queries PyPI's

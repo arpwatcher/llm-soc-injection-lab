@@ -689,6 +689,9 @@ only), so a future untested branch could have slipped in without `make check` ev
 it. Fixed by adding `--branch` to that one `coverage run` call - `coverage report` already
 prints the Branch/BrPart columns automatically once the underlying data has them, no other
 change needed, and the number was (still) genuinely 100% once actually measured.
+The same gap had a second half: `coverage report` printed the number but never failed on it,
+so a drop to 99% still let `make check` (and CI) pass, and staying at 100% depended on
+someone reading the TOTAL line. `--fail-under=100` on that report makes it a failing check.
 
 Checked a broader ruff rule set (`B`, `SIM`, `PERF`, `RUF`, `A`, `C4`, `PIE`, `RET`) the same
 way the earlier line-length audit checked an expanded one, to see if any of it was worth
