@@ -25,6 +25,7 @@ from soclab.scoring import (
     aggregate_by_technique,
     baseline_and_total,
     classify_outcome,
+    clean_accuracy_change_by_defense,
     defense_effect_by_technique,
     hijacked_and_total,
     holm_adjusted,
@@ -723,3 +724,49 @@ def test_defense_effect_only_pairs_injected_alerts_present_in_both_runs():
     with_defense = score_batch(clean + alerts[:3], client, "sandwich")
     effects = defense_effect_by_technique(without, with_defense)
     assert sum(entry["pairs"] for entry in effects.values()) == 3
+
+
+def _wrong(action: str) -> str:
+    return "investigate" if action != "investigate" else "escalate"
+
+
+def test_clean_accuracy_change_pairs_each_alert_with_itself_under_no_defense():
+    """strict breaks 9 of the 18 clean alerts (2 x 0.5^9 raw, x2 after Holm
+    over the two defenses); sandwich breaks 2, which is nothing like enough
+    to say it's the defense and not noise."""
+    alerts = generate_clean_alerts()
+    truth = [a.ground_truth_action for a in alerts]
+    results = {
+        "none": score_batch(alerts, _scripted(truth)),
+        "strict": score_batch(alerts, _scripted([_wrong(t) if i < 9 else t for i, t in enumerate(truth)]), "strict"),
+        "sandwich": score_batch(alerts, _scripted([_wrong(t) if i < 2 else t for i, t in enumerate(truth)]), "sandwich"),
+    }
+    changes = clean_accuracy_change_by_defense(results)
+    assert set(changes) == {"strict", "sandwich"}
+    strict = changes["strict"]
+    assert (strict["pairs"], strict["broke"], strict["fixed"]) == (18, 9, 0)
+    assert (strict["none_accuracy"], strict["defense_accuracy"], strict["change"]) == (1.0, 0.5, -0.5)
+    assert strict["change_ci_low"] < -0.5 < strict["change_ci_high"] < 0
+    assert strict["p_value"] == pytest.approx(2 / 512)
+    assert strict["p_holm"] == pytest.approx(2 * 2 / 512)
+    assert changes["sandwich"]["broke"] == 2
+    assert changes["sandwich"]["p_holm"] == pytest.approx(0.5)
+
+
+def test_clean_accuracy_change_counts_alerts_a_defense_fixed():
+    alerts = generate_clean_alerts()[:3]
+    truth = [a.ground_truth_action for a in alerts]
+    results = {
+        "none": score_batch(alerts, _scripted([_wrong(t) for t in truth])),
+        "both": score_batch(alerts, _scripted(truth), "both"),
+    }
+    change = clean_accuracy_change_by_defense(results)["both"]
+    assert (change["broke"], change["fixed"], change["change"]) == (0, 3, 1.0)
+
+
+def test_clean_accuracy_change_with_no_shared_alerts_is_empty_not_a_crash():
+    """an alert only one of the two runs answered has nothing to pair with."""
+    alert = generate_clean_alerts()[0]
+    unpaired = score_batch([alert], _scripted([alert.ground_truth_action]), "sandwich")
+    change = clean_accuracy_change_by_defense({"none": [], "sandwich": unpaired})["sandwich"]
+    assert (change["pairs"], change["change"], change["p_value"]) == (0, 0.0, 1.0)

@@ -73,6 +73,7 @@ from soclab.scoring import (
     aggregate_by_severity_and_technique,
     aggregate_by_technique,
     baseline_and_total,
+    clean_accuracy_change_by_defense,
     defense_effect_by_technique,
     hijacked_and_total,
     holm_adjusted,
@@ -299,6 +300,21 @@ def _print_defense_effect_counts(effects_by_defense: dict, heading: str) -> None
         verdicts = [defense_effect_verdict(entry) for entry in effects.values()]
         print(f"  defense={defense}: {verdicts.count('reduced')}/{len(effects)} techniques reduced, "
               f"{verdicts.count('increased')}/{len(effects)} increased (Holm-adjusted p<{SIGNIFICANCE_ALPHA})")
+    print()
+
+
+def _print_clean_accuracy_change(changes: dict) -> None:
+    """whether each defense measurably changed clean-alert accuracy, paired
+    by alert - the cost side of the trade-off, next to the bare
+    accuracies printed just above."""
+    if not changes:
+        return
+    print("clean-alert accuracy vs none, paired by alert (exact McNemar test, Holm-adjusted across the defenses):")
+    for defense, entry in changes.items():
+        interval = lift_interval(entry["change_ci_low"], entry["change_ci_high"])
+        print(f"  defense={defense}: {entry['none_accuracy']:.0%} -> {entry['defense_accuracy']:.0%} "
+              f"({points_or_na(entry['change'])} points, {interval}), broke {entry['broke']}, fixed {entry['fixed']}, "
+              f"p_holm={entry['p_holm']:.4f} ({defense_effect_verdict(entry)})")
     print()
 
 
@@ -594,6 +610,8 @@ def cmd_compare(args):
     _print_summary(
         clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
     )
+    clean_accuracy_change = clean_accuracy_change_by_defense(clean_results_by_defense, DEFENSE_NONE)
+    _print_clean_accuracy_change(clean_accuracy_change)
     baseline_by_defense = _baseline_by_defense(clean_results_by_defense, results_by_defense, args.direction)
     _print_baseline_summary(baseline_by_defense, "summary: injection lift over the no-injection baseline")
     technique_lift_by_defense = {
@@ -619,6 +637,7 @@ def cmd_compare(args):
                 significance_by_defense=significance_by_defense,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
+                clean_accuracy_change_by_defense=clean_accuracy_change,
                 baseline_by_defense=baseline_by_defense,
                 technique_lift_by_defense=technique_lift_by_defense,
                 defense_effect_by_defense=defense_effect_by_defense,
@@ -631,6 +650,7 @@ def cmd_compare(args):
                 significance_by_defense=significance_by_defense,
                 severity_breakdown_by_defense=severity_breakdown_by_defense,
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
+                clean_accuracy_change_by_defense=clean_accuracy_change,
                 baseline_by_defense=baseline_by_defense,
                 technique_lift_by_defense=technique_lift_by_defense,
                 defense_effect_by_defense=defense_effect_by_defense,
@@ -696,6 +716,8 @@ def cmd_full_report(args):
     _print_summary(
         clean_accuracy_by_defense, "summary: clean-alert accuracy by defense", column_label="clean_accuracy",
     )
+    clean_accuracy_change = clean_accuracy_change_by_defense(clean_results_by_defense, DEFENSE_NONE)
+    _print_clean_accuracy_change(clean_accuracy_change)
     baseline_by_direction = {
         direction: _baseline_by_defense(clean_results_by_defense, results_by_direction[direction], direction)
         for direction in DIRECTIONS
@@ -735,6 +757,7 @@ def cmd_full_report(args):
             significance_by_direction=significance_by_direction,
             severity_breakdown_by_direction=severity_breakdown_by_direction,
             clean_accuracy_by_defense=clean_accuracy_by_defense,
+            clean_accuracy_change_by_defense=clean_accuracy_change,
             baseline_by_direction=baseline_by_direction,
             technique_lift_by_direction=technique_lift_by_direction,
             defense_effect_by_direction=defense_effect_by_direction,
@@ -747,6 +770,7 @@ def cmd_full_report(args):
             significance_by_direction=significance_by_direction,
             severity_breakdown_by_direction=severity_breakdown_by_direction,
             clean_accuracy_by_defense=clean_accuracy_by_defense,
+            clean_accuracy_change_by_defense=clean_accuracy_change,
             baseline_by_direction=baseline_by_direction,
             technique_lift_by_direction=technique_lift_by_direction,
             defense_effect_by_direction=defense_effect_by_direction,

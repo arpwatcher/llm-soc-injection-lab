@@ -324,6 +324,47 @@ def defense_effect_by_technique(none_results: list[ScoredResult], defense_result
     return effects
 
 
+def clean_accuracy_change_by_defense(clean_results_by_defense: dict, baseline: str = "none") -> dict:
+    """The cost side of a defense: per defense other than the baseline,
+    each clean alert answered under no defense paired with the same alert
+    under the defense - how many the defense broke (right without it,
+    wrong with it) against how many it fixed, an exact McNemar p-value on
+    those, the accuracy change with its paired 95% interval, and p_holm
+    across the defenses (each is tested against the same baseline). A bare
+    accuracy per defense can't say whether a drop of an alert or two is
+    the defense's doing."""
+    correct_without = {r.alert.id: r.outcome == "resisted" for r in clean_results_by_defense[baseline]}
+    changes = {}
+    for defense, results in clean_results_by_defense.items():
+        if defense == baseline:
+            continue
+        cells = {"both": 0, "fixed": 0, "broke": 0, "neither": 0}
+        for result in results:
+            if result.alert.id not in correct_without:
+                continue
+            without, with_defense = correct_without[result.alert.id], result.outcome == "resisted"
+            cell = ("both" if with_defense else "broke") if without else ("fixed" if with_defense else "neither")
+            cells[cell] += 1
+        pairs = sum(cells.values())
+        low, high = paired_lift_confidence_interval(cells["both"], cells["fixed"], cells["broke"], cells["neither"])
+        none_accuracy = (cells["both"] + cells["broke"]) / pairs if pairs else 0.0
+        defense_accuracy = (cells["both"] + cells["fixed"]) / pairs if pairs else 0.0
+        changes[defense] = {
+            "pairs": pairs,
+            "none_accuracy": none_accuracy,
+            "defense_accuracy": defense_accuracy,
+            "change": defense_accuracy - none_accuracy,
+            "change_ci_low": low,
+            "change_ci_high": high,
+            "broke": cells["broke"],
+            "fixed": cells["fixed"],
+            "p_value": mcnemar_exact_p_value(cells["broke"], cells["fixed"]),
+        }
+    for defense, p_holm in holm_adjusted({d: entry["p_value"] for d, entry in changes.items()}).items():
+        changes[defense]["p_holm"] = p_holm
+    return changes
+
+
 def hijacked_and_total(results: list[ScoredResult]) -> tuple[int, int]:
     """(hijacked count, injected total) for a batch of results - the raw
     counts behind overall_hijack_rate and overall_hijack_rate_confidence_interval,

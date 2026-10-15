@@ -2807,3 +2807,18 @@ def test_summarize_of_none_only_reports_has_no_defense_effect_table(tmp_path, ca
     main(["summarize", str(path), "--report", str(md)])
     assert "reduced vs none" not in capsys.readouterr().out
     assert "reduced vs none" not in md.read_text()
+
+
+def test_compare_and_full_report_test_each_defenses_clean_accuracy_change(tmp_path, capsys):
+    """every fake client answers all 18 clean alerts right under every
+    defense - no change, and an interval that still can't rule out 18
+    points either way."""
+    report_path = tmp_path / "r.json"
+    main(["compare", "--client", "fake-robust", "--defenses", "sandwich", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert ("defense=sandwich: 100% -> 100% (+0 points, -18 to +18), broke 0, fixed 0, p_holm=1.0000 "
+            "(no significant change)") in out
+    assert json.loads(report_path.read_text())["clean_accuracy_vs_none_by_defense"]["sandwich"]["pairs"] == 18
+    main(["full-report", "--client", "fake-robust", "--defenses", "none", "--report", str(report_path)])
+    assert "clean-alert accuracy vs none" not in capsys.readouterr().out
+    assert json.loads(report_path.read_text())["clean_accuracy_vs_none_by_defense"] == {}

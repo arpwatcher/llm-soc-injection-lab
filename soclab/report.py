@@ -182,6 +182,25 @@ def _render_defense_effect_table(effects: dict) -> list[str]:
     return lines
 
 
+def _render_clean_accuracy_change_table(changes: dict) -> list[str]:
+    lines = [
+        ("clean-alert accuracy vs none, each clean alert paired with itself under no defense "
+         "(exact McNemar test, Holm-adjusted across the defenses):"),
+        "",
+        "| defense | without | with | change | change 95% ci | broke | fixed | p | p (holm) | |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for defense, entry in changes.items():
+        lines.append(
+            f"| {defense} | {entry['none_accuracy']:.0%} | {entry['defense_accuracy']:.0%} "
+            f"| {points_or_na(entry['change'])} | {lift_interval(entry['change_ci_low'], entry['change_ci_high'])} "
+            f"| {entry['broke']} | {entry['fixed']} | {entry['p_value']:.4f} | {entry['p_holm']:.4f} "
+            f"| {defense_effect_verdict(entry)} |"
+        )
+    lines.append("")
+    return lines
+
+
 def _render_defense_sections(
     per_defense: dict,
     severity_weighted_by_defense: dict | None = None,
@@ -273,6 +292,7 @@ def render_markdown_report(
     baseline_by_defense: dict | None = None,
     technique_lift_by_defense: dict | None = None,
     defense_effect_by_defense: dict | None = None,
+    clean_accuracy_change_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """per_defense maps defense name -> aggregate_by_technique() output for
@@ -301,6 +321,8 @@ def render_markdown_report(
         lines.extend(_render_summary_table(
             clean_accuracy_by_defense, "## summary: clean-alert accuracy by defense", column_label="clean accuracy",
         ))
+    if clean_accuracy_change_by_defense:
+        lines.extend(_render_clean_accuracy_change_table(clean_accuracy_change_by_defense))
     lines.extend(_render_defense_sections(
         per_defense,
         severity_weighted_by_defense=severity_weighted_by_defense,
@@ -326,6 +348,7 @@ def render_json_report(
     baseline_by_defense: dict | None = None,
     technique_lift_by_defense: dict | None = None,
     defense_effect_by_defense: dict | None = None,
+    clean_accuracy_change_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_markdown_report, as JSON instead of a document -
@@ -341,6 +364,7 @@ def render_json_report(
         "significance_vs_none_by_defense": significance_by_defense,
         "severity_breakdown_by_defense": severity_breakdown_by_defense,
         "clean_accuracy_by_defense": clean_accuracy_by_defense,
+        "clean_accuracy_vs_none_by_defense": clean_accuracy_change_by_defense,
         "baseline_by_defense": baseline_by_defense,
         "technique_lift_by_defense": technique_lift_by_defense,
         "defense_effect_vs_none_by_defense": defense_effect_by_defense,
@@ -378,6 +402,7 @@ def render_combined_report(
     baseline_by_direction: dict | None = None,
     technique_lift_by_direction: dict | None = None,
     defense_effect_by_direction: dict | None = None,
+    clean_accuracy_change_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
@@ -409,6 +434,8 @@ def render_combined_report(
         lines.extend(_render_summary_table(
             clean_accuracy_by_defense, "## summary: clean-alert accuracy by defense", column_label="clean accuracy",
         ))
+    if clean_accuracy_change_by_defense:
+        lines.extend(_render_clean_accuracy_change_table(clean_accuracy_change_by_defense))
 
     for direction, per_defense in by_direction.items():
         lines.append(f"# direction: {direction}")
@@ -445,6 +472,7 @@ def render_combined_json_report(
     baseline_by_direction: dict | None = None,
     technique_lift_by_direction: dict | None = None,
     defense_effect_by_direction: dict | None = None,
+    clean_accuracy_change_by_defense: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
@@ -457,6 +485,7 @@ def render_combined_json_report(
         "significance_vs_none_by_direction": significance_by_direction,
         "severity_breakdown_by_direction": severity_breakdown_by_direction,
         "clean_accuracy_by_defense": clean_accuracy_by_defense,
+        "clean_accuracy_vs_none_by_defense": clean_accuracy_change_by_defense,
         "baseline_by_direction": baseline_by_direction,
         "technique_lift_by_direction": technique_lift_by_direction,
         "defense_effect_vs_none_by_direction": defense_effect_by_direction,

@@ -984,3 +984,23 @@ def test_json_reports_carry_the_defense_effect_tables():
         defense_effect_by_direction={"dismiss": effects},
     )
     assert "| reduced |" in markdown
+
+
+def test_reports_carry_the_clean_accuracy_change_table():
+    change = {"sandwich": {"pairs": 18, "none_accuracy": 1.0, "defense_accuracy": 0.5, "change": -0.5,
+                           "change_ci_low": -0.71, "change_ci_high": -0.25, "broke": 9, "fixed": 0,
+                           "p_value": 0.0039, "p_holm": 0.0039}}
+    accuracy = {"none": 1.0, "sandwich": 0.5}
+    single = render_markdown_report(
+        "c", {"none": _sample_aggregate()}, clean_accuracy_by_defense=accuracy, clean_accuracy_change_by_defense=change,
+    )
+    assert "| sandwich | 100% | 50% | -50 | -71 to -25 | 9 | 0 | 0.0039 | 0.0039 | reduced |" in single
+    combined = render_combined_report(
+        "c", {"dismiss": {"none": _sample_aggregate()}}, clean_accuracy_by_defense=accuracy,
+        clean_accuracy_change_by_defense=change,
+    )
+    assert "clean-alert accuracy vs none, each clean alert paired" in combined
+    for render in (render_json_report, render_combined_json_report):
+        by = {"none": _sample_aggregate()} if render is render_json_report else {"dismiss": {"none": _sample_aggregate()}}
+        payload = json.loads(render("c", by, clean_accuracy_change_by_defense=change))
+        assert payload["clean_accuracy_vs_none_by_defense"]["sandwich"]["broke"] == 9

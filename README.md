@@ -291,7 +291,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   the change. `compare` and `full-report` print `defense=sandwich: 7/8 techniques reduced,
   0/8 increased` per defense and save the full tables (`defense_effect_vs_none_by_defense`,
   or `..._by_direction` in a full report). "Increased" is there because a defense can make a
-  model worse, and a pooled rate can hide that behind a technique it fixed.
+  model worse, and a pooled rate can hide that behind a technique it fixed. The cost side
+  gets the same treatment (`clean_accuracy_change_by_defense`): each clean alert under `none`
+  paired with itself under the defense, how many the defense broke and how many it fixed,
+  McNemar Holm-adjusted across the defenses, saved as `clean_accuracy_vs_none_by_defense`.
+  With 18 clean alerts, "no change" still comes with a -18 to +18 interval.
   `--defenses both` (or any comma-separated subset, on `compare` and `full-report`) runs just
   those plus `none` - always kept, since it's the baseline every significance test compares
   against - because each defense is a full pass over the battery, and against a real model
@@ -620,8 +624,9 @@ Worth reporting alongside the hijack rates: the injection lift over the no-injec
 the part the attack actually caused) with each technique's exact McNemar p-value (whether
 that lift is more than chance), the `unparseable responses: N/M` line (a model
 that breaks its answer format can't be scored as hijacked on those alerts, so a high count
-makes its hijack rate look better than it is) and clean-alert accuracy (a defense that hurts
-the model on alerts that were never attacked has a real cost). `--host` (or `$OLLAMA_HOST`)
+makes its hijack rate look better than it is) and clean-alert accuracy with its paired test
+against `none` (a defense that hurts the model on alerts that were never attacked has a real
+cost). `--host` (or `$OLLAMA_HOST`)
 points at an ollama server on another machine.
 
 ## Tests
@@ -630,7 +635,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-555 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+560 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
