@@ -35,6 +35,7 @@ from soclab.report import (
     MATRIX_LEGEND,
     baseline_line,
     combined_rate_by_defense,
+    defense_effect_verdict,
     lift_interval,
     matrix_cell,
     percent_or_na,
@@ -72,6 +73,7 @@ from soclab.scoring import (
     aggregate_by_severity_and_technique,
     aggregate_by_technique,
     baseline_and_total,
+    defense_effect_by_technique,
     hijacked_and_total,
     holm_adjusted,
     is_significant,
@@ -274,6 +276,29 @@ def _print_significant_lift_counts(lifts_by_defense: dict, heading: str) -> None
         significant = sum(1 for entry in lifts.values() if is_significant(entry["p_holm"]))
         print(f"  defense={defense}: {significant}/{len(lifts)} techniques with a significant lift "
               f"(Holm-adjusted p<{SIGNIFICANCE_ALPHA})")
+    print()
+
+
+def _defense_effects(results_by_defense: dict) -> dict:
+    """defense name -> defense_effect_by_technique against defense=none,
+    for every defense that isn't none."""
+    return {
+        defense: defense_effect_by_technique(results_by_defense[DEFENSE_NONE], results)
+        for defense, results in results_by_defense.items()
+        if defense != DEFENSE_NONE
+    }
+
+
+def _print_defense_effect_counts(effects_by_defense: dict, heading: str) -> None:
+    """one line per defense, the same way as the lift counts - the full
+    per-technique tables go into the saved report."""
+    if not effects_by_defense:
+        return
+    print(heading)
+    for defense, effects in effects_by_defense.items():
+        verdicts = [defense_effect_verdict(entry) for entry in effects.values()]
+        print(f"  defense={defense}: {verdicts.count('reduced')}/{len(effects)} techniques reduced, "
+              f"{verdicts.count('increased')}/{len(effects)} increased (Holm-adjusted p<{SIGNIFICANCE_ALPHA})")
     print()
 
 
@@ -578,6 +603,11 @@ def cmd_compare(args):
     _print_significant_lift_counts(
         technique_lift_by_defense, "per-technique lift, paired by alert (exact McNemar test) - tables in --report:",
     )
+    defense_effect_by_defense = _defense_effects(results_by_defense)
+    _print_defense_effect_counts(
+        defense_effect_by_defense,
+        "per-technique effect of each defense vs none, paired by alert (exact McNemar test) - tables in --report:",
+    )
 
     if args.report:
         _write_report(
@@ -591,6 +621,7 @@ def cmd_compare(args):
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 baseline_by_defense=baseline_by_defense,
                 technique_lift_by_defense=technique_lift_by_defense,
+                defense_effect_by_defense=defense_effect_by_defense,
                 severity_filter=requested_severities,
             ),
             json_content=render_json_report(
@@ -602,6 +633,7 @@ def cmd_compare(args):
                 clean_accuracy_by_defense=clean_accuracy_by_defense,
                 baseline_by_defense=baseline_by_defense,
                 technique_lift_by_defense=technique_lift_by_defense,
+                defense_effect_by_defense=defense_effect_by_defense,
                 severity_filter=requested_severities,
             ),
             csv_content=render_csv_report(_client_label(args), per_defense, direction=args.direction),
@@ -684,6 +716,15 @@ def cmd_full_report(args):
             lifts_by_defense,
             f"per-technique lift, paired by alert (exact McNemar test), direction={direction} - tables in the report:",
         )
+    defense_effect_by_direction = {
+        direction: _defense_effects(results_by_direction[direction]) for direction in DIRECTIONS
+    }
+    for direction, effects_by_defense in defense_effect_by_direction.items():
+        _print_defense_effect_counts(
+            effects_by_defense,
+            f"per-technique effect of each defense vs none, paired by alert, direction={direction} - "
+            f"tables in the report:",
+        )
 
     _write_report(
         args.report,
@@ -696,6 +737,7 @@ def cmd_full_report(args):
             clean_accuracy_by_defense=clean_accuracy_by_defense,
             baseline_by_direction=baseline_by_direction,
             technique_lift_by_direction=technique_lift_by_direction,
+            defense_effect_by_direction=defense_effect_by_direction,
             severity_filter=requested_severities,
         ),
         json_content=render_combined_json_report(
@@ -707,6 +749,7 @@ def cmd_full_report(args):
             clean_accuracy_by_defense=clean_accuracy_by_defense,
             baseline_by_direction=baseline_by_direction,
             technique_lift_by_direction=technique_lift_by_direction,
+            defense_effect_by_direction=defense_effect_by_direction,
             severity_filter=requested_severities,
         ),
         csv_content=render_combined_csv_report(_client_label(args), by_direction),

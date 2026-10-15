@@ -2712,3 +2712,33 @@ def test_summarize_shows_na_significance_for_a_report_saved_before_holm(tmp_path
     assert main(["summarize", str(path)]) == 0
     table = capsys.readouterr().out.split("techniques with a significant lift")[1]
     assert table.strip().splitlines()[2].split()[1:] == ["n/a"] * 4
+
+
+def test_compare_prints_and_saves_each_defenses_paired_effect(tmp_path, capsys):
+    """sandwich stops every technique sandwich-sensitive caved to (7 of 8,
+    the eighth never worked to begin with); strict does nothing for it."""
+    md, js = tmp_path / "r.md", tmp_path / "r.json"
+    for path in (md, js):
+        main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(path)])
+    out = capsys.readouterr().out
+    assert "defense=sandwich: 7/8 techniques reduced, 0/8 increased (Holm-adjusted p<0.05)" in out
+    assert "defense=strict: 0/8 techniques reduced, 0/8 increased (Holm-adjusted p<0.05)" in out
+    effects = json.loads(js.read_text())["defense_effect_vs_none_by_defense"]
+    assert set(effects) == {"sandwich", "strict", "both"}
+    assert effects["sandwich"]["direct_override"]["stopped"] == 9
+    assert "| direct_override | 100% | 0% | -100 | -100 to -58 | 9 | 0 | 0.0039 | 0.0312 | reduced |" in md.read_text()
+
+
+def test_compare_with_only_the_none_baseline_has_no_defense_effect_to_show(capsys):
+    main(["compare", "--client", "fake-robust", "--defenses", "none"])
+    assert "effect of each defense" not in capsys.readouterr().out
+
+
+def test_full_report_saves_the_defense_effect_per_direction(tmp_path, capsys):
+    report_path = tmp_path / "r.json"
+    main(["full-report", "--client", "fake-strict-sensitive", "--defenses", "strict", "--report", str(report_path)])
+    out = capsys.readouterr().out
+    assert "defense=strict: 7/8 techniques reduced" in out.split("direction=dismiss - tables in the report:")[-1]
+    effects = json.loads(report_path.read_text())["defense_effect_vs_none_by_direction"]
+    assert set(effects) == {"dismiss", "escalate"}
+    assert effects["dismiss"]["strict"]["direct_override"]["change"] == -1.0

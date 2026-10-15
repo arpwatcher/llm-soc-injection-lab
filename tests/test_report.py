@@ -7,6 +7,7 @@ from soclab.analyst import AnalystDecision
 from soclab.report import (
     baseline_line,
     combined_rate_by_defense,
+    defense_effect_verdict,
     rate_by_defense,
     render_combined_csv_report,
     render_combined_json_report,
@@ -945,3 +946,41 @@ def test_technique_leaderboard_renderers_show_na_without_lift_data():
     assert "| direct_override | 1 | 0 | 0 | 100% | 20%-100% | n/a | n/a | n/a | n/a |" in report
     csv_row = next(csv.DictReader(io.StringIO(render_technique_leaderboard_csv_report(rows, "dismiss", "none"))))
     assert (csv_row["lift"], csv_row["lift_ci_low"], csv_row["p_value"]) == ("", "", "")
+
+
+def _effect(change, p_holm, **extra):
+    return {"pairs": 9, "none_rate": 1.0, "defense_rate": 1.0 + change, "change": change,
+            "change_ci_low": -1.0, "change_ci_high": -0.577, "stopped": 9, "introduced": 0,
+            "p_value": 0.0039, "p_holm": p_holm, **extra}
+
+
+def test_defense_effect_verdict_says_which_way_a_significant_change_went():
+    assert defense_effect_verdict(_effect(-1.0, 0.03)) == "reduced"
+    assert defense_effect_verdict(_effect(0.5, 0.03)) == "increased"
+    # the raw p would pass; the verdict goes by the adjusted one
+    assert defense_effect_verdict(_effect(-0.3, 0.2)) == "no significant change"
+
+
+def test_markdown_report_puts_the_defense_effect_table_under_each_defense_but_none():
+    report = render_markdown_report(
+        "fake-sandwich-sensitive", {"none": _sample_aggregate(), "sandwich": _sample_aggregate()},
+        defense_effect_by_defense={"sandwich": {"direct_override": _effect(-1.0, 0.03125)}},
+    )
+    none_section, sandwich_section = report.split("## defense: sandwich")
+    assert "per-technique effect vs none" not in none_section
+    assert "| direct_override | 100% | 0% | -100 | -100 to -58 | 9 | 0 | 0.0039 | 0.0312 | reduced |" in sandwich_section
+
+
+def test_json_reports_carry_the_defense_effect_tables():
+    effects = {"sandwich": {"direct_override": _effect(-1.0, 0.03125)}}
+    single = json.loads(render_json_report("c", {"none": _sample_aggregate()}, defense_effect_by_defense=effects))
+    assert single["defense_effect_vs_none_by_defense"]["sandwich"]["direct_override"]["stopped"] == 9
+    combined = json.loads(render_combined_json_report(
+        "c", {"dismiss": {"none": _sample_aggregate()}}, defense_effect_by_direction={"dismiss": effects},
+    ))
+    assert combined["defense_effect_vs_none_by_direction"]["dismiss"] == effects
+    markdown = render_combined_report(
+        "c", {"dismiss": {"none": _sample_aggregate(), "sandwich": _sample_aggregate()}},
+        defense_effect_by_direction={"dismiss": effects},
+    )
+    assert "| reduced |" in markdown

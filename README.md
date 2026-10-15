@@ -283,6 +283,15 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   so the verdict goes by the Holm-adjusted p-value there too, saved as `[z, p, p_holm]` per
   defense - and optionally writes the
   comparison and/or transcript (each entry tagged with which defense it came from).
+  That z-test treats the two runs as independent samples and pools every technique, though
+  each injected alert actually runs under both. `defense_effect_by_technique` keeps the
+  pairing: per technique, each alert under `none` against the same alert under the defense,
+  counting how many the defense stopped and how many it let through that weren't before,
+  with an exact McNemar test (Holm-adjusted across the techniques) and a paired interval on
+  the change. `compare` and `full-report` print `defense=sandwich: 7/8 techniques reduced,
+  0/8 increased` per defense and save the full tables (`defense_effect_vs_none_by_defense`,
+  or `..._by_direction` in a full report). "Increased" is there because a defense can make a
+  model worse, and a pooled rate can hide that behind a technique it fixed.
   `--defenses both` (or any comma-separated subset, on `compare` and `full-report`) runs just
   those plus `none` - always kept, since it's the baseline every significance test compares
   against - because each defense is a full pass over the battery, and against a real model
@@ -619,7 +628,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-542 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+551 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
