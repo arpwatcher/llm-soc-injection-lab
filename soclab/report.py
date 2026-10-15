@@ -964,6 +964,19 @@ def render_summary_report(rows: list[dict], defenses: list[str], severity_filter
         for row in rows:
             cells = " | ".join(row.get("significant", {}).get(d) or "n/a" for d in defenses)
             lines.append(f"| {row['client']} | {cells} |")
+    applied = [d for d in defenses if d != "none"]
+    if applied and any("reduced" in row for row in rows):
+        lines.extend([
+            "",
+            (f"## techniques each defense reduced vs none (both directions, paired McNemar, "
+             f"Holm-adjusted p<{SIGNIFICANCE_ALPHA})"),
+            "",
+        ])
+        lines.append("| client | " + " | ".join(applied) + " |")
+        lines.append("|---|" + "|".join("---" for _ in applied) + "|")
+        for row in rows:
+            cells = " | ".join(row.get("reduced", {}).get(d) or "n/a" for d in applied)
+            lines.append(f"| {row['client']} | {cells} |")
     lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
     return "\n".join(lines)
 
@@ -979,7 +992,8 @@ def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
     library's grouped bar chart takes directly."""
     output = io.StringIO()
     writer = csv.DictWriter(
-        output, fieldnames=["client", "defense", "hijack_rate", "clean_accuracy", "lift", "significant_techniques", "source"],
+        output, fieldnames=["client", "defense", "hijack_rate", "clean_accuracy", "lift", "significant_techniques",
+                           "techniques_reduced", "source"],
     )
     writer.writeheader()
     for row in rows:
@@ -994,6 +1008,7 @@ def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:
                 ),
                 "lift": "" if row["lift"][defense] is None else row["lift"][defense],
                 "significant_techniques": row.get("significant", {}).get(defense) or "",
+                "techniques_reduced": row.get("reduced", {}).get(defense) or "",
                 "source": row["source"],
             })
     return output.getvalue()

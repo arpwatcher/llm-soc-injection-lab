@@ -2673,7 +2673,7 @@ def test_summarize_counts_significant_techniques_per_model_and_defense(fake_olla
     assert main(["summarize", str(stubborn), str(lazy)]) == 0
     table = capsys.readouterr().out.split("techniques with a significant lift")[1]
     assert table.startswith(" (both directions, paired McNemar, Holm-adjusted p<0.05)")
-    rows = {line.split()[0]: line.split()[1:] for line in table.strip().splitlines()[2:]}
+    rows = {line.split()[0]: line.split()[1:] for line in table.strip().split("\n\n")[0].splitlines()[2:]}
     # stubborn: 7 dismiss techniques under none/sandwich/strict, nothing escalates it; nothing under both
     assert rows["fake-stubborn"] == ["7/16", "7/16", "7/16", "0/16"]
     assert rows["ollama:dismiss-everything-model"] == ["0/16", "0/16", "0/16", "0/16"]
@@ -2742,3 +2742,68 @@ def test_full_report_saves_the_defense_effect_per_direction(tmp_path, capsys):
     effects = json.loads(report_path.read_text())["defense_effect_vs_none_by_direction"]
     assert set(effects) == {"dismiss", "escalate"}
     assert effects["dismiss"]["strict"]["direct_override"]["change"] == -1.0
+
+
+def _reduced_table(out):
+    table = out.split("techniques each defense reduced vs none")[1].strip().split("\n\n")[0]
+    return {line.split()[0]: line.split()[1:] for line in table.splitlines()[2:]}
+
+
+def test_summarize_counts_the_techniques_each_defense_reduced(tmp_path, capsys):
+    """which defense works on which model - sandwich and strict each stop the
+    7 techniques their sensitive client caves to, and only those."""
+    sandwich = _saved_full_report(tmp_path, "fake-sandwich-sensitive")
+    strict = _saved_full_report(tmp_path, "fake-strict-sensitive")
+    md, cs = tmp_path / "s.md", tmp_path / "s.csv"
+    capsys.readouterr()
+    assert main(["summarize", str(sandwich), str(strict)]) == 0
+    rows = _reduced_table(capsys.readouterr().out)
+    assert rows["fake-sandwich-sensitive"] == ["7/16", "0/16", "7/16"]  # no none column - nothing to compare
+    assert rows["fake-strict-sensitive"] == ["0/16", "7/16", "7/16"]
+    main(["summarize", str(sandwich), str(strict), "--report", str(md)])
+    main(["summarize", str(sandwich), str(strict), "--report", str(cs)])
+    capsys.readouterr()
+    assert "| fake-strict-sensitive | 0/16 | 7/16 | 7/16 |" in md.read_text()
+    csv_rows = {(r["client"], r["defense"]): r for r in csv.DictReader(io.StringIO(cs.read_text()))}
+    assert csv_rows[("fake-strict-sensitive", "strict")]["techniques_reduced"] == "7/16"
+    assert csv_rows[("fake-strict-sensitive", "none")]["techniques_reduced"] == ""
+
+
+def test_summarize_flags_a_defense_that_made_some_technique_worse(tmp_path, capsys):
+    """no fake client gets worse under a defense, so this edits a saved
+    report - the case real models can produce, and the one a pooled rate
+    would hide."""
+    path = _saved_full_report(tmp_path, "fake-sandwich-sensitive")
+    report = json.loads(path.read_text())
+    entry = report["defense_effect_vs_none_by_direction"]["escalate"]["strict"]["false_urgency"]
+    entry.update(change=0.5, p_holm=0.01)
+    path.write_text(json.dumps(report))
+    capsys.readouterr()
+    main(["summarize", str(path)])
+    assert _reduced_table(capsys.readouterr().out)["fake-sandwich-sensitive"] == ["7/16", "0/16,", "1", "worse", "7/16"]
+
+
+def test_summarize_shows_na_where_there_is_no_defense_effect(tmp_path, capsys):
+    """a report saved before the paired defense effect existed, and a
+    defense a --defenses run skipped."""
+    old = _saved_full_report(tmp_path, "fake-sandwich-sensitive")
+    report = json.loads(old.read_text())
+    del report["defense_effect_vs_none_by_direction"]
+    old.write_text(json.dumps(report))
+    partial = tmp_path / "partial.json"
+    main(["full-report", "--client", "fake-strict-sensitive", "--defenses", "strict", "--report", str(partial)])
+    capsys.readouterr()
+    main(["summarize", str(old), str(partial)])
+    rows = _reduced_table(capsys.readouterr().out)
+    assert rows["fake-sandwich-sensitive"] == ["n/a", "n/a", "n/a"]
+    assert rows["fake-strict-sensitive"] == ["n/a", "7/16", "n/a"]
+
+
+def test_summarize_of_none_only_reports_has_no_defense_effect_table(tmp_path, capsys):
+    path = tmp_path / "none.json"
+    main(["full-report", "--client", "fake-robust", "--defenses", "none", "--report", str(path)])
+    md = tmp_path / "s.md"
+    capsys.readouterr()
+    main(["summarize", str(path), "--report", str(md)])
+    assert "reduced vs none" not in capsys.readouterr().out
+    assert "reduced vs none" not in md.read_text()

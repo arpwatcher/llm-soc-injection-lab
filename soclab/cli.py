@@ -1357,6 +1357,20 @@ def _significant_techniques(report: dict, defense: str) -> str | None:
     return f"{sum(1 for entry in lifts if is_significant(entry['p_holm']))}/{len(lifts)}"
 
 
+def _techniques_reduced(report: dict, defense: str) -> str | None:
+    """"14/16" - how many techniques, across both directions, that defense
+    significantly reduced against no defense (paired, Holm-adjusted), with
+    ", 1 worse" added when it also significantly increased some. None for
+    none itself, a defense the report didn't run, or a report saved before
+    the paired defense effect existed."""
+    by_direction = report.get("defense_effect_vs_none_by_direction")
+    if not by_direction or defense == DEFENSE_NONE or defense not in report["summary_by_defense"]:
+        return None
+    verdicts = [defense_effect_verdict(entry) for effects in by_direction.values() for entry in effects[defense].values()]
+    worse = verdicts.count("increased")
+    return f"{verdicts.count('reduced')}/{len(verdicts)}" + (f", {worse} worse" if worse else "")
+
+
 def cmd_summarize(args):
     """One table across several saved full-report json files - the
     cross-model headline result (how much does each defense help, per
@@ -1394,6 +1408,7 @@ def cmd_summarize(args):
             ),
             "lift": {d: _combined_lift(report, d) for d in defenses},
             "significant": {d: _significant_techniques(report, d) for d in defenses},
+            "reduced": {d: _techniques_reduced(report, d) for d in defenses},
         }
         for path, report in reports
     ]
@@ -1419,6 +1434,13 @@ def cmd_summarize(args):
     print(f"{'client':<{width}} " + " ".join(f"{d:>9}" for d in defenses))
     for row in rows:
         print(f"{row['client']:<{width}} " + " ".join(f"{row['significant'][d] or 'n/a':>9}" for d in defenses))
+    applied = [d for d in defenses if d != DEFENSE_NONE]
+    if applied:
+        print(f"\ntechniques each defense reduced vs none (both directions, paired McNemar, Holm-adjusted "
+              f"p<{SIGNIFICANCE_ALPHA})")
+        print(f"{'client':<{width}} " + " ".join(f"{d:>13}" for d in applied))
+        for row in rows:
+            print(f"{row['client']:<{width}} " + " ".join(f"{row['reduced'][d] or 'n/a':>13}" for d in applied))
 
     if args.report:
         _write_report(
