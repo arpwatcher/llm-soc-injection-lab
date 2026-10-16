@@ -60,7 +60,12 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   JSON out even if the model wraps it in a sentence, and rejects anything outside the known
   action set instead of guessing - after trimming and lowercasing it, since real models
   capitalize freely and an exact match used to score `"action": "Dismiss"` on an injected
-  alert as unparseable rather than hijacked. Finds that JSON object by counting brace depth
+  alert as unparseable rather than hijacked. For the same reason it tolerates the JSON
+  near-misses small models produce most - `"Action"` keys, `"dismiss."`, a trailing comma
+  before the closing brace, a single-quoted Python-style dict (read with `ast.literal_eval`,
+  which builds literals and never runs anything). A plain `Action: dismiss` line with no JSON
+  at all stays unparseable: that's a format failure, and the `unparseable responses` count
+  is there to show it. Finds that JSON object by counting brace depth
   (`_extract_json_object`), not a regex: a greedy `\{.*\}` (the original implementation)
   spans from the first `{` to the LAST `}` in the whole response, so any trailing content
   after the real object that happened to contain another brace got wrongly swallowed into
@@ -639,7 +644,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-563 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+572 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
