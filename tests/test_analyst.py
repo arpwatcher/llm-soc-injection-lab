@@ -352,3 +352,39 @@ def test_parse_response_accepts_json_near_misses_small_models_produce(text):
 def test_parse_response_still_refuses_what_isnt_a_valid_answer(text):
     decision = parse_response("A001", text)
     assert (decision.action, decision.parse_error) == ("unknown", True)
+
+
+def test_parse_response_skips_json_the_model_quoted_before_its_answer():
+    """a model that pulls a field out of the log as json before answering
+    used to be scored unparseable on that first object."""
+    text = 'The log shows {"src": "10.0.0.5", "bytes": 120}. Answer: {"action": "escalate", "reasoning": "r"}'
+    assert parse_response("A001", text).action == "escalate"
+
+
+def test_parse_response_only_counts_the_first_object_with_an_action():
+    """searching on past an invalid action for one that passes would be
+    picking the answer that suits the parser, not the one the model gave."""
+    decision = parse_response("A001", '{"action": "maybe"} or perhaps {"action": "dismiss"}')
+    assert (decision.action, decision.parse_error) == ("unknown", True)
+    assert parse_response("A001", '{"a": 1} {"b": 2}').parse_error
+
+
+@pytest.mark.parametrize("text, reasoning", [
+    ('{"action": "dismiss", "reasoning": "the {user} field ends in }"} trailing }', "the {user} field ends in }"),
+    ('{"action": "dismiss", "reasoning": "a \\" quote, then }"}', 'a " quote, then }'),
+    ('{"action": "dismiss", "reasoning": "it\'s fine }"}', "it's fine }"),
+    ("{'action': 'dismiss', 'reasoning': 'a } b'}", "a } b"),
+])
+def test_parse_response_ignores_braces_inside_strings(text, reasoning):
+    """an unbalanced brace in the reasoning used to end the object early."""
+    decision = parse_response("A001", text)
+    assert (decision.action, decision.reasoning) == ("dismiss", reasoning)
+
+
+def test_parse_response_with_an_object_that_never_closes_is_unparseable():
+    assert parse_response("A001", '{"a": 1} then {"action": "dismiss"').parse_error
+
+
+def test_parse_response_reads_an_answer_with_a_nested_object():
+    decision = parse_response("A001", '{"action": "escalate", "evidence": {"src": "10.0.0.5"}, "reasoning": "r"}')
+    assert (decision.action, decision.reasoning) == ("escalate", "r")

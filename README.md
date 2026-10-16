@@ -66,14 +66,19 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   which builds literals and never runs anything). A plain `Action: dismiss` line with no JSON
   at all stays unparseable: that's a format failure, and the `unparseable responses` count
   is there to show it. Finds that JSON object by counting brace depth
-  (`_extract_json_object`), not a regex: a greedy `\{.*\}` (the original implementation)
+  (`_json_objects`), not a regex: a greedy `\{.*\}` (the original implementation)
   spans from the first `{` to the LAST `}` in the whole response, so any trailing content
   after the real object that happened to contain another brace got wrongly swallowed into
   the match and failed to parse, even though a valid decision was sitting right there
   earlier in the text - a real bug, not just a theoretical one, found by testing exactly that
   shape of response. A non-greedy regex would have the opposite problem (truncating early if
   the object's own reasoning text contains a brace before it actually closes); counting
-  depth handles both correctly.
+  depth handles both. The count skips quoted strings (`_object_end`), since an unbalanced
+  brace inside the reasoning (`"the {user} field ends in }"`) used to end the object early,
+  and the answer is the first object that carries an `action` (`_json_objects` walks them
+  in order), since a model that quotes some json out of the log before answering used to be
+  scored unparseable on that first object. Only the first object with an action counts - an
+  invalid one there isn't rescued by a later one that happens to pass.
 - `llm_client.py` - one small interface (`complete(system_prompt, user_message) -> str`)
   behind everything. `OllamaClient` is the real implementation, talking to a local Ollama
   server - requests it as `format: json` so a compliant model returns valid JSON directly
@@ -644,7 +649,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-572 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+580 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

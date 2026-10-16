@@ -102,30 +102,48 @@ def get_system_prompt(defense: str = DEFENSE_NONE) -> str:
     return SYSTEM_PROMPT
 
 
-def _extract_json_object(text: str) -> str | None:
-    """Finds the first balanced {...} object in text by counting brace
-    depth, rather than a regex. A greedy `\\{.*\\}` regex spans from the
-    first { to the LAST } in the whole text - if the model's response has
-    any trailing content after the real object that happens to contain
-    another brace (a second example object, a stray "}" in its own
-    rambling), the match wrongly swallows that too and fails to parse. A
-    non-greedy `\\{.*?\\}` has the opposite problem: it stops at the
-    FIRST }, which truncates early if the real object's own content (e.g.
-    a reasoning string) contains a brace before the object actually
-    closes. Counting depth handles both correctly. Returns None if there
-    is no balanced object at all (an unmatched { with no closing brace)."""
-    start = text.find("{")
-    if start == -1:
-        return None
+def _object_end(text: str, start: int) -> int | None:
+    """Index of the } closing the object that opens at text[start], or None
+    if it never closes. Counts brace depth rather than using a regex - a
+    greedy `\\{.*\\}` spans to the LAST } in the whole response and swallows
+    any trailing brace, a non-greedy one stops at the FIRST } - and skips
+    over quoted strings, so a reasoning like "the {user} field ends in }"
+    doesn't end the object early. Both quote styles, since single-quoted
+    dicts are accepted too; an apostrophe inside a double-quoted string is
+    just a character there."""
     depth = 0
+    quote = None
+    escaped = False
     for i in range(start, len(text)):
-        if text[i] == "{":
+        char = text[i]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+        elif char in "\"'":
+            quote = char
+        elif char == "{":
             depth += 1
-        elif text[i] == "}":
+        elif char == "}":
             depth -= 1
             if depth == 0:
-                return text[start:i + 1]
+                return i
     return None
+
+
+def _json_objects(text: str):
+    """Every balanced top-level {...} in text, in order. An unmatched {
+    with no closing brace ends the search."""
+    start = text.find("{")
+    while start != -1:
+        end = _object_end(text, start)
+        if end is None:
+            return
+        yield text[start:end + 1]
+        start = text.find("{", end + 1)
 
 
 def _load_object(candidate: str) -> dict | None:
@@ -150,18 +168,22 @@ def _load_object(candidate: str) -> dict | None:
 
 
 def parse_response(alert_id: str, text: str) -> AnalystDecision:
-    """Pulls the first {...} JSON object out of the response text - models
+    """Pulls the answer's JSON object out of the response text - models
     sometimes wrap it in a code fence or a sentence even when told not to -
     and validates the action against the known set."""
-    candidate = _extract_json_object(text)
-    if candidate is None:
+    # the first object that carries an action is the answer - a model that
+    # quotes some other json first (a log line it pulled out, its own
+    # extracted fields) used to be scored unparseable on that object.
+    # "Action"/"Reasoning" is as clear an answer as the lowercase keys asked
+    # for. Only the first such object counts: an invalid action there stays
+    # unparseable rather than searching on for one that would pass.
+    for candidate in _json_objects(text):
+        parsed = _load_object(candidate)
+        fields = {str(key).lower(): value for key, value in (parsed or {}).items()}
+        if "action" in fields:
+            break
+    else:
         return AnalystDecision(alert_id=alert_id, action="unknown", reasoning="", raw_response=text, parse_error=True)
-
-    parsed = _load_object(candidate)
-    if parsed is None:
-        return AnalystDecision(alert_id=alert_id, action="unknown", reasoning="", raw_response=text, parse_error=True)
-    # "Action"/"Reasoning" is as clear an answer as the lowercase keys asked for
-    fields = {str(key).lower(): value for key, value in parsed.items()}
     action = fields.get("action")
     reasoning = fields.get("reasoning", "")
 
