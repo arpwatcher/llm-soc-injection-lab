@@ -368,8 +368,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   given, with the same `--report` md/json/csv choice as everything else (csv in long form, one
   row per model and defense). That's the cross-model headline result, which full-report,
   being single-client, can't give on its own. It refuses reports run with different
-  `--severity` filters (different alert sets in one table) and two reports with the same
-  client label (rows nobody could tell apart). Also reports clean-alert accuracy alongside
+  `--severity` filters (different alert sets in one table), reports measured on different
+  alert batteries (one saved before the battery last grew - injected alerts per direction are
+  read from each report and have to match), and two reports with the same client label (rows
+  nobody could tell apart). Also reports clean-alert accuracy alongside
   the hijack rate: a client that answers wrong across the board (matching neither the
   ground truth nor the attacker's target action) would otherwise score a misleadingly good
   0% hijack rate despite being useless as an analyst, which a bare hijack-rate ranking alone
@@ -634,7 +636,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-559 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+560 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

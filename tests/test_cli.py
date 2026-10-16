@@ -2813,3 +2813,20 @@ def test_compare_and_full_report_test_each_defenses_clean_accuracy_change(tmp_pa
     main(["full-report", "--client", "fake-robust", "--defenses", "none", "--report", str(report_path)])
     assert "clean-alert accuracy vs none" not in capsys.readouterr().out
     assert json.loads(report_path.read_text())["clean_accuracy_vs_none_by_defense"] == {}
+
+
+def test_summarize_refuses_reports_run_on_different_alert_batteries(tmp_path, capsys):
+    """the escalation battery grew from 7 alerts (56 injected) to 9 (72) -
+    a report saved before that, next to one saved after, would compare a
+    rate over different alerts as if it were the same measurement."""
+    new = _saved_full_report(tmp_path, "fake-stubborn")
+    old = _saved_full_report(tmp_path, "fake-sandwich-sensitive")
+    report = json.loads(old.read_text())
+    for bucket in report["by_direction"]["escalate"]["none"].values():
+        bucket["total"] = 7
+    old.write_text(json.dumps(report))
+    capsys.readouterr()
+    assert main(["summarize", str(new), str(old)]) == 1
+    err = capsys.readouterr().err
+    assert "different alert batteries" in err
+    assert f"{new}: dismiss 72, escalate 72; {old}: dismiss 72, escalate 56" in err

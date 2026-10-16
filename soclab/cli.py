@@ -1355,6 +1355,15 @@ def _load_full_report(path: str) -> dict:
     return report
 
 
+def _battery_sizes(report: dict) -> dict:
+    """injected alerts per direction under defense=none (always run) - what
+    a report was actually measured on."""
+    return {
+        direction: sum(bucket["total"] for bucket in per_defense["none"].values())
+        for direction, per_defense in report["by_direction"].items()
+    }
+
+
 def _combined_lift(report: dict, defense: str) -> float | None:
     """A full-report's hijack rate for one defense (both directions pooled)
     minus its no-injection baseline pooled the same way - each direction's
@@ -1405,13 +1414,23 @@ def cmd_summarize(args):
     design, so with real models this otherwise meant copying numbers out
     of one file per model by hand. Refuses to mix reports run with
     different --severity filters (they'd be measuring different alert
-    sets in one table) or two reports with the same client label (rows
-    nobody could tell apart)."""
+    sets in one table), reports measured on different alert batteries (one
+    saved before the battery last grew), or two reports with the same
+    client label (rows nobody could tell apart)."""
     reports = [(path, _load_full_report(path)) for path in args.reports]
     filters = {json.dumps(report.get("severity_filter")) for _, report in reports}
     if len(filters) > 1:
         detail = ", ".join(f"{path}: {report.get('severity_filter') or 'all severities'}" for path, report in reports)
         raise ValueError(f"these reports were run with different --severity filters, so they don't compare: {detail}")
+    sizes = [(path, _battery_sizes(report)) for path, report in reports]
+    if len({json.dumps(size, sort_keys=True) for _, size in sizes}) > 1:
+        detail = "; ".join(
+            f"{path}: " + ", ".join(f"{direction} {count}" for direction, count in size.items()) for path, size in sizes
+        )
+        raise ValueError(
+            f"these reports were run on different alert batteries, so they don't compare: {detail} - "
+            f"re-run the older ones with the current harness"
+        )
     seen = {}
     for path, report in reports:
         if report["client"] in seen:
