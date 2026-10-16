@@ -694,9 +694,21 @@ def cmd_full_report(args):
         direction: _injected_alerts_for(direction, requested_severities)
         for direction in DIRECTIONS
     }
-    _expect_requests(
-        client, (len(clean_alerts) + sum(len(alerts) for alerts in injected_by_direction.values())) * len(defenses),
-    )
+    requests = (len(clean_alerts) + sum(len(alerts) for alerts in injected_by_direction.values())) * len(defenses)
+    _expect_requests(client, requests)
+    method = {
+        "clean_alerts": len(clean_alerts),
+        "directions": {
+            direction: {
+                "eligible_alerts": len({a.id for a in alerts}),
+                "techniques": list(dict.fromkeys(a.injected_technique for a in alerts)),
+                "injected_alerts": len(alerts),
+            }
+            for direction, alerts in injected_by_direction.items()
+        },
+        "defenses": defenses,
+        "requests": requests,
+    }
 
     by_direction = {}
     results_by_direction = {}
@@ -772,6 +784,7 @@ def cmd_full_report(args):
             baseline_by_direction=baseline_by_direction,
             technique_lift_by_direction=technique_lift_by_direction,
             defense_effect_by_direction=defense_effect_by_direction,
+            method=method,
             severity_filter=requested_severities,
         ),
         json_content=render_combined_json_report(
@@ -785,6 +798,7 @@ def cmd_full_report(args):
             baseline_by_direction=baseline_by_direction,
             technique_lift_by_direction=technique_lift_by_direction,
             defense_effect_by_direction=defense_effect_by_direction,
+            method=method,
             severity_filter=requested_severities,
         ),
         csv_content=render_combined_csv_report(_client_label(args), by_direction),

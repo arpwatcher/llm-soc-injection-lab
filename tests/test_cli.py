@@ -11,6 +11,7 @@ import soclab.cli as cli_module
 from soclab.alerts import Alert
 from soclab.analyst import AnalystDecision
 from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
+from soclab.injections import ESCALATION_TECHNIQUES
 from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
 from soclab.scoring import ScoredResult
 
@@ -2830,3 +2831,37 @@ def test_summarize_refuses_reports_run_on_different_alert_batteries(tmp_path, ca
     err = capsys.readouterr().err
     assert "different alert batteries" in err
     assert f"{new}: dismiss 72, escalate 72; {old}: dismiss 72, escalate 56" in err
+
+
+def test_full_report_records_its_method(tmp_path, capsys):
+    """what the tables below were measured on, in the report itself."""
+    md, js = tmp_path / "r.md", tmp_path / "r.json"
+    for path in (md, js):
+        main(["full-report", "--client", "fake-vulnerable", "--report", str(path)])
+    capsys.readouterr()
+    content = md.read_text()
+    assert content.index("## method") < content.index("## summary: overall hijack rate by defense")
+    assert "- clean alerts: 18, each answered once under every defense" in content
+    assert "- direction=dismiss: 9 alerts x 8 techniques = 72 injected (direct_override, fake_system_tag," in content
+    assert "- defenses: none, sandwich, strict, both" in content
+    assert "- requests: 648" in content
+    assert "exact McNemar test, Holm-adjusted" in content
+    method = json.loads(js.read_text())["method"]
+    assert method["directions"]["escalate"]["techniques"] == list(ESCALATION_TECHNIQUES)
+    assert method["requests"] == 648
+
+
+def test_full_report_method_follows_the_severity_filter_and_defenses(tmp_path, capsys):
+    """--severity high leaves 3 dismiss-direction alerts and 1 escalate one,
+    and --defenses both runs two passes - the method has to say so, not
+    the full battery's numbers."""
+    path = tmp_path / "r.json"
+    main(["full-report", "--client", "fake-vulnerable", "--severity", "high", "--defenses", "both",
+          "--report", str(path)])
+    capsys.readouterr()
+    method = json.loads(path.read_text())["method"]
+    assert method["clean_alerts"] == 4
+    assert method["directions"]["dismiss"]["eligible_alerts"] == 3
+    assert method["directions"]["escalate"]["injected_alerts"] == 8
+    assert method["defenses"] == ["none", "both"]
+    assert method["requests"] == (4 + 24 + 8) * 2

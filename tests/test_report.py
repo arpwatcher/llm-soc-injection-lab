@@ -1004,3 +1004,8 @@ def test_reports_carry_the_clean_accuracy_change_table():
         by = {"none": _sample_aggregate()} if render is render_json_report else {"dismiss": {"none": _sample_aggregate()}}
         payload = json.loads(render("c", by, clean_accuracy_change_by_defense=change))
         assert payload["clean_accuracy_vs_none_by_defense"]["sandwich"]["broke"] == 9
+
+
+def test_combined_report_without_method_has_no_method_section():
+    report = render_combined_report("c", {"dismiss": {"none": _sample_aggregate()}})
+    assert "## method" not in report

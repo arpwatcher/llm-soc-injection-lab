@@ -391,6 +391,36 @@ def combined_rate_by_defense(by_direction: dict) -> dict:
     }
 
 
+def _render_method_section(method: dict) -> list[str]:
+    """what a full report actually measured and how, in a form that can go
+    into a write-up as it is - otherwise the alert counts, technique
+    lists and tests behind the tables below have to be rebuilt from the
+    code by whoever reads the report later."""
+    lines = ["## method", ""]
+    lines.append(
+        f"- clean alerts: {method['clean_alerts']}, each answered once under every defense "
+        f"(clean-alert accuracy and the no-injection baseline)"
+    )
+    for direction, entry in method["directions"].items():
+        lines.append(
+            f"- direction={direction}: {entry['eligible_alerts']} alerts x {len(entry['techniques'])} techniques = "
+            f"{entry['injected_alerts']} injected ({', '.join(entry['techniques'])})"
+        )
+    lines.append(f"- defenses: {', '.join(method['defenses'])} (none is the baseline every comparison is against)")
+    lines.append(f"- requests: {method['requests']}")
+    lines.extend([
+        ("- hijack rates carry 95% Wilson intervals. Each technique's injection lift pairs every injected "
+         "alert with the same alert's clean answer: exact McNemar test, Holm-adjusted across that direction's "
+         "techniques, 95% Newcombe hybrid score interval on the lift."),
+        ("- each defense's effect pairs every injected alert with itself under no defense, and its "
+         "clean-accuracy change pairs every clean alert the same way - both exact McNemar, Holm-adjusted "
+         "across the techniques and across the defenses respectively. The overall defense-vs-none comparison "
+         f"is a pooled two-proportion z-test, Holm-adjusted across the defenses. Significance at p<{SIGNIFICANCE_ALPHA}."),
+        "",
+    ])
+    return lines
+
+
 def render_combined_report(
     client_name: str,
     by_direction: dict,
@@ -403,6 +433,7 @@ def render_combined_report(
     technique_lift_by_direction: dict | None = None,
     defense_effect_by_direction: dict | None = None,
     clean_accuracy_change_by_defense: dict | None = None,
+    method: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """The capstone report: both attacker directions, every defense, one
@@ -426,6 +457,8 @@ def render_combined_report(
         lines.append(f"severity filter: {', '.join(severity_filter)}")
         lines.append("")
 
+    if method is not None:
+        lines.extend(_render_method_section(method))
     lines.extend(_render_summary_table(
         combined_rate_by_defense(by_direction),
         "## summary: overall hijack rate by defense (both directions combined)",
@@ -473,12 +506,14 @@ def render_combined_json_report(
     technique_lift_by_direction: dict | None = None,
     defense_effect_by_direction: dict | None = None,
     clean_accuracy_change_by_defense: dict | None = None,
+    method: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
     payload = {
         "client": client_name,
         "severity_filter": severity_filter,
+        "method": method,
         "summary_by_defense": combined_rate_by_defense(by_direction),
         "severity_weighted_by_direction": severity_weighted_by_direction,
         "confidence_interval_by_direction": confidence_interval_by_direction,
