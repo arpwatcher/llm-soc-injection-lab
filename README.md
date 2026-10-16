@@ -258,14 +258,13 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   a chosen subset of severities (comma-separated, same parsing/validation shape
   `_resolve_client_names`/`_resolve_technique_names` already use, via `_resolve_severities`,
   shared across every subcommand below via `_SEVERITY_HELP`) - for zooming into just the
-  highest-impact alerts instead of the whole battery; a subset with nothing present for the
+  highest-impact alerts instead of the whole battery. A subset with nothing present for the
   chosen direction (e.g. `--severity critical` under `--direction escalate`, where no
-  dismiss-worthy alert is critical) comes back as an empty, 0%, non-erroring result
-  rather than crashing (`matrix`'s own per-technique columns used to raise a bare `KeyError`
-  on exactly this case - a technique can be entirely absent from `aggregate_by_technique`'s
-  output once `--severity` filters its alerts down to zero, and the column lookup assumed
-  it would always be there; fixed to fall back to 0% the same way every other subcommand
-  already does for an empty battery). Every `--severity`-aware subcommand also prints a
+  dismiss-worthy alert is critical) is refused with an error naming the severities that
+  direction does have (`full-report` refuses it when either direction would be empty). It
+  used to run the empty battery and print a 0% hijack rate, which reads exactly like a model
+  that resisted everything and would sit in a saved report or a `summarize` table next to
+  real results. Every `--severity`-aware subcommand also prints a
   `severity filter: critical, high` line right under its usual header whenever a filter is
   active (via the shared `_print_severity_filter`, silent when none was given) - without it,
   a saved terminal transcript or screenshot of a filtered run gave no way to tell afterward
@@ -635,7 +634,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-560 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+559 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

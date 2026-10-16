@@ -198,16 +198,15 @@ def _wrap_real_model(client, label: str, cache: ResponseCache | None):
     return _ProgressReporter(client, label)
 
 
-def _print_report(aggregated, results, severity_breakdown=None):
+def _print_report(aggregated, results, severity_breakdown):
     print(f"{'technique':<24} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
     for technique, bucket in aggregated.items():
         print(f"{technique:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
               f"{bucket['hijack_rate']:>11.0%}")
-    if severity_breakdown:
-        print(f"\n{'severity':<24} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
-        for severity, bucket in severity_breakdown.items():
-            print(f"{severity:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
-                  f"{bucket['hijack_rate']:>11.0%}")
+    print(f"\n{'severity':<24} {'hijacked':>8} {'resisted':>8} {'other':>6} {'hijack_rate':>12}")
+    for severity, bucket in severity_breakdown.items():
+        print(f"{severity:<24} {bucket['hijacked']:>8} {bucket['resisted']:>8} {bucket['other']:>6} "
+              f"{bucket['hijack_rate']:>11.0%}")
     print(f"\noverall hijack rate: {overall_hijack_rate(results):.0%}")
     ci_low, ci_high = overall_hijack_rate_confidence_interval(results)
     print(f"95% confidence interval: {ci_low:.0%}-{ci_high:.0%}")
@@ -401,11 +400,25 @@ def _report_format(path: str) -> str:
     return "markdown"
 
 
-def _injected_alerts_for(direction: str) -> list:
+def _injected_alerts_for(direction: str, requested_severities: list | None = None) -> list:
+    """The direction's injected battery, narrowed to --severity when given.
+    Refuses a filter that leaves nothing: no dismiss-worthy alert is
+    critical, so --severity critical has no escalate-direction alerts at
+    all, and an empty battery would come out as a 0% hijack rate that
+    reads exactly like a model that resisted everything."""
     clean_alerts = generate_clean_alerts()
     if direction == "escalate":
-        return apply_all_escalation_techniques(clean_alerts)
-    return apply_all_techniques(clean_alerts)
+        alerts = apply_all_escalation_techniques(clean_alerts)
+    else:
+        alerts = apply_all_techniques(clean_alerts)
+    filtered = _filter_by_severity(alerts, requested_severities)
+    if not filtered:
+        available = sorted({a.severity for a in alerts}, key=SEVERITIES.index)
+        raise ValueError(
+            f"--severity {','.join(requested_severities or [])} leaves no alerts for direction={direction} - "
+            f"its alerts are {', '.join(available)}"
+        )
+    return filtered
 
 
 def _run_defense_battery(injected_alerts: list, client, defenses: list, heading_prefix: str = "") -> tuple:
@@ -520,11 +533,10 @@ def cmd_run(args):
     client = build_client(args)
 
     clean_alerts = generate_clean_alerts()
-    injected_alerts = _injected_alerts_for(args.direction)
 
     requested_severities = _resolve_severities(args.severity, "run")
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
-    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    injected_alerts = _injected_alerts_for(args.direction, requested_severities)
     _expect_requests(client, len(clean_alerts) + len(injected_alerts))
 
     clean_results = score_batch(clean_alerts, client, defense=args.defense)
@@ -586,12 +598,11 @@ def cmd_run(args):
 
 def cmd_compare(args):
     client = build_client(args)
-    injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
 
     requested_severities = _resolve_severities(args.severity, "compare")
     defenses = _resolve_defenses(args.defenses)
-    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    injected_alerts = _injected_alerts_for(args.direction, requested_severities)
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
     _expect_requests(client, (len(clean_alerts) + len(injected_alerts)) * len(defenses))
 
@@ -680,7 +691,7 @@ def cmd_full_report(args):
     _print_severity_filter(requested_severities)
     clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
     injected_by_direction = {
-        direction: _filter_by_severity(_injected_alerts_for(direction), requested_severities)
+        direction: _injected_alerts_for(direction, requested_severities)
         for direction in DIRECTIONS
     }
     _expect_requests(
@@ -932,10 +943,9 @@ def cmd_leaderboard(args):
     where every pair would need its own comparison."""
     clients = _comparison_clients(args, "leaderboard")
 
-    injected_alerts = _injected_alerts_for(args.direction)
     clean_alerts = generate_clean_alerts()
     requested_severities = _resolve_severities(args.severity, "leaderboard")
-    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    injected_alerts = _injected_alerts_for(args.direction, requested_severities)
     clean_alerts = _filter_by_severity(clean_alerts, requested_severities)
     for _, client in clients:
         _expect_requests(client, len(clean_alerts) + len(injected_alerts))
@@ -1033,9 +1043,8 @@ def cmd_technique_leaderboard(args):
     already buckets by technique regardless of which client produced
     each result - no new scoring logic needed, just a different batch."""
     clients = _comparison_clients(args, "technique-leaderboard")
-    injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "technique-leaderboard")
-    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    injected_alerts = _injected_alerts_for(args.direction, requested_severities)
     clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
     for _, client in clients:
         _expect_requests(client, len(clean_alerts) + len(injected_alerts))
@@ -1138,9 +1147,8 @@ def cmd_matrix(args):
     rather than concatenated - the per-technique breakdown needs to stay
     attributed to its own client, not merged into one combined rate."""
     clients = _comparison_clients(args, "matrix")
-    injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "matrix")
-    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    injected_alerts = _injected_alerts_for(args.direction, requested_severities)
     clean_alerts = _filter_by_severity(generate_clean_alerts(), requested_severities)
     for _, client in clients:
         _expect_requests(client, len(clean_alerts) + len(injected_alerts))
@@ -1159,20 +1167,16 @@ def cmd_matrix(args):
         results_by_client[name] = results
         aggregated = aggregate_by_technique(results)
         lifts = paired_lift_by_technique(clean_results, results, args.direction)
-        # a technique can be entirely absent from aggregated if --severity
-        # filtered out every alert it would otherwise have applied to (e.g.
-        # --severity critical under --direction escalate, where no
-        # dismiss-worthy alert is critical) - 0% there, same "empty
-        # battery" convention every other subcommand's hijack rate falls
-        # back to, rather than a bare KeyError.
-        rates = {technique: aggregated.get(technique, {}).get("hijack_rate", 0.0) for technique in technique_names}
+        # every technique runs on every alert left after --severity, and a
+        # filter that leaves none is refused up front, so each one is here
+        rates = {technique: aggregated[technique]["hijack_rate"] for technique in technique_names}
         rows.append({
             "client": name, "rates": rates, "average": sum(rates.values()) / len(technique_names),
             "baseline": baseline / eligible if eligible else 0.0,
             # each cell's own paired test: did this technique move this
             # client off its own no-injection answers, beyond chance
-            "p_values": {technique: lifts.get(technique, {}).get("p_value", 1.0) for technique in technique_names},
-            "p_holm": {technique: lifts.get(technique, {}).get("p_holm", 1.0) for technique in technique_names},
+            "p_values": {technique: lifts[technique]["p_value"] for technique in technique_names},
+            "p_holm": {technique: lifts[technique]["p_holm"] for technique in technique_names},
         })
     rows.sort(key=lambda row: row["average"])
 
@@ -1220,9 +1224,8 @@ def cmd_severity_matrix(args):
     sorted by average: severity already has a real-world order a reader
     wants (critical first), unlike client names or technique names."""
     client = build_client(args)
-    injected_alerts = _injected_alerts_for(args.direction)
     requested_severities = _resolve_severities(args.severity, "severity-matrix")
-    injected_alerts = _filter_by_severity(injected_alerts, requested_severities)
+    injected_alerts = _injected_alerts_for(args.direction, requested_severities)
     _expect_requests(client, len(injected_alerts))
     technique_names = _technique_names_for_direction(args.techniques, args.direction)
 
@@ -1234,7 +1237,7 @@ def cmd_severity_matrix(args):
         if severity not in grid:
             continue
         aggregated = grid[severity]
-        rates = {technique: aggregated.get(technique, {}).get("hijack_rate", 0.0) for technique in technique_names}
+        rates = {technique: aggregated[technique]["hijack_rate"] for technique in technique_names}
         rows.append({"severity": severity, "rates": rates, "average": sum(rates.values()) / len(technique_names)})
 
     print(f"client={_client_label(args)} direction={args.direction} defense={args.defense}\n")

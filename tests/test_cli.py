@@ -138,18 +138,34 @@ def test_run_severity_filter_all_commas_is_a_clear_error(capsys):
     assert "no severity names" in err
 
 
-def test_run_severity_filter_with_nothing_present_is_empty_not_a_crash(capsys):
+def test_severity_filter_that_empties_a_direction_is_refused_not_scored_as_zero(capsys):
     """escalation-direction injected alerts only ever come from dismiss-
-    worthy ground truth alerts, none of which are severity=critical -
-    asking for --severity critical there should produce an empty (not
-    erroring) injected battery, same as an injected-alerts-only filter in
-    scoring.py gracefully returning 0.0/empty rather than raising."""
-    exit_code = main([
-        "run", "--client", "fake-escalation-vulnerable", "--direction", "escalate", "--severity", "critical",
-    ])
-    out = capsys.readouterr().out
-    assert exit_code == 0
-    assert "overall hijack rate: 0%" in out
+    worthy ground truth alerts, none of which are severity=critical. This
+    used to run an empty battery and print a 0% hijack rate - which reads
+    exactly like a model that resisted everything, and would sit in a
+    summary table next to real results. Refused up front instead, naming
+    the severities that direction does have."""
+    for command in (
+        ["run", "--client", "fake-escalation-vulnerable"],
+        ["compare", "--client", "fake-escalation-vulnerable"],
+        ["leaderboard"],
+        ["technique-leaderboard"],
+        ["matrix", "--clients", "fake-vulnerable"],
+        ["severity-matrix", "--client", "fake-vulnerable"],
+    ):
+        assert main([*command, "--direction", "escalate", "--severity", "critical"]) == 1
+        captured = capsys.readouterr()
+        assert ("--severity critical leaves no alerts for direction=escalate - its alerts are high, medium, low"
+                in captured.err), command
+        assert "hijack rate" not in captured.out
+
+
+def test_full_report_refuses_a_severity_filter_that_empties_either_direction(tmp_path, capsys):
+    report_path = tmp_path / "r.json"
+    assert main(["full-report", "--client", "fake-vulnerable", "--severity", "critical",
+                 "--report", str(report_path)]) == 1
+    assert "leaves no alerts for direction=escalate" in capsys.readouterr().err
+    assert not report_path.exists()
 
 
 def test_run_writes_markdown_report(tmp_path, capsys):
@@ -1690,31 +1706,6 @@ def test_matrix_severity_filter_rejects_unknown_name(capsys):
     assert "unknown severity/severities for matrix" in err
 
 
-def test_matrix_severity_filter_that_empties_the_battery_shows_zero_not_a_crash(capsys):
-    """escalation-direction injected alerts only ever come from dismiss-
-    worthy ground truth alerts, none of which are severity=critical - every
-    technique column used to KeyError on a direct aggregated[technique]
-    lookup once --severity filtered the injected battery down to nothing,
-    instead of falling back to the same 0% every other subcommand shows
-    for an empty battery."""
-    exit_code = main([
-        "matrix", "--clients", "fake-vulnerable", "--direction", "escalate", "--severity", "critical",
-    ])
-    out = capsys.readouterr().out
-    assert exit_code == 0
-    assert "fake-vulnerable | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0%" in out
-
-
-def test_matrix_severity_filter_that_empties_the_battery_works_for_escalate_direction_too(capsys):
-    exit_code = main([
-        "matrix", "--clients", "fake-escalation-vulnerable", "--direction", "escalate",
-        "--severity", "critical",
-    ])
-    out = capsys.readouterr().out
-    assert exit_code == 0
-    assert "fake-escalation-vulnerable | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0%" in out
-
-
 def test_matrix_rejects_unknown_technique(capsys):
     exit_code = main(["matrix", "--techniques", "not_a_real_technique"])
     err = capsys.readouterr().err
@@ -2245,17 +2236,17 @@ def test_summarize_writes_markdown_json_and_csv(tmp_path, capsys):
 
 
 def test_summarize_refuses_reports_with_different_severity_filters(tmp_path, capsys):
-    """a critical-only run next to a full-battery run would put two
+    """a high-only run next to a full-battery run would put two
     different alert sets in one table as if they were comparable."""
     full = _saved_full_report(tmp_path, "fake-stubborn")
-    critical = tmp_path / "critical.json"
-    main(["full-report", "--client", "fake-vulnerable", "--severity", "critical", "--report", str(critical)])
+    high = tmp_path / "high.json"
+    assert main(["full-report", "--client", "fake-vulnerable", "--severity", "high", "--report", str(high)]) == 0
     capsys.readouterr()
-    exit_code = main(["summarize", str(full), str(critical)])
+    exit_code = main(["summarize", str(full), str(high)])
     err = capsys.readouterr().err
     assert exit_code == 1
     assert "different --severity filters" in err
-    assert "all severities" in err and "critical" in err
+    assert "all severities" in err and "high" in err
 
 
 def test_summarize_refuses_two_reports_for_the_same_client(tmp_path, capsys):
