@@ -131,6 +131,7 @@ class _ProgressReporter:
         self._label = label
         self._done = 0
         self._started = time.monotonic()
+        self._last_line = self._started
         # set by the command once it knows its battery (_expect_requests),
         # so a line reads "120/576" - how far along, not just how many
         self.expected: int | None = None
@@ -142,9 +143,19 @@ class _ProgressReporter:
         response = self._client.complete(system_prompt, user_message)
         self._done += 1
         if self._done % self.every == 0:
-            elapsed = int(time.monotonic() - self._started)
+            now = time.monotonic()
+            elapsed = int(now - self._started)
             done = f"{self._done}/{self.expected}" if self.expected else f"{self._done}"
-            print(f"{self._label}: {done} requests done ({elapsed // 60}m{elapsed % 60:02d}s)", file=sys.stderr)
+            left = ""
+            # paced on the last `every` requests, not the whole run: on a
+            # resumed run the cached answers come back instantly, and an
+            # average over them would promise a finish far too soon. A
+            # stretch that was all cache has no pace to go on at all.
+            pace = (now - self._last_line) / self.every
+            if self.expected and self._done < self.expected and pace > 0:
+                left = f", about {_duration(pace * (self.expected - self._done))} left"
+            self._last_line = now
+            print(f"{self._label}: {done} requests done ({elapsed // 60}m{elapsed % 60:02d}s{left})", file=sys.stderr)
         return response
 
 

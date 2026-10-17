@@ -2944,3 +2944,31 @@ def test_cache_and_an_output_file_cant_be_the_same_path(fake_ollama, tmp_path, c
                  "--cache", str(path), flag, str(path)]) == 1
     assert f"--cache and {flag} are the same file" in capsys.readouterr().err
     assert fake_ollama == []  # refused before a single request
+
+
+def test_progress_lines_estimate_the_time_left_from_the_recent_pace(monkeypatch, capsys):
+    """a resumed run answers its cached requests instantly - 20 of them
+    here, then 3s a request. An average over the whole run would promise
+    a finish far too soon; the pace over the last 10 requests doesn't."""
+    clock = iter([0.0,  # started
+                  0.0, 0.0,  # 10 and 20 done, both from the cache
+                  30.0, 60.0,  # 30 and 40 done, 3s a request
+                  ])
+    monkeypatch.setattr(cli_module.time, "monotonic", lambda: next(clock))
+    reporter = cli_module._ProgressReporter(ScriptedLLMClient(["{}"] * 40), "ollama:m")
+    reporter.expected = 100
+    for _ in range(40):
+        reporter.complete("s", "u")
+    lines = capsys.readouterr().err.splitlines()
+    assert lines[1] == "ollama:m: 20/100 requests done (0m00s)"  # all cache so far - nothing to estimate from
+    assert lines[2] == "ollama:m: 30/100 requests done (0m30s, about 4 min left)"  # 70 x 3s = 3.5 min
+    assert lines[3] == "ollama:m: 40/100 requests done (1m00s, about 3 min left)"
+
+
+def test_the_last_progress_line_has_no_time_left(monkeypatch, capsys):
+    monkeypatch.setattr(cli_module.time, "monotonic", lambda: 0.0)
+    reporter = cli_module._ProgressReporter(ScriptedLLMClient(["{}"] * 10), "ollama:m")
+    reporter.expected = 10
+    for _ in range(10):
+        reporter.complete("s", "u")
+    assert capsys.readouterr().err.strip() == "ollama:m: 10/10 requests done (0m00s)"

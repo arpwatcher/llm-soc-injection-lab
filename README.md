@@ -341,10 +341,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   missing or misspelled model fails straight away, all of them named in one error, instead
   of surfacing only after every model listed before it has finished its whole battery.
   Every real-model run (`--models`, or `--client ollama` on the single-client commands)
-  also prints `ollama:<model>: 120/648 requests done (5m12s)` to stderr every 10 requests -
-  how far along out of the total the command works out up front - at
-  a few seconds per alert, a few hundred silent requests otherwise look just like a hung
-  run. stderr, so the results on stdout stay clean even when redirected to a file. Saved
+  also prints `ollama:<model>: 120/648 requests done (5m12s, about 23 min left)` to stderr
+  every 10 requests - how far along out of the total the command works out up front, and
+  the time left at the pace of the last 10 (not the whole run's average, which on a resumed
+  run would count the instant cached answers and promise a finish far too soon). At a few
+  seconds per alert, a few hundred silent requests otherwise look just like a hung run. stderr, so the results on stdout stay clean even when redirected to a file. Saved
   reports from `run`/`compare`/`full-report`/`severity-matrix --client ollama --model X` name
   the client `ollama:X` too, not just `ollama` - otherwise two report files for two models
   could only be told apart by their filenames. `--temperature`/`--seed` (on every command that can run a real
@@ -662,7 +663,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-596 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+598 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
