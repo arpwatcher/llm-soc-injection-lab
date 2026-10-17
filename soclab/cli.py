@@ -7,6 +7,8 @@ import json
 import sys
 import time
 
+import requests
+
 from soclab.alerts import SEVERITIES, generate_clean_alerts
 from soclab.analyst import DEFENSE_NONE, DEFENSES, analyze
 from soclab.injections import (
@@ -1865,9 +1867,21 @@ def main(argv=None):
         # permission, etc.) - without it, that crashes with a raw
         # traceback instead of the same clean "error: ..." every other
         # failure in this cli gets.
-        print(f"error: {exc}", file=sys.stderr)
+        print(f"error: {exc}{_resume_hint(args, exc)}", file=sys.stderr)
         return 1
     return 0
+
+
+def _resume_hint(args, exc: Exception) -> str:
+    """after the server stopped answering partway (retries already spent),
+    what a rerun will and won't keep - the difference between picking a
+    half-hour run back up and starting it over."""
+    if not isinstance(exc, requests.RequestException):
+        return ""
+    cache = getattr(args, "cache", None)
+    if cache:
+        return f" - every answer so far is saved in {cache}; rerun the same command to pick up from there"
+    return " - nothing from this run was kept; add --cache FILE so a rerun picks up where it stopped"
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised as a real subprocess, not in-process

@@ -506,6 +506,9 @@ actual thesis experiments run. A request that times out, can't connect or gets a
 2, waiting 2s then 4s, each retry noted on stderr) - a 648-request full report used to die
 on the first dropped connection. Errors that would only repeat, like a model that isn't
 pulled or doesn't fit in memory, fail at once.
+When the retries run out the error says what a rerun will keep: with `--cache`, that every
+answer so far is saved and the same command picks up from there; without it, that nothing
+was kept and `--cache FILE` would have.
 
 ## Usage
 
@@ -653,7 +656,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-587 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+589 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

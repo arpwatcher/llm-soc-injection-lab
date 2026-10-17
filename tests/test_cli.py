@@ -1134,7 +1134,10 @@ def test_cache_resumes_a_run_that_died_partway(fake_ollama, monkeypatch, tmp_pat
 
     monkeypatch.setattr(requests, "post", dies_after_25)
     assert main(command) == 1
-    assert "read timed out" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "read timed out" in err
+    # the run says how to get its answers back, not just that it died
+    assert f"every answer so far is saved in {cache_path}; rerun the same command to pick up from there" in err
     assert len(fake_ollama) == 25
 
     monkeypatch.setattr(requests, "post", answering)
@@ -2881,3 +2884,20 @@ def test_retries_flag_reaches_every_real_model_client(capsys):
     with pytest.raises(SystemExit):
         cli_module.build_parser().parse_args(["run", "--client", "ollama", "--model", "m", "--retries", "-1"])
     assert "must be 0 or more" in capsys.readouterr().err
+
+
+def test_a_run_that_dies_without_a_cache_says_how_to_keep_the_next_one(fake_ollama, monkeypatch, capsys):
+    def server_gone(url, json, timeout):
+        raise requests.exceptions.ConnectionError("connection refused")
+
+    monkeypatch.setattr(requests, "post", server_gone)
+    assert main(["run", "--client", "ollama", "--model", "gullible-model"]) == 1
+    assert ("connection refused - nothing from this run was kept; add --cache FILE so a rerun picks up "
+            "where it stopped") in capsys.readouterr().err
+
+
+def test_errors_that_arent_the_server_going_away_get_no_resume_hint(tmp_path, capsys):
+    """a bad --report path is an OSError too, but rerunning wouldn't help."""
+    assert main(["run", "--client", "fake-robust", "--report", str(tmp_path / "missing" / "r.md")]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and "rerun" not in err and "--cache" not in err
