@@ -12,6 +12,8 @@ without needing a running LLM.
 import hashlib
 import json
 import os
+import sys
+import time
 from typing import Protocol
 
 import requests
@@ -346,11 +348,22 @@ class OllamaClient:
     test suite, but the actual code path that builds the request and
     parses the response is exercised, not skipped."""
 
+    # the failures worth waiting out: the server momentarily unreachable,
+    # a request that outran the timeout (often the first one, while the
+    # model loads), and ollama's "busy" answers when its queue is full or a
+    # proxy in front of it hiccups. Everything else - a model that isn't
+    # pulled, one that needs more memory than the machine has - fails the
+    # same way on every attempt, so it fails at once.
+    _RETRYABLE_STATUS = (502, 503, 504)
+
     def __init__(
         self, model: str, host: str | None = None, timeout: float = 120.0,
-        temperature: float | None = None, seed: int | None = None,
+        temperature: float | None = None, seed: int | None = None, retries: int = 2,
     ):
         self.model = model
+        # a 648-request full-report used to die on the first dropped
+        # connection - resumable with --cache, but only once someone noticed
+        self.retries = retries
         # sampling options - left out of the request entirely when not set,
         # so the model's own defaults apply (usually a temperature above 0,
         # which means two runs of the same battery can disagree).
@@ -375,6 +388,27 @@ class OllamaClient:
         except (ValueError, KeyError, TypeError) as exc:
             raise ValueError(f"unexpected response from ollama /api/tags: {response.text!r}") from exc
 
+    def _post_with_retries(self, payload: dict):
+        """POST /api/chat, retrying transient failures up to self.retries
+        times with a doubling wait (2s, 4s, ...), each retry noted on stderr
+        so a flaky server is visible rather than silently slow. The final
+        attempt's error or response goes to the caller unchanged."""
+        url = f"{self.host}/api/chat"
+        for attempt in range(self.retries):
+            try:
+                response = requests.post(url, json=payload, timeout=self.timeout)
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                reason = "timed out" if isinstance(exc, requests.Timeout) else "couldn't connect"
+            else:
+                if response.status_code not in self._RETRYABLE_STATUS:
+                    return response
+                reason = f"returned {response.status_code}"
+            wait = 2 ** (attempt + 1)
+            print(f"ollama:{self.model}: request {reason}, retrying in {wait}s ({attempt + 1}/{self.retries})",
+                  file=sys.stderr)
+            time.sleep(wait)
+        return requests.post(url, json=payload, timeout=self.timeout)
+
     def complete(self, system_prompt: str, user_message: str) -> str:
         payload: dict = {
             "model": self.model,
@@ -395,7 +429,7 @@ class OllamaClient:
         }
         if options:
             payload["options"] = options
-        response = requests.post(f"{self.host}/api/chat", json=payload, timeout=self.timeout)
+        response = self._post_with_retries(payload)
         if response.status_code == 404:
             # ollama's answer to a model that was never pulled - the bare
             # "404 Client Error: Not Found for url" raise_for_status gives

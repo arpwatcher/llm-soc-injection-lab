@@ -2182,9 +2182,11 @@ def test_build_client_ollama_wires_custom_timeout():
         temperature = None
         seed = None
         cache = None
+        retries = 0
 
     client = build_client(Args())
     assert client.timeout == 5.0
+    assert client.retries == 0
 
 
 def test_ollama_client_unreachable_host_fails_cleanly(capsys):
@@ -2865,3 +2867,17 @@ def test_full_report_method_follows_the_severity_filter_and_defenses(tmp_path, c
     assert method["directions"]["escalate"]["injected_alerts"] == 8
     assert method["defenses"] == ["none", "both"]
     assert method["requests"] == (4 + 24 + 8) * 2
+
+
+def test_retries_flag_reaches_every_real_model_client(capsys):
+    """a run against a flaky server keeps going instead of dying on the
+    first dropped connection - and --retries 0 is there for anyone who'd
+    rather it didn't."""
+    for command in (["run", "--client", "ollama", "--model", "robust-model"],
+                    ["leaderboard", "--models", "robust-model"]):
+        args = cli_module.build_parser().parse_args([*command, "--retries", "0"])
+        assert args.retries == 0
+    assert cli_module.build_parser().parse_args(["check-ollama"]).retries == 2
+    with pytest.raises(SystemExit):
+        cli_module.build_parser().parse_args(["run", "--client", "ollama", "--model", "m", "--retries", "-1"])
+    assert "must be 0 or more" in capsys.readouterr().err

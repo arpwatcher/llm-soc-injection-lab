@@ -104,6 +104,7 @@ CLIENT_FACTORIES = {
     "fake-escalation-stubborn": lambda args: EscalationStubbornFakeClient(),
     "ollama": lambda args: OllamaClient(
         model=args.model, host=args.host, timeout=args.timeout, temperature=args.temperature, seed=args.seed,
+        retries=args.retries,
     ),
 }
 
@@ -867,7 +868,10 @@ def _comparison_clients(args, command_label: str) -> list[tuple[str, object]]:
     fake_names = [] if models and not args.clients else _resolve_client_names(args.clients, command_label)
     clients: list[tuple[str, object]] = [(name, CLIENT_FACTORIES[name](args)) for name in fake_names]
     model_clients = [
-        OllamaClient(model=model, host=args.host, timeout=args.timeout, temperature=args.temperature, seed=args.seed)
+        OllamaClient(
+            model=model, host=args.host, timeout=args.timeout, temperature=args.temperature, seed=args.seed,
+            retries=args.retries,
+        )
         for model in models
     ]
     if model_clients:
@@ -1321,7 +1325,7 @@ def cmd_check_ollama(args):
     would otherwise surface partway into a full battery."""
     server = OllamaClient(
         model=args.model or "", host=args.host, timeout=args.timeout,
-        temperature=args.temperature, seed=args.seed,
+        temperature=args.temperature, seed=args.seed, retries=args.retries,
     )
     available = server.available_models()
     print(f"ollama at {server.host} is reachable, {len(available)} model(s) pulled: {', '.join(available) or 'none'}")
@@ -1559,6 +1563,13 @@ def _non_negative_float(value: str) -> float:
     return number
 
 
+def _non_negative_int(value: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"must be 0 or more, got {value}")
+    return number
+
+
 def _add_sampling_arguments(subparser) -> None:
     subparser.add_argument(
         "--temperature", type=_non_negative_float,
@@ -1568,6 +1579,14 @@ def _add_sampling_arguments(subparser) -> None:
     subparser.add_argument(
         "--seed", type=int,
         help="random seed sent to ollama (default: none) - pin it alongside --temperature for a reproducible run",
+    )
+
+
+def _add_retries_argument(subparser) -> None:
+    subparser.add_argument(
+        "--retries", type=_non_negative_int, default=2,
+        help="times to retry an ollama request that timed out, couldn't connect or got a 502/503/504, "
+             "waiting 2s, 4s, ... between tries (default 2, 0 to fail on the first one)",
     )
 
 
@@ -1592,6 +1611,7 @@ def _add_model_arguments(subparser) -> None:
         help="request timeout in seconds for each --models request, default 120",
     )
     _add_sampling_arguments(subparser)
+    _add_retries_argument(subparser)
     _add_cache_argument(subparser)
 
 
@@ -1609,6 +1629,7 @@ def build_parser():
     run_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     run_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(run_parser)
+    _add_retries_argument(run_parser)
     _add_cache_argument(run_parser)
     run_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     run_parser.add_argument(
@@ -1632,6 +1653,7 @@ def build_parser():
     compare_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     compare_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(compare_parser)
+    _add_retries_argument(compare_parser)
     _add_cache_argument(compare_parser)
     compare_parser.add_argument("--report", help="write results to this path - markdown, or json/csv if the path ends in .json/.csv")
     compare_parser.add_argument(
@@ -1657,6 +1679,7 @@ def build_parser():
     full_report_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     full_report_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(full_report_parser)
+    _add_retries_argument(full_report_parser)
     _add_cache_argument(full_report_parser)
     full_report_parser.add_argument(
         "--report", required=True,
@@ -1784,6 +1807,7 @@ def build_parser():
     severity_matrix_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     severity_matrix_parser.add_argument("--timeout", type=float, default=120.0, help=_TIMEOUT_HELP)
     _add_sampling_arguments(severity_matrix_parser)
+    _add_retries_argument(severity_matrix_parser)
     _add_cache_argument(severity_matrix_parser)
     severity_matrix_parser.add_argument(
         "--report",
@@ -1805,6 +1829,7 @@ def build_parser():
     check_parser.add_argument("--host", help="ollama host, defaults to $OLLAMA_HOST or localhost:11434")
     check_parser.add_argument("--timeout", type=float, default=120.0, help="request timeout in seconds, default 120")
     _add_sampling_arguments(check_parser)
+    _add_retries_argument(check_parser)
     check_parser.set_defaults(func=cmd_check_ollama)
 
     summarize_parser = sub.add_parser(

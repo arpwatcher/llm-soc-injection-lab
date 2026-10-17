@@ -235,3 +235,81 @@ def test_raises_clean_error_on_a_200_that_is_not_valid_json(monkeypatch):
     client = OllamaClient(model="m")
     with pytest.raises(ValueError, match="unexpected response from ollama"):
         client.complete("s", "u")
+
+
+def _sequence(*outcomes):
+    """a requests.post that gives each outcome in turn - an exception
+    instance is raised, anything else returned - and counts the calls."""
+    calls = []
+
+    def post(*args, **kwargs):
+        outcome = outcomes[len(calls)]
+        calls.append(outcome)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+    return post, calls
+
+
+def test_retries_a_timeout_then_answers(monkeypatch, capsys, retry_waits):
+    """the first request to a cold model often outruns the timeout while
+    the model loads - the second one finds it loaded."""
+    post, calls = _sequence(requests.exceptions.ReadTimeout("read timed out"), _FakeResponse({"message": {"content": "ok"}}))
+    monkeypatch.setattr(requests, "post", post)
+    assert OllamaClient(model="llama3.2:3b").complete("s", "u") == "ok"
+    assert len(calls) == 2
+    assert retry_waits == [2]
+    assert "ollama:llama3.2:3b: request timed out, retrying in 2s (1/2)" in capsys.readouterr().err
+
+
+def test_retries_a_busy_server_with_doubling_waits(monkeypatch, capsys, retry_waits):
+    post, calls = _sequence(
+        _FakeResponse({"error": "server busy"}, status_code=503),
+        requests.exceptions.ConnectionError("connection refused"),
+        _FakeResponse({"message": {"content": "ok"}}),
+    )
+    monkeypatch.setattr(requests, "post", post)
+    assert OllamaClient(model="m").complete("s", "u") == "ok"
+    assert len(calls) == 3
+    assert retry_waits == [2, 4]
+    err = capsys.readouterr().err
+    assert "request returned 503, retrying in 2s (1/2)" in err
+    assert "request couldn't connect, retrying in 4s (2/2)" in err
+
+
+def test_gives_up_after_the_last_retry_with_the_real_error(monkeypatch, retry_waits):
+    post, calls = _sequence(*[requests.exceptions.ConnectionError("connection refused")] * 3)
+    monkeypatch.setattr(requests, "post", post)
+    with pytest.raises(requests.exceptions.ConnectionError, match="connection refused"):
+        OllamaClient(model="m").complete("s", "u")
+    assert len(calls) == 3  # the first try and both retries
+    assert retry_waits == [2, 4]
+
+
+def test_a_busy_answer_on_the_last_try_is_reported_not_retried_again(monkeypatch, retry_waits):
+    post, calls = _sequence(*[_FakeResponse({"error": "server busy"}, status_code=503)] * 2)
+    monkeypatch.setattr(requests, "post", post)
+    with pytest.raises(ValueError, match="ollama returned 503 for model 'm': server busy"):
+        OllamaClient(model="m", retries=1).complete("s", "u")
+    assert len(calls) == 2
+
+
+def test_errors_that_would_repeat_are_not_retried(monkeypatch, retry_waits):
+    """a model needing more memory than the machine has, or one that isn't
+    pulled, fails the same way every time - waiting would only delay it."""
+    for status in (500, 404):
+        post, calls = _sequence(_FakeResponse({"error": "model requires more system memory"}, status_code=status))
+        monkeypatch.setattr(requests, "post", post)
+        with pytest.raises(ValueError):
+            OllamaClient(model="m").complete("s", "u")
+        assert len(calls) == 1
+    assert retry_waits == []
+
+
+def test_retries_zero_fails_on_the_first_error(monkeypatch, retry_waits):
+    post, calls = _sequence(requests.exceptions.ReadTimeout("read timed out"))
+    monkeypatch.setattr(requests, "post", post)
+    with pytest.raises(requests.exceptions.ReadTimeout):
+        OllamaClient(model="m", retries=0).complete("s", "u")
+    assert len(calls) == 1
+    assert retry_waits == []

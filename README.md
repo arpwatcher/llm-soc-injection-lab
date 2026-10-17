@@ -501,7 +501,11 @@ local Ollama server or download open weights here. `OllamaClient` is real, worki
 regardless, pointed at via `OLLAMA_HOST` / `--host` / `--model` / `--timeout` (default 120s,
 plenty of slower local models can exceed that) - it'll run for real the
 moment Ollama is reachable, either here with a different network policy or wherever the
-actual thesis experiments run.
+actual thesis experiments run. A request that times out, can't connect or gets a
+502/503/504 (ollama's answer when its queue is full) is retried `--retries` times (default
+2, waiting 2s then 4s, each retry noted on stderr) - a 648-request full report used to die
+on the first dropped connection. Errors that would only repeat, like a model that isn't
+pulled or doesn't fit in memory, fail at once.
 
 ## Usage
 
@@ -649,7 +653,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-580 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+587 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
