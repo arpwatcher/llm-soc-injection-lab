@@ -12,6 +12,7 @@ without needing a running LLM.
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from typing import Protocol
@@ -270,15 +271,28 @@ class ResponseCache:
     model separately, and separate copies of the file would each write
     back only their own answers, wiping out the others'."""
 
+    # what CachedClient writes: "<model label>|<sha256 of the prompt>"
+    _KEY = re.compile(r".+\|[0-9a-f]{64}")
+
     def __init__(self, path: str):
         self._path = path
         self._answers: dict[str, str] = {}
         if os.path.exists(path):
             try:
                 with open(path) as f:
-                    self._answers = json.load(f)
+                    answers = json.load(f)
             except ValueError as exc:
                 raise ValueError(f"cache file {path} isn't valid json - delete it to start a fresh cache") from exc
+            # a report json loaded as a cache would quietly reuse nothing and
+            # then get answers written into it - the likeliest way being the
+            # same file passed as both --cache and --report
+            if not isinstance(answers, dict) or not all(
+                isinstance(answer, str) and self._KEY.fullmatch(key) for key, answer in answers.items()
+            ):
+                raise ValueError(
+                    f"{path} isn't an answer cache (a --report file, maybe?) - point --cache at a file of its own"
+                )
+            self._answers = answers
 
     def get(self, key: str) -> str | None:
         return self._answers.get(key)

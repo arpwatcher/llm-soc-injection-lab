@@ -4,6 +4,7 @@ per-technique report, or list the available techniques."""
 import argparse
 import csv
 import json
+import os
 import sys
 import time
 
@@ -190,7 +191,14 @@ def build_client(args):
 
 
 def _response_cache(args) -> ResponseCache | None:
-    return ResponseCache(args.cache) if args.cache else None
+    if not args.cache:
+        return None
+    for flag in ("report", "transcript"):
+        output = getattr(args, flag, None)
+        if output and os.path.abspath(output) == os.path.abspath(args.cache):
+            # the file written at the end would replace every cached answer
+            raise ValueError(f"--cache and --{flag} are the same file ({args.cache}) - give the cache its own file")
+    return ResponseCache(args.cache)
 
 
 def _wrap_real_model(client, label: str, cache: ResponseCache | None):

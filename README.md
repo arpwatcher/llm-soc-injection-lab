@@ -510,6 +510,11 @@ When the retries run out the error says what a rerun will keep: with `--cache`, 
 answer so far is saved and the same command picks up from there; without it, that nothing
 was kept and `--cache FILE` would have. Ctrl-c on a real-model run says the same (exit code
 130) instead of ending in a traceback.
+The cache file is checked before the first request: the same path as `--report` or
+`--transcript` is refused (the file written at the end would replace every cached answer, and
+the next "resume" would start over), and so is a file that isn't an answer cache - say a
+report json passed by mistake, which would otherwise reuse nothing and get answers written
+into it.
 
 ## Usage
 
@@ -657,7 +662,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-591 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+596 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

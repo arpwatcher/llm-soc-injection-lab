@@ -2933,3 +2933,14 @@ def test_ctrl_c_on_a_fake_client_run_gets_no_cache_advice(monkeypatch, capsys):
     assert main(["run", "--client", "fake-robust"]) == 130
     err = capsys.readouterr().err
     assert err.strip() == "interrupted"
+
+
+@pytest.mark.parametrize("flag", ["--report", "--transcript"])
+def test_cache_and_an_output_file_cant_be_the_same_path(fake_ollama, tmp_path, capsys, flag):
+    """the file written at the end of the run would replace every cached
+    answer, and the next "resume" would start over."""
+    path = tmp_path / "llama.json"
+    assert main(["run", "--client", "ollama", "--model", "gullible-model",
+                 "--cache", str(path), flag, str(path)]) == 1
+    assert f"--cache and {flag} are the same file" in capsys.readouterr().err
+    assert fake_ollama == []  # refused before a single request

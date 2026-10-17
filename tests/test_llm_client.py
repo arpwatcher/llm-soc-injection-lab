@@ -361,3 +361,18 @@ def test_clients_sharing_one_cache_keep_each_others_answers(tmp_path):
     reloaded = ResponseCache(path)
     assert CachedClient(ScriptedLLMClient([]), reloaded, key_prefix="ollama:a").complete("s", "u") == "a's answer"
     assert CachedClient(ScriptedLLMClient([]), reloaded, key_prefix="ollama:b").complete("s", "u") == "b's answer"
+
+
+@pytest.mark.parametrize("content", [
+    "[1, 2]",
+    '{"client": "ollama:llama3.2:3b", "summary_by_defense": {"none": 0.5}}',
+    '{"m|' + "a" * 64 + '": 5}',
+])
+def test_response_cache_refuses_a_file_that_isnt_an_answer_cache(tmp_path, content):
+    """a report json loaded as a cache would reuse nothing and then get
+    answers written into it; a list used to crash with an AttributeError."""
+    path = tmp_path / "not-a-cache.json"
+    path.write_text(content)
+    with pytest.raises(ValueError, match="isn't an answer cache"):
+        ResponseCache(str(path))
+    assert path.read_text() == content  # left exactly as it was
