@@ -1867,16 +1867,24 @@ def main(argv=None):
         # permission, etc.) - without it, that crashes with a raw
         # traceback instead of the same clean "error: ..." every other
         # failure in this cli gets.
-        print(f"error: {exc}{_resume_hint(args, exc)}", file=sys.stderr)
+        hint = _resume_hint(args) if isinstance(exc, requests.RequestException) else ""
+        print(f"error: {exc}{hint}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        # ctrl-c on a long real-model run is a normal way to stop one - a
+        # traceback said nothing about whether the answers so far survived
+        print(f"\ninterrupted{_resume_hint(args)}", file=sys.stderr)
+        return 130
     return 0
 
 
-def _resume_hint(args, exc: Exception) -> str:
-    """after the server stopped answering partway (retries already spent),
-    what a rerun will and won't keep - the difference between picking a
-    half-hour run back up and starting it over."""
-    if not isinstance(exc, requests.RequestException):
+def _resume_hint(args) -> str:
+    """after a real-model run stopped partway - the server gone with its
+    retries spent, or ctrl-c - what a rerun will and won't keep: the
+    difference between picking a half-hour run back up and starting it
+    over. Nothing for the fake clients, which finish in a second and have
+    no cache."""
+    if getattr(args, "client", None) != "ollama" and not getattr(args, "models", None):
         return ""
     cache = getattr(args, "cache", None)
     if cache:

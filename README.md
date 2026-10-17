@@ -508,7 +508,8 @@ on the first dropped connection. Errors that would only repeat, like a model tha
 pulled or doesn't fit in memory, fail at once.
 When the retries run out the error says what a rerun will keep: with `--cache`, that every
 answer so far is saved and the same command picks up from there; without it, that nothing
-was kept and `--cache FILE` would have.
+was kept and `--cache FILE` would have. Ctrl-c on a real-model run says the same (exit code
+130) instead of ending in a traceback.
 
 ## Usage
 
@@ -656,7 +657,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-589 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+591 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

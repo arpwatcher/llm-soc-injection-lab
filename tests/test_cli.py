@@ -2901,3 +2901,35 @@ def test_errors_that_arent_the_server_going_away_get_no_resume_hint(tmp_path, ca
     assert main(["run", "--client", "fake-robust", "--report", str(tmp_path / "missing" / "r.md")]) == 1
     err = capsys.readouterr().err
     assert err.startswith("error: ") and "rerun" not in err and "--cache" not in err
+
+
+def test_ctrl_c_on_a_real_model_run_says_what_was_kept(fake_ollama, monkeypatch, tmp_path, capsys):
+    """stopping a long run by hand is normal - it used to end in a raw
+    traceback that said nothing about whether the answers so far survived."""
+    answering = requests.post
+    calls = {"n": 0}
+
+    def interrupted_after_10(url, json, timeout):
+        calls["n"] += 1
+        if calls["n"] > 10:
+            raise KeyboardInterrupt
+        return answering(url, json=json, timeout=timeout)
+
+    monkeypatch.setattr(requests, "post", interrupted_after_10)
+    cache_path = tmp_path / "answers.json"
+    assert main(["leaderboard", "--models", "gullible-model", "--cache", str(cache_path)]) == 130
+    assert f"interrupted - every answer so far is saved in {cache_path}" in capsys.readouterr().err
+    assert len(json.loads(cache_path.read_text())) == 10
+    calls["n"] = 0
+    assert main(["run", "--client", "ollama", "--model", "gullible-model"]) == 130
+    assert "interrupted - nothing from this run was kept; add --cache FILE" in capsys.readouterr().err
+
+
+def test_ctrl_c_on_a_fake_client_run_gets_no_cache_advice(monkeypatch, capsys):
+    def interrupt(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli_module, "score_batch", interrupt)
+    assert main(["run", "--client", "fake-robust"]) == 130
+    err = capsys.readouterr().err
+    assert err.strip() == "interrupted"
