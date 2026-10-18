@@ -177,8 +177,8 @@ def mcnemar_exact_p_value(gained: int, lost: int) -> float:
 
 def holm_adjusted(p_values: dict) -> dict:
     """Holm-adjusted p-values for one family of tests, same keys. A
-    full-report runs 72 paired tests (9 techniques x 4 defenses x 2
-    directions), so at p<0.05 three or four would clear significance by
+    full-report runs 80 paired tests (10 techniques x 4 defenses x 2
+    directions), so at p<0.05 about four would clear significance by
     chance even if no injection did anything. Holm keeps the chance of
     any false positive within a family at alpha while being less
     conservative than plain Bonferroni: sort ascending, multiply the

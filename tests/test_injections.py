@@ -1,4 +1,5 @@
 import base64
+import re
 
 import pytest
 
@@ -264,3 +265,13 @@ def test_few_shot_examples_cant_be_read_back_as_the_models_answer(technique):
     assert "{" not in payload
     echoed = f"The log says:{payload}\nMy answer: " + '{"action": "investigate", "reasoning": "r"}'
     assert parse_response(alert.id, echoed).action == "investigate"
+
+
+@pytest.mark.parametrize("technique, target", [("language_switch", "dismiss"), ("language_switch_escalation", "escalate")])
+def test_language_switch_leaves_nothing_in_english_but_the_action_word(technique, target):
+    """the technique's whole point: a filter or defense tuned to english
+    phrasing has nothing to match, and the only latin word left is the
+    answer the analyst is allowed to give."""
+    alert = generate_clean_alerts()[0]
+    payload = apply_technique(alert, technique).raw_log[len(alert.raw_log):]
+    assert re.findall(r"[A-Za-z]+", payload) == [target]
