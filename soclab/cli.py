@@ -339,13 +339,21 @@ def _strict_named_split(effects: dict) -> str:
     how many it reduced among the ones it names and among the ones it
     doesn't. One that never got through has nothing to reduce, and
     counting it would read as the defense failing on it."""
+    named, unnamed = _named_unnamed_reduced(effects)
+    return f" - of those that got through without it: {named} it names, {unnamed} it doesn't"
+
+
+def _named_unnamed_reduced(effects: dict) -> tuple[str, str]:
+    """("7/7", "2/2"): of the techniques in effects that got through with no
+    defense, how many were reduced among those strict names and among
+    those it doesn't."""
     worked = {technique: entry for technique, entry in effects.items() if entry["none_rate"] > 0}
 
     def reduced(unnamed: bool) -> str:
         group = [entry for technique, entry in worked.items() if (technique in STRICT_UNNAMED_TECHNIQUES) == unnamed]
         return f"{sum(1 for entry in group if defense_effect_verdict(entry) == 'reduced')}/{len(group)}"
 
-    return f" - of those that got through without it: {reduced(False)} it names, {reduced(True)} it doesn't"
+    return reduced(False), reduced(True)
 
 
 def _print_clean_accuracy_change(changes: dict) -> None:
@@ -1471,6 +1479,18 @@ def _techniques_reduced(report: dict, defense: str) -> str | None:
     return f"{verdicts.count('reduced')}/{len(verdicts)}" + (f", {worse} worse" if worse else "")
 
 
+def _strict_split(report: dict) -> tuple[str, str] | None:
+    """_named_unnamed_reduced for a saved full report's strict defense,
+    both directions together. None if the report didn't run strict or
+    was saved before the paired defense effect existed."""
+    by_direction = report.get("defense_effect_vs_none_by_direction")
+    if not by_direction or DEFENSE_STRICT not in report["summary_by_defense"]:
+        return None
+    return _named_unnamed_reduced(
+        {technique: entry for effects in by_direction.values() for technique, entry in effects[DEFENSE_STRICT].items()}
+    )
+
+
 def cmd_summarize(args):
     """One table across several saved full-report json files - the
     cross-model headline result (how much does each defense help, per
@@ -1519,6 +1539,7 @@ def cmd_summarize(args):
             "lift": {d: _combined_lift(report, d) for d in defenses},
             "significant": {d: _significant_techniques(report, d) for d in defenses},
             "reduced": {d: _techniques_reduced(report, d) for d in defenses},
+            "strict_split": _strict_split(report),
         }
         for path, report in reports
     ]
@@ -1551,6 +1572,13 @@ def cmd_summarize(args):
         print(f"{'client':<{width}} " + " ".join(f"{d:>13}" for d in applied))
         for row in rows:
             print(f"{row['client']:<{width}} " + " ".join(f"{row['reduced'][d] or 'n/a':>13}" for d in applied))
+    if DEFENSE_STRICT in defenses:
+        print("\nstrict on the techniques it names vs the ones it doesn't (reduced, of those that got through "
+              "without it, both directions)")
+        print(f"{'client':<{width}} {'named':>9} {'unnamed':>9}")
+        for row in rows:
+            named, unnamed = row["strict_split"] or ("n/a", "n/a")
+            print(f"{row['client']:<{width}} {named:>9} {unnamed:>9}")
 
     if args.report:
         _write_report(

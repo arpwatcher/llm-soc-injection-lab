@@ -2995,3 +2995,43 @@ def test_strict_and_both_say_how_they_did_on_techniques_strict_names_and_doesnt(
 def test_the_unnamed_techniques_really_are_techniques():
     """a renamed technique would silently fall out of the unnamed group."""
     assert STRICT_UNNAMED_TECHNIQUES <= set(TECHNIQUES) | set(ESCALATION_TECHNIQUES)
+
+
+def _strict_split_table(out):
+    table = out.split("strict on the techniques it names vs the ones it doesn't")[1].strip().split("\n\n")[0]
+    return {line.split()[0]: line.split()[1:] for line in table.splitlines()[2:]}
+
+
+def test_summarize_shows_strict_on_named_vs_unnamed_techniques_per_model(tmp_path, capsys):
+    """the cross-model view of the question the unnamed techniques are
+    there to ask - and n/a for a report that didn't run strict or was saved
+    before the paired defense effect existed."""
+    strict = _saved_full_report(tmp_path, "fake-strict-sensitive")
+    stubborn = _saved_full_report(tmp_path, "fake-stubborn")
+    old = _saved_full_report(tmp_path, "fake-vulnerable")
+    report = json.loads(old.read_text())
+    del report["defense_effect_vs_none_by_direction"]
+    old.write_text(json.dumps(report))
+    no_strict = tmp_path / "no-strict.json"
+    main(["full-report", "--client", "fake-sandwich-sensitive", "--defenses", "both", "--report", str(no_strict)])
+    md = tmp_path / "s.md"
+    capsys.readouterr()
+    main(["summarize", str(strict), str(stubborn), str(old), str(no_strict)])
+    rows = _strict_split_table(capsys.readouterr().out)
+    assert rows["fake-strict-sensitive"] == ["7/7", "2/2"]
+    assert rows["fake-stubborn"] == ["0/7", "0/2"]  # needs strict and sandwich together
+    assert rows["fake-vulnerable"] == ["n/a", "n/a"]
+    assert rows["fake-sandwich-sensitive"] == ["n/a", "n/a"]
+    main(["summarize", str(strict), str(stubborn), "--report", str(md)])
+    capsys.readouterr()
+    assert "| fake-strict-sensitive | 7/7 | 2/2 |" in md.read_text()
+
+
+def test_summarize_without_any_strict_run_has_no_strict_table(tmp_path, capsys):
+    path = tmp_path / "r.json"
+    main(["full-report", "--client", "fake-robust", "--defenses", "both", "--report", str(path)])
+    md = tmp_path / "s.md"
+    capsys.readouterr()
+    main(["summarize", str(path), "--report", str(md)])
+    assert "strict on the techniques" not in capsys.readouterr().out
+    assert "strict on the techniques" not in md.read_text()

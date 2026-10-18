@@ -1041,6 +1041,18 @@ def render_summary_report(rows: list[dict], defenses: list[str], severity_filter
         for row in rows:
             cells = " | ".join(row.get("reduced", {}).get(d) or "n/a" for d in applied)
             lines.append(f"| {row['client']} | {cells} |")
+    if "strict" in defenses and any("strict_split" in row for row in rows):
+        lines.extend([
+            "",
+            ("## strict on the techniques it names vs the ones it doesn't (reduced, of those that got "
+             "through without it, both directions)"),
+            "",
+            "| client | named | unnamed |",
+            "|---|---|---|",
+        ])
+        for row in rows:
+            named, unnamed = row.get("strict_split") or ("n/a", "n/a")
+            lines.append(f"| {row['client']} | {named} | {unnamed} |")
     lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
     return "\n".join(lines)
 
