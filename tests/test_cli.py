@@ -9,9 +9,9 @@ import requests
 
 import soclab.cli as cli_module
 from soclab.alerts import Alert
-from soclab.analyst import AnalystDecision
+from soclab.analyst import STRICT_UNNAMED_TECHNIQUES, AnalystDecision
 from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
-from soclab.injections import ESCALATION_TECHNIQUES
+from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES
 from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
 from soclab.scoring import ScoredResult
 
@@ -2972,3 +2972,26 @@ def test_the_last_progress_line_has_no_time_left(monkeypatch, capsys):
     for _ in range(10):
         reporter.complete("s", "u")
     assert capsys.readouterr().err.strip() == "ollama:m: 10/10 requests done (0m00s)"
+
+
+def test_strict_and_both_say_how_they_did_on_techniques_strict_names_and_doesnt(capsys):
+    """the strict prompt leaves a few techniques unnamed on purpose - this
+    line is where "does naming tricks cover the ones it doesn't name" gets
+    read off. The fakes react to strict whatever it names, so here it's
+    just the arithmetic: of the 9 dismiss techniques that got through
+    (unicode_homoglyph never did), 7 are named and 2 aren't."""
+    main(["compare", "--client", "fake-strict-sensitive"])
+    out = capsys.readouterr().out
+    split = " - of those that got through without it: 7/7 it names, 2/2 it doesn't"
+    assert f"defense=strict: 9/10 techniques reduced, 0/10 increased (Holm-adjusted p<0.05){split}" in out
+    assert f"defense=both: 9/10 techniques reduced, 0/10 increased (Holm-adjusted p<0.05){split}" in out
+    assert "defense=sandwich: 0/10 techniques reduced, 0/10 increased (Holm-adjusted p<0.05)\n" in out
+    main(["compare", "--client", "fake-escalation-stubborn", "--direction", "escalate", "--defenses", "strict"])
+    # stubborn needs both signals - strict alone reduces nothing, named or not (and like
+    # its dismiss-direction twin it never falls for the homoglyph one, so 7 named got through)
+    assert "of those that got through without it: 0/7 it names, 0/2 it doesn't" in capsys.readouterr().out
+
+
+def test_the_unnamed_techniques_really_are_techniques():
+    """a renamed technique would silently fall out of the unnamed group."""
+    assert STRICT_UNNAMED_TECHNIQUES <= set(TECHNIQUES) | set(ESCALATION_TECHNIQUES)

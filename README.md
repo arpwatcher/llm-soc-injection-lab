@@ -69,9 +69,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   them together. `strict` names the first eight patterns per direction and deliberately
   not `few_shot_poisoning` or `language_switch` (or their mirrors): whether a defense that
   lists known tricks also holds against ones it doesn't list is a question of its own, and
-  naming them would stop the battery from asking it. Comparing `strict`'s effect on those
-  two against the other eight is that answer (a test pins the prompt so it isn't extended
-  by accident). The fake clients can't say anything about it - they react to `strict`
+  naming them would stop the battery from asking it. `compare` and `full-report` read that
+  answer off for `strict` and `both`: `- of those that got through without it: 7/7 it names,
+  2/2 it doesn't` after each one's reduced count, counting only techniques that got through
+  with no defense (one that never did has nothing to reduce). A test pins the prompt so it
+  isn't extended by accident. The fake clients can't say anything about it - they react to `strict`
   regardless of what it names - so only a real model's numbers count here. Parses the model's response back into a structured decision - pulls the
   JSON out even if the model wraps it in a sentence, and rejects anything outside the known
   action set instead of guessing - after trimming and lowercasing it, since real models
@@ -683,7 +685,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-605 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+607 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

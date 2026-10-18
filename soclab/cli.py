@@ -11,7 +11,14 @@ import time
 import requests
 
 from soclab.alerts import SEVERITIES, generate_clean_alerts
-from soclab.analyst import DEFENSE_NONE, DEFENSES, analyze
+from soclab.analyst import (
+    DEFENSE_BOTH,
+    DEFENSE_NONE,
+    DEFENSE_STRICT,
+    DEFENSES,
+    STRICT_UNNAMED_TECHNIQUES,
+    analyze,
+)
 from soclab.injections import (
     ESCALATION_TECHNIQUES,
     TECHNIQUES,
@@ -319,9 +326,26 @@ def _print_defense_effect_counts(effects_by_defense: dict, heading: str) -> None
     print(heading)
     for defense, effects in effects_by_defense.items():
         verdicts = [defense_effect_verdict(entry) for entry in effects.values()]
+        split = _strict_named_split(effects) if defense in (DEFENSE_STRICT, DEFENSE_BOTH) else ""
         print(f"  defense={defense}: {verdicts.count('reduced')}/{len(effects)} techniques reduced, "
-              f"{verdicts.count('increased')}/{len(effects)} increased (Holm-adjusted p<{SIGNIFICANCE_ALPHA})")
+              f"{verdicts.count('increased')}/{len(effects)} increased (Holm-adjusted p<{SIGNIFICANCE_ALPHA}){split}")
     print()
+
+
+def _strict_named_split(effects: dict) -> str:
+    """the strict prompt names most techniques and deliberately leaves a
+    few out (STRICT_UNNAMED_TECHNIQUES) - this is where that comparison
+    gets read off: of the techniques that got through with no defense,
+    how many it reduced among the ones it names and among the ones it
+    doesn't. One that never got through has nothing to reduce, and
+    counting it would read as the defense failing on it."""
+    worked = {technique: entry for technique, entry in effects.items() if entry["none_rate"] > 0}
+
+    def reduced(unnamed: bool) -> str:
+        group = [entry for technique, entry in worked.items() if (technique in STRICT_UNNAMED_TECHNIQUES) == unnamed]
+        return f"{sum(1 for entry in group if defense_effect_verdict(entry) == 'reduced')}/{len(group)}"
+
+    return f" - of those that got through without it: {reduced(False)} it names, {reduced(True)} it doesn't"
 
 
 def _print_clean_accuracy_change(changes: dict) -> None:
