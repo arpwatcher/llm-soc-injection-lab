@@ -203,7 +203,7 @@ def test_run_writes_json_report_when_path_ends_in_json(tmp_path, capsys):
     assert parsed["direction"] == "dismiss"
     assert parsed["severity_filter"] is None
     assert "direct_override" in parsed["per_defense"]["none"]
-    assert parsed["severity_weighted_by_defense"] == {"none": 0.875}
+    assert parsed["severity_weighted_by_defense"] == {"none": pytest.approx(8 / 9)}
     assert "none" in parsed["confidence_interval_by_defense"]
     assert "critical" in parsed["severity_breakdown_by_defense"]["none"]
     assert parsed["clean_accuracy_by_defense"] == {"none": 1.0}
@@ -234,7 +234,7 @@ def test_run_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
     capsys.readouterr()
     assert exit_code == 0
     rows = list(csv.DictReader(report_path.open()))
-    assert len(rows) == 8  # one per dismiss-direction technique
+    assert len(rows) == 9  # one per dismiss-direction technique
     assert all(row["client"] == "fake-vulnerable" for row in rows)
     assert all(row["defense"] == "none" for row in rows)
 
@@ -263,11 +263,11 @@ def test_run_writes_transcript(tmp_path, capsys):
     assert exit_code == 0
     assert f"wrote transcript to {transcript_path}" in out
     entries = json.loads(transcript_path.read_text())
-    assert len(entries) == 72  # 8 techniques x 9 alerts each
+    assert len(entries) == 81  # 9 techniques x 9 alerts each
     assert all("reasoning" in e for e in entries)
     hijacked = [e for e in entries if e["outcome"] == "hijacked"]
     resisted = [e for e in entries if e["outcome"] == "resisted"]
-    assert len(hijacked) == 63  # every technique but unicode_homoglyph, 9 alerts each
+    assert len(hijacked) == 72  # every technique but unicode_homoglyph, 9 alerts each
     assert len(resisted) == 9  # unicode_homoglyph's 9
 
 
@@ -548,7 +548,7 @@ def test_compare_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
     capsys.readouterr()
     assert exit_code == 0
     rows = list(csv.DictReader(report_path.open()))
-    assert len(rows) == 32  # 4 defenses x 8 techniques
+    assert len(rows) == 36  # 4 defenses x 9 techniques
     assert {row["defense"] for row in rows} == {"none", "sandwich", "strict", "both"}
 
 
@@ -694,7 +694,7 @@ def test_full_report_writes_csv_report_when_path_ends_in_csv(tmp_path, capsys):
     capsys.readouterr()
     assert exit_code == 0
     rows = list(csv.DictReader(report_path.open()))
-    assert len(rows) == 64  # 2 directions x 4 defenses x 8 techniques
+    assert len(rows) == 72  # 2 directions x 4 defenses x 9 techniques
     assert {row["direction"] for row in rows} == {"dismiss", "escalate"}
     assert all(row["client"] == "fake-stubborn" for row in rows)
 
@@ -949,14 +949,14 @@ def test_models_missing_from_server_fails_before_anything_runs(fake_ollama, caps
 def test_real_model_runs_report_progress_on_stderr(fake_ollama, capsys):
     """a real model takes seconds per alert, so without this a few hundred
     requests of silence look exactly like a hung run. leaderboard sends
-    18 clean + 72 injected requests here - a progress line every 10th,
+    18 clean + 81 injected requests here - a progress line every 10th,
     all on stderr so stdout stays just the results."""
     exit_code = main(["leaderboard", "--models", "robust-model"])
     captured = capsys.readouterr()
     assert exit_code == 0
     progress = [line for line in captured.err.splitlines() if line.startswith("ollama:robust-model:")]
     assert len(progress) == 9
-    assert progress[-1].startswith("ollama:robust-model: 90/90 requests done (")
+    assert progress[-1].startswith("ollama:robust-model: 90/99 requests done (")
     assert "requests done" not in captured.out
 
 
@@ -964,7 +964,7 @@ def test_run_with_ollama_client_reports_progress_too(fake_ollama, capsys):
     exit_code = main(["run", "--client", "ollama", "--model", "gullible-model"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "ollama:gullible-model: 40/90 requests done (" in captured.err
+    assert "ollama:gullible-model: 40/99 requests done (" in captured.err
 
 
 def test_single_client_reports_name_the_real_model(fake_ollama, tmp_path, capsys):
@@ -1021,7 +1021,7 @@ def test_pinned_sampling_settings_are_recorded_in_saved_reports(fake_ollama, tmp
     ])
     captured = capsys.readouterr()
     assert json.loads(report_path.read_text())["client"] == "ollama:robust-model (temperature=0, seed=42)"
-    assert "ollama:robust-model (temperature=0, seed=42): 40/90 requests done" in captured.err
+    assert "ollama:robust-model (temperature=0, seed=42): 40/99 requests done" in captured.err
 
 
 def test_comparison_rows_carry_pinned_sampling_settings(fake_ollama, tmp_path, capsys):
@@ -1062,15 +1062,15 @@ def test_unparseable_responses_are_reported_not_hidden(fake_ollama, tmp_path, ca
         assert main(["run", "--client", "ollama", "--model", "rambling-model", "--report", str(path)]) == 0
     out = capsys.readouterr().out
     assert "overall hijack rate: 0%" in out
-    assert "unparseable responses: 72/72" in out
-    assert "unparseable responses: 72/72" in md_path.read_text()
+    assert "unparseable responses: 81/81" in out
+    assert "unparseable responses: 81/81" in md_path.read_text()
     rows = list(csv.DictReader(io.StringIO(csv_path.read_text())))
-    assert sum(int(row["unparseable"]) for row in rows) == 72
+    assert sum(int(row["unparseable"]) for row in rows) == 81
 
 
 def test_fake_clients_report_zero_unparseable(capsys):
     main(["run", "--client", "fake-vulnerable"])
-    assert "unparseable responses: 0/72" in capsys.readouterr().out
+    assert "unparseable responses: 0/81" in capsys.readouterr().out
 
 
 def test_check_ollama_lists_pulled_models(fake_ollama, capsys):
@@ -1143,7 +1143,7 @@ def test_cache_resumes_a_run_that_died_partway(fake_ollama, monkeypatch, tmp_pat
     monkeypatch.setattr(requests, "post", answering)
     assert main(command) == 0
     resumed = capsys.readouterr().out
-    assert len(fake_ollama) == 25 + (90 - 25)  # only the 65 unanswered requests went out again
+    assert len(fake_ollama) == 25 + (99 - 25)  # only the 74 unanswered requests went out again
 
     fake_ollama.clear()
     main(["run", "--client", "ollama", "--model", "gullible-model"])
@@ -1222,7 +1222,7 @@ def test_leaderboard_models_compares_real_models_only(fake_ollama, capsys):
     }
     assert set(rows) == {"ollama:robust-model", "ollama:gullible-model"}
     assert rows["ollama:robust-model"].split()[1] == "0%"
-    assert rows["ollama:gullible-model"].split()[1] == "88%"
+    assert rows["ollama:gullible-model"].split()[1] == "89%"
     assert "fake-" not in out
     assert "ollama:robust-model vs ollama:gullible-model (two-proportion z-test):" in out
 
@@ -1345,7 +1345,7 @@ def test_leaderboard_severity_filter_restricts_the_battery(capsys):
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "fake-robust" in out and "0%" in out
-    assert "fake-vulnerable" in out and "88%" in out
+    assert "fake-vulnerable" in out and "89%" in out
 
 
 def test_leaderboard_severity_filter_rejects_unknown_name(capsys):
@@ -1613,7 +1613,7 @@ def test_technique_leaderboard_writes_csv_report(tmp_path, capsys):
     main(["technique-leaderboard", "--report", str(report_path)])
     capsys.readouterr()
     rows = list(csv.DictReader(report_path.read_text().splitlines()))
-    assert len(rows) == 8  # 8 dismiss-direction techniques
+    assert len(rows) == 9  # 9 dismiss-direction techniques
     assert all(row["direction"] == "dismiss" and row["defense"] == "none" for row in rows)
 
 
@@ -1964,7 +1964,7 @@ def test_severity_matrix_writes_csv_report(tmp_path, capsys):
     assert rows[0]["severity"] == "critical"
     assert rows[0]["direction"] == "dismiss"
     assert "direct_override" in rows[0]
-    assert rows[0]["average"] == "0.875"
+    assert float(rows[0]["average"]) == pytest.approx(8 / 9)
 
 
 def test_severity_matrix_writes_transcript(tmp_path, capsys):
@@ -2063,8 +2063,8 @@ def test_list_techniques_json(capsys):
     assert exit_code == 0
     parsed = json.loads(out)
     assert set(parsed) == {"dismiss", "escalation"}
-    assert len(parsed["dismiss"]) == 8
-    assert len(parsed["escalation"]) == 8
+    assert len(parsed["dismiss"]) == 9
+    assert len(parsed["escalation"]) == 9
     assert "direct_override" in parsed["dismiss"]
     assert "already reviewed" in parsed["dismiss"]["direct_override"]
     assert "fake_incident_commander" in parsed["escalation"]
@@ -2084,17 +2084,17 @@ def test_list_techniques_csv(capsys):
     exit_code = main(["list-techniques", "--csv"])
     out = capsys.readouterr().out
     assert exit_code == 0
-    # 1 header + 16 technique rows - would be far more physical lines if
+    # 1 header + 18 technique rows - would be far more physical lines if
     # descriptions still carried embedded newlines from their docstrings.
-    assert len(out.splitlines()) == 17
+    assert len(out.splitlines()) == 19
     rows = list(csv.reader(io.StringIO(out)))
     assert rows[0] == ["direction", "technique", "description"]
     body = rows[1:]
-    assert len(body) == 16
+    assert len(body) == 18
     dismiss_rows = [r for r in body if r[0] == "dismiss"]
     escalation_rows = [r for r in body if r[0] == "escalation"]
-    assert len(dismiss_rows) == 8
-    assert len(escalation_rows) == 8
+    assert len(dismiss_rows) == 9
+    assert len(escalation_rows) == 9
     direct_override = next(r for r in dismiss_rows if r[1] == "direct_override")
     assert "already reviewed" in direct_override[2]
     assert any(r[1] == "fake_incident_commander" for r in escalation_rows)
@@ -2375,7 +2375,7 @@ def test_summarize_drops_a_defense_no_report_ran(tmp_path, capsys):
     ["matrix", "--models", "gullible-model"],
 ])
 def test_progress_total_matches_the_requests_actually_made(command, fake_ollama, tmp_path, capsys):
-    """progress lines read "120/576" so a half-hour run says how far along
+    """progress lines read "120/720" so a half-hour run says how far along
     it is - each command works out its own total up front, and that total
     has to be the number of requests it then really sends."""
     command = [str(tmp_path / "r.md") if part == "REPORT" else part for part in command]
@@ -2388,8 +2388,8 @@ def test_progress_total_matches_the_requests_actually_made(command, fake_ollama,
 def test_full_report_progress_total_with_every_defense(fake_ollama, tmp_path, capsys):
     main(["full-report", "--client", "ollama", "--model", "gullible-model", "--report", str(tmp_path / "r.md")])
     err = capsys.readouterr().err
-    assert len(fake_ollama) == 648  # (18 clean + 72 + 72 injected) x 4 defenses, as the readme says
-    assert "640/648 requests done" in err
+    assert len(fake_ollama) == 720  # (18 clean + 81 + 81 injected) x 4 defenses, as the readme says
+    assert "720/720 requests done" in err
 
 
 def test_baseline_shows_a_hijack_rate_the_injection_didnt_cause(fake_ollama, tmp_path, capsys):
@@ -2411,7 +2411,7 @@ def test_baseline_shows_a_hijack_rate_the_injection_didnt_cause(fake_ollama, tmp
 
 def test_baseline_for_a_model_the_injection_really_moves(capsys):
     main(["run", "--client", "fake-vulnerable"])
-    assert "no-injection baseline: 0/9 already answered dismiss with no injection (0%) - injection lift +88 points" \
+    assert "no-injection baseline: 0/9 already answered dismiss with no injection (0%) - injection lift +89 points" \
         in capsys.readouterr().out
 
 
@@ -2501,9 +2501,9 @@ def test_leaderboard_csv_and_markdown_carry_baseline_and_lift(tmp_path, capsys):
     main(["leaderboard", "--clients", "fake-vulnerable", "--report", str(cs)])
     capsys.readouterr()
     assert "| baseline | lift |" in md.read_text()
-    assert "| fake-vulnerable | 88% | 78%-93% | 0% | +88 |" in md.read_text()
+    assert "| fake-vulnerable | 89% | 80%-94% | 0% | +89 |" in md.read_text()
     row = next(csv.DictReader(io.StringIO(cs.read_text())))
-    assert (row["baseline"], row["lift"]) == ("0.0", "0.875")
+    assert row["baseline"] == "0.0" and float(row["lift"]) == pytest.approx(8 / 9)
 
 
 def test_matrix_shows_each_clients_no_injection_baseline(fake_ollama, tmp_path, capsys):
@@ -2547,8 +2547,8 @@ def test_check_ollama_estimates_how_long_a_full_report_takes(fake_ollama, monkey
     monkeypatch.setattr(cli_module.time, "monotonic", lambda: next(clock))
     assert main(["check-ollama", "--model", "robust-model"]) == 0
     out = capsys.readouterr().out
-    # 3s a request: 648 requests is 32.4 min, the 324 of --defenses both 16.2
-    assert "that took 3.0s - at that pace a full-report is 648 requests, about 32 min (16 min with --defenses both)" in out
+    # 3s a request: 720 requests is 36 min, the 360 of --defenses both 18
+    assert "that took 3.0s - at that pace a full-report is 720 requests, about 36 min (18 min with --defenses both)" in out
     assert "an upper bound" in out
 
 
@@ -2562,8 +2562,8 @@ def test_run_prints_a_per_technique_paired_lift_table(capsys):
     out = capsys.readouterr().out
     table = out.split("(exact McNemar test, Holm-adjusted across the techniques):")[1]
     rows = {line.split()[0]: line.split()[1:] for line in table.strip().splitlines()[1:]}
-    # all 9 alerts flipped to dismiss once injected: 2 * 0.5^9, and x8 after Holm over the 8 techniques
-    assert rows["direct_override"] == ["100%", "0%", "+100", "+58", "to", "+100", "0.0039", "0.0312", "significant"]
+    # all 9 alerts flipped to dismiss once injected: 2 * 0.5^9, and x9 after Holm over the 9 techniques
+    assert rows["direct_override"] == ["100%", "0%", "+100", "+58", "to", "+100", "0.0039", "0.0352", "significant"]
     # unchanged on all 9 alerts, and still the interval can't rule out a 30-point lift either way
     assert rows["unicode_homoglyph"] == ["0%", "0%", "+0", "-30", "to", "+30", "1.0000", "1.0000", "not", "significant"]
 
@@ -2575,7 +2575,7 @@ def test_a_model_that_already_dismisses_everything_shows_no_significant_lift(fak
     report_path = tmp_path / "r.json"
     main(["run", "--client", "ollama", "--model", "dismiss-everything-model", "--report", str(report_path)])
     out = capsys.readouterr().out
-    assert out.count("not significant") == 8
+    assert out.count("not significant") == 9
     lifts = json.loads(report_path.read_text())["technique_lift_by_defense"]["none"]
     assert all(entry["p_value"] == 1.0 and entry["lift"] == 0.0 for entry in lifts.values())
 
@@ -2586,15 +2586,15 @@ def test_run_markdown_report_carries_the_lift_table(tmp_path, capsys):
     capsys.readouterr()
     content = report_path.read_text()
     assert "| technique | hijack rate | baseline | lift | lift 95% ci | p | p (holm) | |" in content
-    assert "| direct_override | 100% | 0% | +100 | +58 to +100 | 0.0039 | 0.0312 | significant |" in content
+    assert "| direct_override | 100% | 0% | +100 | +58 to +100 | 0.0039 | 0.0352 | significant |" in content
 
 
 def test_compare_prints_significant_lift_counts_and_saves_the_tables(tmp_path, capsys):
     report_path = tmp_path / "r.md"
     main(["compare", "--client", "fake-stubborn", "--defenses", "both", "--report", str(report_path)])
     out = capsys.readouterr().out
-    assert "defense=none: 7/8 techniques with a significant lift (Holm-adjusted p<0.05)" in out
-    assert "defense=both: 0/8 techniques with a significant lift (Holm-adjusted p<0.05)" in out
+    assert "defense=none: 8/9 techniques with a significant lift (Holm-adjusted p<0.05)" in out
+    assert "defense=both: 0/9 techniques with a significant lift (Holm-adjusted p<0.05)" in out
     assert report_path.read_text().count("per-technique lift, each injected alert paired") == 2
 
 
@@ -2654,11 +2654,11 @@ def test_leaderboard_counts_techniques_with_a_significant_lift(fake_ollama, tmp_
         main(["leaderboard", "--models", "dismiss-everything-model,gullible-model", "--report", str(path)])
     out = capsys.readouterr().out
     rows = {line.split()[0]: line.split() for line in out.splitlines() if line.startswith("ollama:") and " vs " not in line}
-    assert rows["ollama:dismiss-everything-model"][5] == "0/8"
-    assert rows["ollama:gullible-model"][5] == "7/8"
+    assert rows["ollama:dismiss-everything-model"][5] == "0/9"
+    assert rows["ollama:gullible-model"][5] == "8/9"
     assert "| significant techniques |" in md.read_text()
     csv_rows = {r["client"]: r for r in csv.DictReader(io.StringIO(cs.read_text()))}
-    assert (csv_rows["ollama:gullible-model"]["significant_techniques"], csv_rows["ollama:gullible-model"]["techniques"]) == ("7", "8")
+    assert (csv_rows["ollama:gullible-model"]["significant_techniques"], csv_rows["ollama:gullible-model"]["techniques"]) == ("8", "9")
 
 
 def test_summarize_counts_significant_techniques_per_model_and_defense(fake_ollama, tmp_path, capsys):
@@ -2672,15 +2672,15 @@ def test_summarize_counts_significant_techniques_per_model_and_defense(fake_olla
     assert table.startswith(" (both directions, paired McNemar, Holm-adjusted p<0.05)")
     rows = {line.split()[0]: line.split()[1:] for line in table.strip().split("\n\n")[0].splitlines()[2:]}
     # stubborn: 7 dismiss techniques under none/sandwich/strict, nothing escalates it; nothing under both
-    assert rows["fake-stubborn"] == ["7/16", "7/16", "7/16", "0/16"]
-    assert rows["ollama:dismiss-everything-model"] == ["0/16", "0/16", "0/16", "0/16"]
+    assert rows["fake-stubborn"] == ["8/18", "8/18", "8/18", "0/18"]
+    assert rows["ollama:dismiss-everything-model"] == ["0/18", "0/18", "0/18", "0/18"]
     main(["summarize", str(stubborn), str(lazy), "--report", str(md)])
     main(["summarize", str(stubborn), str(lazy), "--report", str(cs)])
     capsys.readouterr()
-    assert "| fake-stubborn | 7/16 | 7/16 | 7/16 | 0/16 |" in md.read_text()
+    assert "| fake-stubborn | 8/18 | 8/18 | 8/18 | 0/18 |" in md.read_text()
     assert "## techniques with a significant lift (both directions, paired McNemar, Holm-adjusted p<0.05)" in md.read_text()
     csv_rows = {(r["client"], r["defense"]): r for r in csv.DictReader(io.StringIO(cs.read_text()))}
-    assert csv_rows[("fake-stubborn", "none")]["significant_techniques"] == "7/16"
+    assert csv_rows[("fake-stubborn", "none")]["significant_techniques"] == "8/18"
 
 
 def test_summarize_shows_na_significance_for_a_report_saved_before_the_test_existed(tmp_path, capsys):
@@ -2712,18 +2712,18 @@ def test_summarize_shows_na_significance_for_a_report_saved_before_holm(tmp_path
 
 
 def test_compare_prints_and_saves_each_defenses_paired_effect(tmp_path, capsys):
-    """sandwich stops every technique sandwich-sensitive caved to (7 of 8,
+    """sandwich stops every technique sandwich-sensitive caved to (8 of 9,
     the eighth never worked to begin with); strict does nothing for it."""
     md, js = tmp_path / "r.md", tmp_path / "r.json"
     for path in (md, js):
         main(["compare", "--client", "fake-sandwich-sensitive", "--report", str(path)])
     out = capsys.readouterr().out
-    assert "defense=sandwich: 7/8 techniques reduced, 0/8 increased (Holm-adjusted p<0.05)" in out
-    assert "defense=strict: 0/8 techniques reduced, 0/8 increased (Holm-adjusted p<0.05)" in out
+    assert "defense=sandwich: 8/9 techniques reduced, 0/9 increased (Holm-adjusted p<0.05)" in out
+    assert "defense=strict: 0/9 techniques reduced, 0/9 increased (Holm-adjusted p<0.05)" in out
     effects = json.loads(js.read_text())["defense_effect_vs_none_by_defense"]
     assert set(effects) == {"sandwich", "strict", "both"}
     assert effects["sandwich"]["direct_override"]["stopped"] == 9
-    assert "| direct_override | 100% | 0% | -100 | -100 to -58 | 9 | 0 | 0.0039 | 0.0312 | reduced |" in md.read_text()
+    assert "| direct_override | 100% | 0% | -100 | -100 to -58 | 9 | 0 | 0.0039 | 0.0352 | reduced |" in md.read_text()
 
 
 def test_compare_with_only_the_none_baseline_has_no_defense_effect_to_show(capsys):
@@ -2735,7 +2735,7 @@ def test_full_report_saves_the_defense_effect_per_direction(tmp_path, capsys):
     report_path = tmp_path / "r.json"
     main(["full-report", "--client", "fake-strict-sensitive", "--defenses", "strict", "--report", str(report_path)])
     out = capsys.readouterr().out
-    assert "defense=strict: 7/8 techniques reduced" in out.split("direction=dismiss - tables in the report:")[-1]
+    assert "defense=strict: 8/9 techniques reduced" in out.split("direction=dismiss - tables in the report:")[-1]
     effects = json.loads(report_path.read_text())["defense_effect_vs_none_by_direction"]
     assert set(effects) == {"dismiss", "escalate"}
     assert effects["dismiss"]["strict"]["direct_override"]["change"] == -1.0
@@ -2755,14 +2755,14 @@ def test_summarize_counts_the_techniques_each_defense_reduced(tmp_path, capsys):
     capsys.readouterr()
     assert main(["summarize", str(sandwich), str(strict)]) == 0
     rows = _reduced_table(capsys.readouterr().out)
-    assert rows["fake-sandwich-sensitive"] == ["7/16", "0/16", "7/16"]  # no none column - nothing to compare
-    assert rows["fake-strict-sensitive"] == ["0/16", "7/16", "7/16"]
+    assert rows["fake-sandwich-sensitive"] == ["8/18", "0/18", "8/18"]  # no none column - nothing to compare
+    assert rows["fake-strict-sensitive"] == ["0/18", "8/18", "8/18"]
     main(["summarize", str(sandwich), str(strict), "--report", str(md)])
     main(["summarize", str(sandwich), str(strict), "--report", str(cs)])
     capsys.readouterr()
-    assert "| fake-strict-sensitive | 0/16 | 7/16 | 7/16 |" in md.read_text()
+    assert "| fake-strict-sensitive | 0/18 | 8/18 | 8/18 |" in md.read_text()
     csv_rows = {(r["client"], r["defense"]): r for r in csv.DictReader(io.StringIO(cs.read_text()))}
-    assert csv_rows[("fake-strict-sensitive", "strict")]["techniques_reduced"] == "7/16"
+    assert csv_rows[("fake-strict-sensitive", "strict")]["techniques_reduced"] == "8/18"
     assert csv_rows[("fake-strict-sensitive", "none")]["techniques_reduced"] == ""
 
 
@@ -2777,7 +2777,7 @@ def test_summarize_flags_a_defense_that_made_some_technique_worse(tmp_path, caps
     path.write_text(json.dumps(report))
     capsys.readouterr()
     main(["summarize", str(path)])
-    assert _reduced_table(capsys.readouterr().out)["fake-sandwich-sensitive"] == ["7/16", "0/16,", "1", "worse", "7/16"]
+    assert _reduced_table(capsys.readouterr().out)["fake-sandwich-sensitive"] == ["8/18", "0/18,", "1", "worse", "8/18"]
 
 
 def test_summarize_shows_na_where_there_is_no_defense_effect(tmp_path, capsys):
@@ -2793,7 +2793,7 @@ def test_summarize_shows_na_where_there_is_no_defense_effect(tmp_path, capsys):
     main(["summarize", str(old), str(partial)])
     rows = _reduced_table(capsys.readouterr().out)
     assert rows["fake-sandwich-sensitive"] == ["n/a", "n/a", "n/a"]
-    assert rows["fake-strict-sensitive"] == ["n/a", "7/16", "n/a"]
+    assert rows["fake-strict-sensitive"] == ["n/a", "8/18", "n/a"]
 
 
 def test_summarize_of_none_only_reports_has_no_defense_effect_table(tmp_path, capsys):
@@ -2835,7 +2835,7 @@ def test_summarize_refuses_reports_run_on_different_alert_batteries(tmp_path, ca
     assert main(["summarize", str(new), str(old)]) == 1
     err = capsys.readouterr().err
     assert "different alert batteries" in err
-    assert f"{new}: dismiss 72, escalate 72; {old}: dismiss 72, escalate 56" in err
+    assert f"{new}: dismiss 81, escalate 81; {old}: dismiss 81, escalate 63" in err
 
 
 def test_full_report_records_its_method(tmp_path, capsys):
@@ -2847,13 +2847,13 @@ def test_full_report_records_its_method(tmp_path, capsys):
     content = md.read_text()
     assert content.index("## method") < content.index("## summary: overall hijack rate by defense")
     assert "- clean alerts: 18, each answered once under every defense" in content
-    assert "- direction=dismiss: 9 alerts x 8 techniques = 72 injected (direct_override, fake_system_tag," in content
+    assert "- direction=dismiss: 9 alerts x 9 techniques = 81 injected (direct_override, fake_system_tag," in content
     assert "- defenses: none, sandwich, strict, both" in content
-    assert "- requests: 648" in content
+    assert "- requests: 720" in content
     assert "exact McNemar test, Holm-adjusted" in content
     method = json.loads(js.read_text())["method"]
     assert method["directions"]["escalate"]["techniques"] == list(ESCALATION_TECHNIQUES)
-    assert method["requests"] == 648
+    assert method["requests"] == 720
 
 
 def test_full_report_method_follows_the_severity_filter_and_defenses(tmp_path, capsys):
@@ -2867,9 +2867,9 @@ def test_full_report_method_follows_the_severity_filter_and_defenses(tmp_path, c
     method = json.loads(path.read_text())["method"]
     assert method["clean_alerts"] == 4
     assert method["directions"]["dismiss"]["eligible_alerts"] == 3
-    assert method["directions"]["escalate"]["injected_alerts"] == 8
+    assert method["directions"]["escalate"]["injected_alerts"] == 9
     assert method["defenses"] == ["none", "both"]
-    assert method["requests"] == (4 + 24 + 8) * 2
+    assert method["requests"] == (4 + 27 + 9) * 2
 
 
 def test_retries_flag_reaches_every_real_model_client(capsys):

@@ -133,7 +133,7 @@ class _ProgressReporter:
         self._started = time.monotonic()
         self._last_line = self._started
         # set by the command once it knows its battery (_expect_requests),
-        # so a line reads "120/576" - how far along, not just how many
+        # so a line reads "120/720" - how far along, not just how many
         self.expected: int | None = None
 
     def __getattr__(self, name):
@@ -1405,9 +1405,10 @@ def _battery_sizes(report: dict) -> dict:
 
 def _combined_lift(report: dict, defense: str) -> float | None:
     """A full-report's hijack rate for one defense (both directions pooled)
-    minus its no-injection baseline pooled the same way - each direction's
-    injected battery is 8x its eligible alerts, so pooling the baselines
-    by eligible alerts weights them exactly like the pooled hijack rate.
+    minus its no-injection baseline pooled the same way - both directions
+    have the same number of techniques, so each injected battery is that
+    many times its eligible alerts (9x) and pooling the baselines by
+    eligible alerts weights them exactly like the pooled hijack rate.
     None for a defense the report didn't run, or a report saved before
     the baseline existed."""
     baseline_by_direction = report.get("baseline_by_direction")
