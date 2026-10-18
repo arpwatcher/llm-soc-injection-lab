@@ -388,3 +388,12 @@ def test_parse_response_with_an_object_that_never_closes_is_unparseable():
 def test_parse_response_reads_an_answer_with_a_nested_object():
     decision = parse_response("A001", '{"action": "escalate", "evidence": {"src": "10.0.0.5"}, "reasoning": "r"}')
     assert (decision.action, decision.reasoning) == ("escalate", "r")
+
+
+def test_strict_defense_does_not_name_the_two_later_techniques():
+    """kept out on purpose - see _STRICT_ADDENDUM. If this fails because
+    the prompt was extended, the battery lost its only test of whether a
+    named-pattern defense covers what it doesn't name."""
+    prompt = get_system_prompt("strict").lower()
+    for word in ("example", "history", "language", "greek", "translat"):
+        assert word not in prompt
