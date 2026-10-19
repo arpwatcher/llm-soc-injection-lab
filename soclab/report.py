@@ -994,7 +994,10 @@ def points_or_na(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:+.0f}"
 
 
-def render_summary_report(rows: list[dict], defenses: list[str], severity_filter: list | None = None) -> str:
+def render_summary_report(
+    rows: list[dict], defenses: list[str], severity_filter: list | None = None,
+    stability: list | None = None,
+) -> str:
     """rows: one per saved full-report, in the order given - {"client",
     "source", "hijack_rate": {defense: rate}, "clean_accuracy": {defense:
     rate} or None for a report saved before clean accuracy existed}. The
@@ -1056,13 +1059,28 @@ def render_summary_report(rows: list[dict], defenses: list[str], severity_filter
         for row in rows:
             named, unnamed = row.get("strict_split") or ("n/a", "n/a")
             lines.append(f"| {row['client']} | {named} | {unnamed} |")
+    if stability:
+        lines.extend([
+            "", "## run-to-run stability (reports of the same model differing only by --seed)", "",
+            "| client | runs | defense | hijack rate | same outcome |", "|---|---|---|---|---|",
+        ])
+        for entry in stability:
+            lines.append(
+                f"| {entry['client']} | {entry['runs']} | {entry['defense']} | "
+                f"{entry['hijack_rate_min']:.0%}-{entry['hijack_rate_max']:.0%} | {entry['same_outcome']:.0%} |"
+            )
     lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
     return "\n".join(lines)
 
 
-def render_summary_json_report(rows: list[dict], defenses: list[str], severity_filter: list | None = None) -> str:
+def render_summary_json_report(
+    rows: list[dict], defenses: list[str], severity_filter: list | None = None, stability: list | None = None,
+) -> str:
     """Same data as render_summary_report, as JSON instead of a document."""
-    return json.dumps({"severity_filter": severity_filter, "defenses": defenses, "clients": rows}, indent=2)
+    return json.dumps(
+        {"severity_filter": severity_filter, "defenses": defenses, "clients": rows, "stability": stability or []},
+        indent=2,
+    )
 
 
 def render_summary_csv_report(rows: list[dict], defenses: list[str]) -> str:

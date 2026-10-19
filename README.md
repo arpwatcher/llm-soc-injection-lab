@@ -671,6 +671,17 @@ python -m soclab.cli matrix --models llama3.2:3b,mistral:7b,qwen2.5:7b \
     --temperature 0 --seed 42 --cache cache.json --report matrix.csv
 python -m soclab.cli technique-leaderboard --models llama3.2:3b,mistral:7b,qwen2.5:7b \
     --temperature 0 --seed 42 --cache cache.json
+
+# 5. optional, at the model's own temperature (how it'd really be deployed): the same
+#    full-report a few times with different seeds, then summarize them together - reports
+#    that differ only by --seed get a run-to-run stability table per defense: the hijack
+#    rate's spread across the runs, and the share of injected items that came out the same
+#    way in every run (a model can keep its rate while changing which alerts it falls for)
+for seed in 1 2 3; do
+    python -m soclab.cli full-report --client ollama --model llama3.2:3b --seed $seed \
+        --cache cache.json --report llama-seed$seed.json
+done
+python -m soclab.cli summarize llama-seed1.json llama-seed2.json llama-seed3.json
 ```
 
 Worth reporting alongside the hijack rates: the injection lift over the no-injection baseline
@@ -689,7 +700,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-611 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+614 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

@@ -3058,3 +3058,67 @@ def test_full_report_json_keeps_every_items_outcome(tmp_path, capsys):
     main(["full-report", "--client", "fake-vulnerable", "--report", str(md)])
     capsys.readouterr()
     assert "direct_override|A001" not in md.read_text()
+
+
+def _seeded_report(tmp_path, seed, *extra):
+    path = tmp_path / f"seed{seed}.json"
+    assert main(["full-report", "--client", "ollama", "--model", "gullible-model", "--seed", str(seed),
+                 "--report", str(path), *extra]) == 0
+    return path
+
+
+def test_summarize_measures_run_to_run_stability_across_seeds(fake_ollama, tmp_path, capsys):
+    """the same model run again with another seed: does it fall for the
+    same alerts, or just about as many? Here the second run's saved items
+    have 18 of its hijacks under no defense turned into resists, with the
+    saved rates left alone - the rate column can't see that, the
+    per-item agreement does."""
+    first, second = _seeded_report(tmp_path, 1), _seeded_report(tmp_path, 2)
+    report = json.loads(second.read_text())
+    items = report["outcomes"]["injected"]["dismiss"]["none"]
+    flipped = [item for item, outcome in items.items() if outcome == "hijacked"][:18]
+    for item in flipped:
+        report["outcomes"]["injected"]["dismiss"]["none"][item] = "resisted"
+    second.write_text(json.dumps(report))
+    md, js = tmp_path / "s.md", tmp_path / "s.json"
+    capsys.readouterr()
+    main(["summarize", str(first), str(second)])
+    out = capsys.readouterr().out
+    table = out.split("run-to-run stability (reports of the same model differing only by --seed)")[1]
+    rows = {line.split()[2]: line.split()[1:] for line in table.strip().splitlines()[1:]}
+    assert rows["none"] == ["2", "none", "45%-45%", "90%"]  # 162 of 180 still agree
+    assert rows["sandwich"] == ["2", "sandwich", "45%-45%", "100%"]
+    assert table.strip().splitlines()[1].startswith("ollama:gullible-model ")
+    for path in (md, js):
+        main(["summarize", str(first), str(second), "--report", str(path)])
+    capsys.readouterr()
+    assert "| ollama:gullible-model | 2 | none | 45%-45% | 90% |" in md.read_text()
+    stability = json.loads(js.read_text())["stability"]
+    assert stability[0]["items"] == 180 and stability[0]["same_outcome"] == pytest.approx(0.9)
+
+
+def test_stability_only_groups_reports_that_differ_by_seed_alone(fake_ollama, tmp_path, capsys):
+    """another temperature is another condition, not a rerun - and a report
+    saved before per-item outcomes were kept can't be compared item by
+    item, so it's left out rather than guessed at."""
+    seeded = _seeded_report(tmp_path, 1)
+    warmer = tmp_path / "warm.json"
+    main(["full-report", "--client", "ollama", "--model", "gullible-model", "--temperature", "0.7", "--seed", "2",
+          "--report", str(warmer)])
+    old = _seeded_report(tmp_path, 3)
+    report = json.loads(old.read_text())
+    del report["outcomes"]
+    old.write_text(json.dumps(report))
+    md = tmp_path / "s.md"
+    capsys.readouterr()
+    main(["summarize", str(seeded), str(warmer), str(old), "--report", str(md)])
+    assert "run-to-run stability" not in capsys.readouterr().out
+    assert "run-to-run stability" not in md.read_text()
+
+
+def test_stability_skips_a_defense_not_every_run_had(fake_ollama, tmp_path, capsys):
+    full, partial = _seeded_report(tmp_path, 1), _seeded_report(tmp_path, 2, "--defenses", "both")
+    capsys.readouterr()
+    main(["summarize", str(full), str(partial)])
+    table = capsys.readouterr().out.split("run-to-run stability")[1]
+    assert [line.split()[2] for line in table.strip().splitlines()[2:]] == ["none", "both"]

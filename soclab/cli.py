@@ -5,6 +5,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 import time
 
@@ -1500,6 +1501,47 @@ def _strict_split(report: dict) -> tuple[str, str] | None:
     )
 
 
+def _without_seed(label: str) -> str:
+    """the label with its seed setting taken out - two reports that match
+    on this are the same model under the same settings, run again."""
+    return re.sub(r"(, )?seed=-?\d+", "", label).replace(" ()", "").replace("(, ", "(")
+
+
+def _stability(reports: list[tuple[str, dict]], defenses: list[str]) -> list[dict]:
+    """For every set of two or more reports that differ only by --seed, per
+    defense they all ran: the hijack rate's spread across the runs, and the
+    share of injected items (both directions) that came out the same way
+    in every run. A model can keep its rate while flipping which alerts it
+    falls for, and only the second number shows that. Reports saved before
+    per-item outcomes were kept are left out."""
+    groups: dict[str, list[dict]] = {}
+    for _, report in reports:
+        if report.get("outcomes"):
+            groups.setdefault(_without_seed(report["client"]), []).append(report)
+    stability = []
+    for label, runs in groups.items():
+        if len(runs) < 2:
+            continue
+        for defense in defenses:
+            if not all(defense in run["summary_by_defense"] for run in runs):
+                continue
+            per_run = [
+                {f"{direction}|{item}": outcome
+                 for direction, by_defense in run["outcomes"]["injected"].items()
+                 for item, outcome in by_defense[defense].items()}
+                for run in runs
+            ]
+            shared = set.intersection(*(set(items) for items in per_run))
+            same = sum(1 for item in shared if len({items[item] for items in per_run}) == 1)
+            rates = [run["summary_by_defense"][defense] for run in runs]
+            stability.append({
+                "client": label, "runs": len(runs), "defense": defense,
+                "hijack_rate_min": min(rates), "hijack_rate_max": max(rates),
+                "same_outcome": same / len(shared) if shared else 0.0, "items": len(shared),
+            })
+    return stability
+
+
 def cmd_summarize(args):
     """One table across several saved full-report json files - the
     cross-model headline result (how much does each defense help, per
@@ -1589,11 +1631,23 @@ def cmd_summarize(args):
             named, unnamed = row["strict_split"] or ("n/a", "n/a")
             print(f"{row['client']:<{width}} {named:>9} {unnamed:>9}")
 
+    stability = _stability(reports, defenses)
+    if stability:
+        print("\nrun-to-run stability (reports of the same model differing only by --seed)")
+        stable_width = max([10, *(len(entry["client"]) for entry in stability)])
+        print(f"{'client':<{stable_width}} {'runs':>4} {'defense':>9} {'hijack rate':>12} {'same outcome':>13}")
+        for entry in stability:
+            spread = f"{entry['hijack_rate_min']:.0%}-{entry['hijack_rate_max']:.0%}"
+            print(f"{entry['client']:<{stable_width}} {entry['runs']:>4} {entry['defense']:>9} {spread:>12} "
+                  f"{entry['same_outcome']:>12.0%}")
+
     if args.report:
         _write_report(
             args.report,
-            markdown_content=render_summary_report(rows, defenses, severity_filter=severity_filter),
-            json_content=render_summary_json_report(rows, defenses, severity_filter=severity_filter),
+            markdown_content=render_summary_report(rows, defenses, severity_filter=severity_filter,
+                                                   stability=stability),
+            json_content=render_summary_json_report(rows, defenses, severity_filter=severity_filter,
+                                                    stability=stability),
             csv_content=render_summary_csv_report(rows, defenses),
             message=f"\nwrote summary to {args.report}",
         )
