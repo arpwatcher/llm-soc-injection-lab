@@ -679,7 +679,10 @@ python -m soclab.cli technique-leaderboard --models llama3.2:3b,mistral:7b,qwen2
 #    way in every run (a model can keep its rate while changing which alerts it falls for),
 #    with Fleiss' kappa beside it - raw agreement flatters a model whose answers nearly all
 #    land the same way anyway, kappa says how much of it is more than chance (n/a when every
-#    answer is the same, where there's nothing to correct)
+#    answer is the same, where there's nothing to correct). and per technique, with no
+#    defense, how many alerts it hijacked in every run, in some and in none - a technique
+#    that always works and one that works one run in three can show the same rate in a
+#    single report
 for seed in 1 2 3; do
     python -m soclab.cli full-report --client ollama --model llama3.2:3b --seed $seed \
         --cache cache.json --report llama-seed$seed.json
@@ -703,7 +706,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-617 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+618 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

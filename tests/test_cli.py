@@ -3085,7 +3085,8 @@ def test_summarize_measures_run_to_run_stability_across_seeds(fake_ollama, tmp_p
     main(["summarize", str(first), str(second)])
     out = capsys.readouterr().out
     table = out.split("run-to-run stability (reports of the same model differing only by --seed)")[1]
-    rows = {line.split()[2]: line.split()[1:] for line in table.strip().splitlines()[1:]}
+    table = table.strip().split("\n\n")[0]
+    rows = {line.split()[2]: line.split()[1:] for line in table.splitlines()[1:]}
     # 162 of 180 still agree; chance alone would give 0.4^2 + 0.6^2 = 0.52 of that, so kappa
     # is (0.9 - 0.52) / (1 - 0.52) = 0.79
     assert rows["none"] == ["2", "none", "45%-45%", "90%", "0.79"]
@@ -3122,5 +3123,33 @@ def test_stability_skips_a_defense_not_every_run_had(fake_ollama, tmp_path, caps
     full, partial = _seeded_report(tmp_path, 1), _seeded_report(tmp_path, 2, "--defenses", "both")
     capsys.readouterr()
     main(["summarize", str(full), str(partial)])
-    table = capsys.readouterr().out.split("run-to-run stability")[1]
-    assert [line.split()[2] for line in table.strip().splitlines()[2:]] == ["none", "both"]
+    table = capsys.readouterr().out.split("run-to-run stability")[1].strip().split("\n\n")[0]
+    assert [line.split()[2] for line in table.splitlines()[2:]] == ["none", "both"]
+
+
+def test_summarize_says_how_consistently_each_technique_worked_across_reruns(fake_ollama, tmp_path, capsys):
+    """with no defense: per technique, the alerts it hijacked in every run,
+    in some and in none. The second run here has three of direct_override's
+    nine hijacks turned into resists - in a single report that's just a
+    lower rate, across the two it's three alerts the technique only
+    sometimes gets."""
+    first, second = _seeded_report(tmp_path, 1), _seeded_report(tmp_path, 2)
+    report = json.loads(second.read_text())
+    items = report["outcomes"]["injected"]["dismiss"]["none"]
+    for item in [item for item, outcome in items.items() if item.startswith("direct_override|")][:3]:
+        items[item] = "resisted"
+    second.write_text(json.dumps(report))
+    md, js = tmp_path / "s.md", tmp_path / "s.json"
+    capsys.readouterr()
+    main(["summarize", str(first), str(second)])
+    table = capsys.readouterr().out.split("(alerts hijacked in every run / some / none)")[1].strip().splitlines()
+    rows = {(line.split()[1], line.split()[2]): line.split()[3:] for line in table}
+    assert rows[("dismiss", "direct_override")] == ["6", "3", "0"]
+    assert rows[("dismiss", "unicode_homoglyph")] == ["0", "0", "9"]  # never gets through, every run agrees
+    assert rows[("escalate", "false_urgency")] == ["0", "0", "9"]  # the gullible model only falls one way
+    for path in (md, js):
+        main(["summarize", str(first), str(second), "--report", str(path)])
+    capsys.readouterr()
+    assert "| ollama:gullible-model | dismiss | direct_override | 6 | 3 | 0 |" in md.read_text()
+    consistency = json.loads(js.read_text())["technique_consistency"]
+    assert len(consistency) == 20  # every technique, both directions

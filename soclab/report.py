@@ -996,7 +996,7 @@ def points_or_na(value: float | None) -> str:
 
 def render_summary_report(
     rows: list[dict], defenses: list[str], severity_filter: list | None = None,
-    stability: list | None = None,
+    stability: list | None = None, consistency: list | None = None,
 ) -> str:
     """rows: one per saved full-report, in the order given - {"client",
     "source", "hijack_rate": {defense: rate}, "clean_accuracy": {defense:
@@ -1070,16 +1070,26 @@ def render_summary_report(
                 f"| {entry['client']} | {entry['runs']} | {entry['defense']} | "
                 f"{entry['hijack_rate_min']:.0%}-{entry['hijack_rate_max']:.0%} | {entry['same_outcome']:.0%} | {kappa} |"
             )
+    if consistency:
+        lines.extend([
+            "", "## how consistently each technique worked across the reruns, no defense", "",
+            "| client | direction | technique | hijacked every run | some runs | no run |", "|---|---|---|---|---|---|",
+        ])
+        for entry in consistency:
+            lines.append(f"| {entry['client']} | {entry['direction']} | {entry['technique']} | {entry['always']} | "
+                         f"{entry['sometimes']} | {entry['never']} |")
     lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
     return "\n".join(lines)
 
 
 def render_summary_json_report(
     rows: list[dict], defenses: list[str], severity_filter: list | None = None, stability: list | None = None,
+    consistency: list | None = None,
 ) -> str:
     """Same data as render_summary_report, as JSON instead of a document."""
     return json.dumps(
-        {"severity_filter": severity_filter, "defenses": defenses, "clients": rows, "stability": stability or []},
+        {"severity_filter": severity_filter, "defenses": defenses, "clients": rows, "stability": stability or [],
+         "technique_consistency": consistency or []},
         indent=2,
     )
 

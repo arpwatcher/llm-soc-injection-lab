@@ -1508,6 +1508,38 @@ def _without_seed(label: str) -> str:
     return re.sub(r"(, )?seed=-?\d+", "", label).replace(" ()", "").replace("(, ", "(")
 
 
+def _rerun_groups(reports: list[tuple[str, dict]]) -> dict[str, list[dict]]:
+    """reports with per-item outcomes, grouped by label without its seed -
+    only groups of two or more, the ones that are actually reruns."""
+    groups: dict[str, list[dict]] = {}
+    for _, report in reports:
+        if report.get("outcomes"):
+            groups.setdefault(_without_seed(report["client"]), []).append(report)
+    return {label: runs for label, runs in groups.items() if len(runs) >= 2}
+
+
+def _technique_consistency(reports: list[tuple[str, dict]]) -> list[dict]:
+    """Per rerun group and technique, with no defense: of the alerts the
+    technique ran on, how many it hijacked in every run, in some, and in
+    none. A technique that works every time is a different finding from
+    one that works one run in three, and the per-technique rate in any
+    single report can't tell them apart."""
+    rows: list[dict] = []
+    for label, runs in _rerun_groups(reports).items():
+        for direction in runs[0]["outcomes"]["injected"]:
+            per_run = [run["outcomes"]["injected"][direction][DEFENSE_NONE] for run in runs]
+            shared = sorted(set.intersection(*(set(items) for items in per_run)))
+            counts: dict[str, dict[str, int]] = {}
+            for item in shared:
+                technique = item.split("|")[0]
+                hijacks = sum(1 for items in per_run if items[item] == "hijacked")
+                kind = "always" if hijacks == len(runs) else ("never" if hijacks == 0 else "sometimes")
+                counts.setdefault(technique, {"always": 0, "sometimes": 0, "never": 0})[kind] += 1
+            rows.extend({"client": label, "runs": len(runs), "direction": direction, "technique": technique, **c}
+                        for technique, c in counts.items())
+    return rows
+
+
 def _stability(reports: list[tuple[str, dict]], defenses: list[str]) -> list[dict]:
     """For every set of two or more reports that differ only by --seed, per
     defense they all ran: the hijack rate's spread across the runs, and the
@@ -1517,14 +1549,8 @@ def _stability(reports: list[tuple[str, dict]], defenses: list[str]) -> list[dic
     beside it, since raw agreement flatters a model whose items nearly all
     land the same way regardless. Reports saved before per-item outcomes
     were kept are left out."""
-    groups: dict[str, list[dict]] = {}
-    for _, report in reports:
-        if report.get("outcomes"):
-            groups.setdefault(_without_seed(report["client"]), []).append(report)
     stability = []
-    for label, runs in groups.items():
-        if len(runs) < 2:
-            continue
+    for label, runs in _rerun_groups(reports).items():
         for defense in defenses:
             if not all(defense in run["summary_by_defense"] for run in runs):
                 continue
@@ -1647,13 +1673,22 @@ def cmd_summarize(args):
             print(f"{entry['client']:<{stable_width}} {entry['runs']:>4} {entry['defense']:>9} {spread:>12} "
                   f"{entry['same_outcome']:>12.0%} {kappa:>6}")
 
+    consistency = _technique_consistency(reports)
+    if consistency:
+        print("\nhow consistently each technique worked across the reruns, no defense "
+              "(alerts hijacked in every run / some / none)")
+        technique_width = max(len(entry["technique"]) for entry in consistency)
+        for entry in consistency:
+            print(f"{entry['client']}  {entry['direction']:<8} {entry['technique']:<{technique_width}} "
+                  f"{entry['always']:>3} {entry['sometimes']:>3} {entry['never']:>3}")
+
     if args.report:
         _write_report(
             args.report,
             markdown_content=render_summary_report(rows, defenses, severity_filter=severity_filter,
-                                                   stability=stability),
+                                                   stability=stability, consistency=consistency),
             json_content=render_summary_json_report(rows, defenses, severity_filter=severity_filter,
-                                                    stability=stability),
+                                                    stability=stability, consistency=consistency),
             csv_content=render_summary_csv_report(rows, defenses),
             message=f"\nwrote summary to {args.report}",
         )
