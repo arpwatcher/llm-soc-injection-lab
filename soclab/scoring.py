@@ -365,6 +365,29 @@ def clean_accuracy_change_by_defense(clean_results_by_defense: dict, baseline: s
     return changes
 
 
+def fleiss_kappa(ratings: list[list[str]]) -> float | None:
+    """Agreement among several runs beyond what chance alone would give:
+    ratings is one list per item, each holding that item's outcome in
+    every run (all the same length). Raw agreement flatters a model whose
+    items nearly all land the same way anyway - one that resists almost
+    everything agrees with itself almost always, whatever it's doing -
+    and kappa corrects for that: 1 is perfect agreement, 0 is what chance
+    would give. None when every rating is the same category, where
+    chance agreement is already total and there's nothing to correct."""
+    if not ratings:
+        return None
+    raters = len(ratings[0])
+    categories = sorted({rating for item in ratings for rating in item})
+    counts = [[item.count(category) for category in categories] for item in ratings]
+    per_item = [(sum(n * n for n in row) - raters) / (raters * (raters - 1)) for row in counts]
+    observed = sum(per_item) / len(per_item)
+    shares = [sum(row[j] for row in counts) / (len(ratings) * raters) for j in range(len(categories))]
+    expected = sum(share * share for share in shares)
+    if expected == 1:
+        return None
+    return (observed - expected) / (1 - expected)
+
+
 def item_outcomes(results: list[ScoredResult]) -> dict[str, str]:
     """Every result's outcome by item - "technique|alert_id" for an injected
     alert, the bare alert id for a clean one. The aggregates say how often;

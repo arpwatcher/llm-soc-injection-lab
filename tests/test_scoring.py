@@ -27,6 +27,7 @@ from soclab.scoring import (
     classify_outcome,
     clean_accuracy_change_by_defense,
     defense_effect_by_technique,
+    fleiss_kappa,
     hijacked_and_total,
     holm_adjusted,
     is_significant,
@@ -781,3 +782,26 @@ def test_item_outcomes_keys_injected_alerts_by_technique_and_clean_ones_by_id():
     assert outcomes["direct_override|A001"] == "hijacked"
     assert outcomes["unicode_homoglyph|A001"] == "resisted"
     assert len(outcomes) == 2 + len(TECHNIQUES)
+
+
+def test_fleiss_kappa_matches_the_textbook_example():
+    """Fleiss (1971) via the usual worked example: 10 subjects, 14 raters,
+    5 categories - kappa 0.210."""
+    table = [[0, 0, 0, 0, 14], [0, 2, 6, 4, 2], [0, 0, 3, 5, 6], [0, 3, 9, 2, 0], [2, 2, 8, 1, 1],
+             [7, 7, 0, 0, 0], [3, 2, 6, 3, 0], [2, 5, 3, 2, 2], [6, 5, 2, 1, 0], [0, 2, 2, 3, 7]]
+    ratings = [[category for category, n in zip("abcde", row) for _ in range(n)] for row in table]
+    assert fleiss_kappa(ratings) == pytest.approx(0.210, abs=5e-4)
+
+
+def test_fleiss_kappa_corrects_agreement_that_chance_alone_explains():
+    """two runs that agree on 9 of 10 items look alike - unless 9 of every
+    10 answers are the same category anyway, which is where kappa drops."""
+    lopsided = [["resisted", "resisted"]] * 9 + [["resisted", "hijacked"]]
+    balanced = [["resisted", "resisted"]] * 5 + [["hijacked", "hijacked"]] * 4 + [["resisted", "hijacked"]]
+    assert fleiss_kappa(lopsided) < 0 < fleiss_kappa(balanced)
+    assert fleiss_kappa([["hijacked", "hijacked"], ["resisted", "resisted"]]) == 1.0
+
+
+def test_fleiss_kappa_is_undefined_with_one_category_or_no_items():
+    assert fleiss_kappa([["resisted", "resisted"]] * 5) is None
+    assert fleiss_kappa([]) is None

@@ -3086,13 +3086,15 @@ def test_summarize_measures_run_to_run_stability_across_seeds(fake_ollama, tmp_p
     out = capsys.readouterr().out
     table = out.split("run-to-run stability (reports of the same model differing only by --seed)")[1]
     rows = {line.split()[2]: line.split()[1:] for line in table.strip().splitlines()[1:]}
-    assert rows["none"] == ["2", "none", "45%-45%", "90%"]  # 162 of 180 still agree
-    assert rows["sandwich"] == ["2", "sandwich", "45%-45%", "100%"]
+    # 162 of 180 still agree; chance alone would give 0.4^2 + 0.6^2 = 0.52 of that, so kappa
+    # is (0.9 - 0.52) / (1 - 0.52) = 0.79
+    assert rows["none"] == ["2", "none", "45%-45%", "90%", "0.79"]
+    assert rows["sandwich"] == ["2", "sandwich", "45%-45%", "100%", "1.00"]
     assert table.strip().splitlines()[1].startswith("ollama:gullible-model ")
     for path in (md, js):
         main(["summarize", str(first), str(second), "--report", str(path)])
     capsys.readouterr()
-    assert "| ollama:gullible-model | 2 | none | 45%-45% | 90% |" in md.read_text()
+    assert "| ollama:gullible-model | 2 | none | 45%-45% | 90% | 0.79 |" in md.read_text()
     stability = json.loads(js.read_text())["stability"]
     assert stability[0]["items"] == 180 and stability[0]["same_outcome"] == pytest.approx(0.9)
 

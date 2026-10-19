@@ -1062,12 +1062,13 @@ def render_summary_report(
     if stability:
         lines.extend([
             "", "## run-to-run stability (reports of the same model differing only by --seed)", "",
-            "| client | runs | defense | hijack rate | same outcome |", "|---|---|---|---|---|",
+            "| client | runs | defense | hijack rate | same outcome | kappa |", "|---|---|---|---|---|---|",
         ])
         for entry in stability:
+            kappa = "n/a" if entry["kappa"] is None else f"{entry['kappa']:.2f}"
             lines.append(
                 f"| {entry['client']} | {entry['runs']} | {entry['defense']} | "
-                f"{entry['hijack_rate_min']:.0%}-{entry['hijack_rate_max']:.0%} | {entry['same_outcome']:.0%} |"
+                f"{entry['hijack_rate_min']:.0%}-{entry['hijack_rate_max']:.0%} | {entry['same_outcome']:.0%} | {kappa} |"
             )
     lines.extend(["", "sources: " + ", ".join(f"{row['client']} <- {row['source']}" for row in rows), ""])
     return "\n".join(lines)

@@ -86,6 +86,7 @@ from soclab.scoring import (
     baseline_and_total,
     clean_accuracy_change_by_defense,
     defense_effect_by_technique,
+    fleiss_kappa,
     hijacked_and_total,
     holm_adjusted,
     is_significant,
@@ -1512,8 +1513,10 @@ def _stability(reports: list[tuple[str, dict]], defenses: list[str]) -> list[dic
     defense they all ran: the hijack rate's spread across the runs, and the
     share of injected items (both directions) that came out the same way
     in every run. A model can keep its rate while flipping which alerts it
-    falls for, and only the second number shows that. Reports saved before
-    per-item outcomes were kept are left out."""
+    falls for, and only the second number shows that - with Fleiss' kappa
+    beside it, since raw agreement flatters a model whose items nearly all
+    land the same way regardless. Reports saved before per-item outcomes
+    were kept are left out."""
     groups: dict[str, list[dict]] = {}
     for _, report in reports:
         if report.get("outcomes"):
@@ -1538,6 +1541,7 @@ def _stability(reports: list[tuple[str, dict]], defenses: list[str]) -> list[dic
                 "client": label, "runs": len(runs), "defense": defense,
                 "hijack_rate_min": min(rates), "hijack_rate_max": max(rates),
                 "same_outcome": same / len(shared) if shared else 0.0, "items": len(shared),
+                "kappa": fleiss_kappa([[items[item] for items in per_run] for item in sorted(shared)]),
             })
     return stability
 
@@ -1635,11 +1639,13 @@ def cmd_summarize(args):
     if stability:
         print("\nrun-to-run stability (reports of the same model differing only by --seed)")
         stable_width = max([10, *(len(entry["client"]) for entry in stability)])
-        print(f"{'client':<{stable_width}} {'runs':>4} {'defense':>9} {'hijack rate':>12} {'same outcome':>13}")
+        print(f"{'client':<{stable_width}} {'runs':>4} {'defense':>9} {'hijack rate':>12} {'same outcome':>13} "
+              f"{'kappa':>6}")
         for entry in stability:
             spread = f"{entry['hijack_rate_min']:.0%}-{entry['hijack_rate_max']:.0%}"
+            kappa = "n/a" if entry["kappa"] is None else f"{entry['kappa']:.2f}"
             print(f"{entry['client']:<{stable_width}} {entry['runs']:>4} {entry['defense']:>9} {spread:>12} "
-                  f"{entry['same_outcome']:>12.0%}")
+                  f"{entry['same_outcome']:>12.0%} {kappa:>6}")
 
     if args.report:
         _write_report(
