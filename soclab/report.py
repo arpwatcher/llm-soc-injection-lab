@@ -507,6 +507,7 @@ def render_combined_json_report(
     defense_effect_by_direction: dict | None = None,
     clean_accuracy_change_by_defense: dict | None = None,
     method: dict | None = None,
+    outcomes: dict | None = None,
     severity_filter: list | None = None,
 ) -> str:
     """Same data as render_combined_report, as JSON instead of a document."""
@@ -525,6 +526,8 @@ def render_combined_json_report(
         "technique_lift_by_direction": technique_lift_by_direction,
         "defense_effect_vs_none_by_direction": defense_effect_by_direction,
         "by_direction": by_direction,
+        # per-item outcomes - json only, nobody reads 792 of these in markdown
+        "outcomes": outcomes,
     }
     return json.dumps(payload, indent=2)
 

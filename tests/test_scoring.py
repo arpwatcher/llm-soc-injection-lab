@@ -30,6 +30,7 @@ from soclab.scoring import (
     hijacked_and_total,
     holm_adjusted,
     is_significant,
+    item_outcomes,
     mcnemar_exact_p_value,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
@@ -770,3 +771,13 @@ def test_clean_accuracy_change_with_no_shared_alerts_is_empty_not_a_crash():
     unpaired = score_batch([alert], _scripted([alert.ground_truth_action]), "sandwich")
     change = clean_accuracy_change_by_defense({"none": [], "sandwich": unpaired})["sandwich"]
     assert (change["pairs"], change["change"], change["p_value"]) == (0, 0.0, 1.0)
+
+
+def test_item_outcomes_keys_injected_alerts_by_technique_and_clean_ones_by_id():
+    clean = score_batch(generate_clean_alerts()[:2], VulnerableFakeClient())
+    injected = score_batch(apply_all_techniques(generate_clean_alerts()[:1]), VulnerableFakeClient())
+    outcomes = item_outcomes(clean + injected)
+    assert outcomes["A001"] == "resisted"
+    assert outcomes["direct_override|A001"] == "hijacked"
+    assert outcomes["unicode_homoglyph|A001"] == "resisted"
+    assert len(outcomes) == 2 + len(TECHNIQUES)

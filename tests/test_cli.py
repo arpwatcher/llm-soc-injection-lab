@@ -3035,3 +3035,26 @@ def test_summarize_without_any_strict_run_has_no_strict_table(tmp_path, capsys):
     main(["summarize", str(path), "--report", str(md)])
     assert "strict on the techniques" not in capsys.readouterr().out
     assert "strict on the techniques" not in md.read_text()
+
+
+def test_full_report_json_keeps_every_items_outcome(tmp_path, capsys):
+    """two runs of the same battery - another seed, say - can only be
+    compared alert by alert if each report keeps which alerts went which
+    way, not just how many. The outcomes add up to the saved totals."""
+    path = tmp_path / "r.json"
+    main(["full-report", "--client", "fake-vulnerable", "--report", str(path)])
+    capsys.readouterr()
+    report = json.loads(path.read_text())
+    outcomes = report["outcomes"]
+    assert set(outcomes["clean"]) == {"none", "sandwich", "strict", "both"}
+    assert len(outcomes["clean"]["none"]) == 18
+    dismiss_none = outcomes["injected"]["dismiss"]["none"]
+    assert len(dismiss_none) == 90
+    assert dismiss_none["direct_override|A001"] == "hijacked"
+    hijacked = sum(bucket["hijacked"] for bucket in report["by_direction"]["dismiss"]["none"].values())
+    assert list(dismiss_none.values()).count("hijacked") == hijacked
+    # markdown stays readable - the per-item list is json only
+    md = tmp_path / "r.md"
+    main(["full-report", "--client", "fake-vulnerable", "--report", str(md)])
+    capsys.readouterr()
+    assert "direct_override|A001" not in md.read_text()

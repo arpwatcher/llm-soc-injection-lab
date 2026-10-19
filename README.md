@@ -658,7 +658,10 @@ python -m soclab.cli full-report --client ollama --model llama3.2:3b \
 # readable version costs nothing extra. it opens with a "method" section (alert and
 # injected counts per direction, techniques, defenses, requests, which tests back which
 # numbers - all from the actual run, so --severity/--defenses show up there), also saved
-# under "method" in the json, so a write-up doesn't have to rebuild it from the code
+# under "method" in the json, so a write-up doesn't have to rebuild it from the code.
+# the json also keeps every item's outcome ("outcomes": "technique|alert_id" ->
+# hijacked/resisted/other per direction and defense, clean alerts by id) - the totals say
+# how often, these say which, so two runs can be compared alert by alert
 
 # 3. the headline table: hijack rate, clean accuracy and injection lift per defense, one row per model
 python -m soclab.cli summarize llama.json mistral.json qwen.json --report summary.md
@@ -686,7 +689,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-609 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+611 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

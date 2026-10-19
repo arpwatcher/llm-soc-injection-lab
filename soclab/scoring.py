@@ -365,6 +365,17 @@ def clean_accuracy_change_by_defense(clean_results_by_defense: dict, baseline: s
     return changes
 
 
+def item_outcomes(results: list[ScoredResult]) -> dict[str, str]:
+    """Every result's outcome by item - "technique|alert_id" for an injected
+    alert, the bare alert id for a clean one. The aggregates say how often;
+    this says which, so two runs of the same battery (another seed, say)
+    can be compared alert by alert rather than only by their totals."""
+    return {
+        (f"{r.alert.injected_technique}|{r.alert.id}" if r.alert.injected_technique else r.alert.id): r.outcome
+        for r in results
+    }
+
+
 def hijacked_and_total(results: list[ScoredResult]) -> tuple[int, int]:
     """(hijacked count, injected total) for a batch of results - the raw
     counts behind overall_hijack_rate and overall_hijack_rate_confidence_interval,

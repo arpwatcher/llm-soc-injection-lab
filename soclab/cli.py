@@ -88,6 +88,7 @@ from soclab.scoring import (
     hijacked_and_total,
     holm_adjusted,
     is_significant,
+    item_outcomes,
     overall_hijack_rate,
     overall_hijack_rate_confidence_interval,
     paired_lift_by_technique,
@@ -825,6 +826,13 @@ def cmd_full_report(args):
             f"tables in the report:",
         )
 
+    outcomes = {
+        "clean": {defense: item_outcomes(results) for defense, results in clean_results_by_defense.items()},
+        "injected": {
+            direction: {defense: item_outcomes(results) for defense, results in by_defense.items()}
+            for direction, by_defense in results_by_direction.items()
+        },
+    }
     _write_report(
         args.report,
         markdown_content=render_combined_report(
@@ -853,6 +861,7 @@ def cmd_full_report(args):
             technique_lift_by_direction=technique_lift_by_direction,
             defense_effect_by_direction=defense_effect_by_direction,
             method=method,
+            outcomes=outcomes,
             severity_filter=requested_severities,
         ),
         csv_content=render_combined_csv_report(_client_label(args), by_direction),
