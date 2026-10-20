@@ -143,7 +143,7 @@ class _ProgressReporter:
         self._started = time.monotonic()
         self._last_line = self._started
         # set by the command once it knows its battery (_expect_requests),
-        # so a line reads "120/792" - how far along, not just how many
+        # so a line reads "120/990" - how far along, not just how many
         self.expected: int | None = None
 
     def __getattr__(self, name):
@@ -388,7 +388,7 @@ def _significance_vs_baseline(results_by_defense: dict, baseline: str) -> dict:
     that defense's overall hijack rate against the baseline's
     (defense=none), for every defense except the baseline itself. The
     defenses compared against the same baseline are one family of tests
-    (three of them on a full run), so p_holm is the Holm-adjusted value
+    (four of them on a full run), so p_holm is the Holm-adjusted value
     and the verdict goes by it. Computed once here so both the terminal
     printout and the written report render from the same numbers instead
     of recomputing them separately."""

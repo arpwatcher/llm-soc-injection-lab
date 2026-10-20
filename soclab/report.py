@@ -526,7 +526,7 @@ def render_combined_json_report(
         "technique_lift_by_direction": technique_lift_by_direction,
         "defense_effect_vs_none_by_direction": defense_effect_by_direction,
         "by_direction": by_direction,
-        # per-item outcomes - json only, nobody reads 792 of these in markdown
+        # per-item outcomes - json only, nobody reads a thousand of these in markdown
         "outcomes": outcomes,
     }
     return json.dumps(payload, indent=2)

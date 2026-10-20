@@ -58,6 +58,16 @@ class LLMClient(Protocol):
     def complete(self, system_prompt: str, user_message: str) -> str: ...
 
 
+def _read_through_datamark(user_message: str) -> str:
+    """the fakes read datamarked text the way any model can - the marking
+    turned back into spaces - so under the datamark defense they behave
+    exactly as with none. Whether datamarking actually helps is a question
+    only a real model's numbers can answer; a fake built to "respond" to it
+    would just be the answer written in advance. Lossless: the battery
+    never contains the marker character itself (a test checks)."""
+    return user_message.replace("^", " ")
+
+
 def _keyword_classify(user_message: str) -> str:
     """A simple, honest reading of the alert content - no awareness of
     anything that looks like an injected instruction. Used by both fake
@@ -89,6 +99,7 @@ class RobustFakeClient:
     reading of the alert content gives, regardless of any injected text."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         action = _keyword_classify(user_message)
         return _to_json_response(action, "based on alert content only")
 
@@ -101,6 +112,7 @@ class VulnerableFakeClient:
     clean alerts and only diverges when an injection is actually present."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         if any(marker in user_message for marker in _INJECTION_MARKERS):
             return _to_json_response("dismiss", "following the note in the log")
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
@@ -114,6 +126,7 @@ class EscalationVulnerableFakeClient:
     urgency, not to false reassurance)."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         if any(marker in user_message for marker in _ESCALATION_MARKERS):
             return _to_json_response("escalate", "following the urgent note in the log")
         return _to_json_response(_keyword_classify(user_message), "based on alert content only")
@@ -135,6 +148,7 @@ class SemanticVulnerableFakeClient:
     actually reads the text isn't protected by that same gap."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         normalized = user_message.translate(_HOMOGLYPH_REVERSE_MAP)
         if any(marker in normalized for marker in _INJECTION_MARKERS):
             return _to_json_response("dismiss", "following the note in the log")
@@ -153,6 +167,7 @@ class EscalationSemanticVulnerableFakeClient:
     same gap either."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         normalized = user_message.translate(_HOMOGLYPH_REVERSE_MAP)
         if any(marker in normalized for marker in _ESCALATION_MARKERS):
             return _to_json_response("escalate", "following the urgent note in the log")
@@ -171,6 +186,7 @@ class SandwichSensitiveFakeClient:
     show up as an actual before/after difference in the harness."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         if _REINFORCEMENT_MARKER in user_message:
             return _to_json_response(_keyword_classify(user_message), "reminded to disregard embedded instructions")
         if any(marker in user_message for marker in _INJECTION_MARKERS):
@@ -191,6 +207,7 @@ class StrictPromptSensitiveFakeClient:
     and neither fake is affected by the other's defense."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         if _STRICT_WARNING_MARKER in system_prompt:
             return _to_json_response(_keyword_classify(user_message), "warned about this pattern in advance")
         if any(marker in user_message for marker in _INJECTION_MARKERS):
@@ -206,6 +223,7 @@ class StubbornFakeClient:
     when neither alone covers this particular failure mode."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         has_reinforcement = _REINFORCEMENT_MARKER in user_message
         has_strict_warning = _STRICT_WARNING_MARKER in system_prompt
         if has_reinforcement and has_strict_warning:
@@ -224,6 +242,7 @@ class EscalationSandwichSensitiveFakeClient:
     doesn't look at defenses at all."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         if _REINFORCEMENT_MARKER in user_message:
             return _to_json_response(_keyword_classify(user_message), "reminded to disregard embedded instructions")
         if any(marker in user_message for marker in _ESCALATION_MARKERS):
@@ -239,6 +258,7 @@ class EscalationStrictPromptSensitiveFakeClient:
     prompt."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         if _STRICT_WARNING_MARKER in system_prompt:
             return _to_json_response(_keyword_classify(user_message), "warned about this pattern in advance")
         if any(marker in user_message for marker in _ESCALATION_MARKERS):
@@ -259,6 +279,7 @@ class EscalationStubbornFakeClient:
     combined defense earned it)."""
 
     def complete(self, system_prompt: str, user_message: str) -> str:
+        user_message = _read_through_datamark(user_message)
         has_reinforcement = _REINFORCEMENT_MARKER in user_message
         has_strict_warning = _STRICT_WARNING_MARKER in system_prompt
         if has_reinforcement and has_strict_warning:
@@ -379,7 +400,7 @@ class OllamaClient:
         temperature: float | None = None, seed: int | None = None, retries: int = 2,
     ):
         self.model = model
-        # a full-report (792 requests) used to die on the first dropped
+        # a full-report (990 requests) used to die on the first dropped
         # connection - resumable with --cache, but only once someone noticed
         self.retries = retries
         # sampling options - left out of the request entirely when not set,

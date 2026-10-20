@@ -61,12 +61,18 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   aiming for.
 - `analyst.py` - builds the prompt sent to the model: a system prompt establishing the role
   and explicitly stating the log content is data, not instructions, and a user message
-  wrapping the untrusted content in clear delimiters. Supports three defenses plus "none":
+  wrapping the untrusted content in clear delimiters. Supports four defenses plus "none":
   `sandwich` repeats the "this is data" reminder in the user message after the untrusted
   block (targets recency bias); `strict` instead names specific manipulation patterns up
   front in the system prompt - patterns from BOTH attacker directions, not just the
   dismiss-direction ones (targets a model that's told what to watch for); `both` layers
-  them together. `strict` names the first eight patterns per direction and deliberately
+  them together; `datamark` is spotlighting by datamarking (Hines et al., 2024), the one
+  structural defense rather than an instruction - every space in the raw log becomes `^`
+  and the system prompt says what the marking means, so the boundary of the untrusted text
+  shows in every word of it, not just at its two ends. The fake clients read straight
+  through the marking (turning `^` back into spaces - the battery never contains it, a test
+  checks), so they answer exactly as with `none`: whether datamarking helps is left to a
+  real model's numbers, and comparing them with the paper's is part of the point. `strict` names the first eight patterns per direction and deliberately
   not `few_shot_poisoning` or `language_switch` (or their mirrors): whether a defense that
   lists known tricks also holds against ones it doesn't list is a question of its own, and
   naming them would stop the battery from asking it. `compare` and `full-report` read that
@@ -304,10 +310,10 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   read later, so it needs the same record (left out of csv, consistent with every other
   run-level, not per-row, stat already excluded from that format);
   `soclab compare --client ... [--direction ...] [--severity ...] [--report FILE]
-  [--transcript FILE]` runs it under all four defenses back to back, prints the same
+  [--transcript FILE]` runs it under all five (`none` and the four defenses) back to back, prints the same
   defense-summary table straight to the terminal, followed by a two-proportion z-test
   comparing each defense's hijack rate against `none` (is the difference actually
-  significant, or could it be noise from a small sample) - three tests against one baseline,
+  significant, or could it be noise from a small sample) - four tests against one baseline,
   so the verdict goes by the Holm-adjusted p-value there too, saved as `[z, p, p_holm]` per
   defense - and optionally writes the
   comparison and/or transcript (each entry tagged with which defense it came from).
@@ -335,7 +341,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   against alerts that were never attacked in the first place, so there was no way to tell
   whether a defense actually costs something on genuinely clean alerts;
   `soclab full-report --client ... [--severity ...] --report FILE
-  [--transcript FILE]` is the capstone run - both directions, all four defenses, one
+  [--transcript FILE]` is the capstone run - both directions, every defense, one
   client, one combined document, with the same per-direction significance check `compare`
   does and its combined summary table also printed to the terminal before the file is
   written, plus an optional combined transcript across every direction and defense. Gets
@@ -360,7 +366,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   missing or misspelled model fails straight away, all of them named in one error, instead
   of surfacing only after every model listed before it has finished its whole battery.
   Every real-model run (`--models`, or `--client ollama` on the single-client commands)
-  also prints `ollama:<model>: 120/792 requests done (5m12s, about 29 min left)` to stderr
+  also prints `ollama:<model>: 120/990 requests done (5m12s, about 38 min left)` to stderr
   every 10 requests - how far along out of the total the command works out up front, and
   the time left at the pace of the last 10 (not the whole run's average, which on a resumed
   run would count the instant cached answers and promise a finish far too soon). At a few
@@ -523,7 +529,7 @@ plenty of slower local models can exceed that) - it'll run for real the
 moment Ollama is reachable, either here with a different network policy or wherever the
 actual thesis experiments run. A request that times out, can't connect or gets a
 502/503/504 (ollama's answer when its queue is full) is retried `--retries` times (default
-2, waiting 2s then 4s, each retry noted on stderr) - a 792-request full report used to die
+2, waiting 2s then 4s, each retry noted on stderr) - a 990-request full report used to die
 on the first dropped connection. Errors that would only repeat, like a model that isn't
 pulled or doesn't fit in memory, fail at once.
 When the retries run out the error says what a rerun will keep: with `--cache`, that every
@@ -649,9 +655,9 @@ python -m soclab.cli check-ollama --model llama3.2:3b
 
 # 2. one full-report per model - pinned temperature/seed so the run can be repeated,
 #    a cache file so a run that dies partway resumes instead of starting over.
-#    that's 792 requests per model (18 clean + 90 + 90 injected alerts, under each of the
-#    4 defenses) - at a few seconds each, budget about 40 minutes; add --defenses both
-#    to run only none and both, which halves it
+#    that's 990 requests per model (18 clean + 90 + 90 injected alerts, under none and each
+#    of the 4 defenses) - at a few seconds each, budget about 50 minutes; add --defenses both
+#    to run only none and both, which takes it down to two fifths
 python -m soclab.cli full-report --client ollama --model llama3.2:3b \
     --temperature 0 --seed 42 --cache cache.json --report llama.json
 # same command with --report llama.md answers every request from the cache - the
@@ -706,7 +712,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-618 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+631 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

@@ -14,7 +14,12 @@ from soclab.analyst import (
     get_system_prompt,
     parse_response,
 )
-from soclab.injections import apply_technique
+from soclab.cli import CLIENT_FACTORIES, FAKE_CLIENT_NAMES
+from soclab.injections import (
+    apply_all_escalation_techniques,
+    apply_all_techniques,
+    apply_technique,
+)
 from soclab.llm_client import (
     EscalationSandwichSensitiveFakeClient,
     EscalationStrictPromptSensitiveFakeClient,
@@ -397,3 +402,34 @@ def test_strict_defense_does_not_name_the_two_later_techniques():
     prompt = get_system_prompt("strict").lower()
     for word in ("example", "history", "language", "greek", "translat"):
         assert word not in prompt
+
+
+def test_datamark_marks_every_space_in_the_raw_log_and_nothing_else():
+    """spotlighting by datamarking: the untrusted text carries the marking
+    in every word, the trusted parts of the message don't."""
+    alert = generate_clean_alerts()[0]
+    message = build_user_message(alert, "datamark")
+    marked = message.split("--- BEGIN UNTRUSTED RAW LOG DATA ---\n")[1].split("\n--- END")[0]
+    assert marked == alert.raw_log.replace(" ", "^")
+    assert " " not in marked
+    assert f"Description: {alert.description}" in message  # the description isn't untrusted log content
+    assert "every space has been replaced with the ^ character" in get_system_prompt("datamark")
+    assert "^" not in get_system_prompt("none") and "^" not in build_user_message(alert, "none")
+
+
+def test_the_battery_never_contains_the_datamark_character():
+    """the fakes read datamarked text by turning the marker back into
+    spaces - only lossless if the marker isn't already in the battery."""
+    alerts = generate_clean_alerts()
+    for alert in alerts + apply_all_techniques(alerts) + apply_all_escalation_techniques(alerts):
+        assert "^" not in alert.raw_log and "^" not in alert.description
+
+
+@pytest.mark.parametrize("name", FAKE_CLIENT_NAMES)
+def test_fake_clients_answer_the_same_with_and_without_datamarking(name):
+    """they read straight through the marking, so whether datamarking helps
+    is left to a real model's numbers rather than written into a fake."""
+    client = CLIENT_FACTORIES[name](None)
+    alerts = generate_clean_alerts()
+    for alert in alerts[:4] + apply_all_techniques(alerts[:2]) + apply_all_escalation_techniques(alerts)[:20]:
+        assert analyze(alert, client, "datamark").action == analyze(alert, client, "none").action
