@@ -8,10 +8,15 @@ import pytest
 import requests
 
 import soclab.cli as cli_module
-from soclab.alerts import Alert
-from soclab.analyst import STRICT_UNNAMED_TECHNIQUES, AnalystDecision
+from soclab.alerts import Alert, generate_clean_alerts
+from soclab.analyst import (
+    STRICT_UNNAMED_TECHNIQUES,
+    AnalystDecision,
+    build_user_message,
+    get_system_prompt,
+)
 from soclab.cli import FAKE_CLIENT_NAMES, _report_format, build_client, main
-from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES
+from soclab.injections import ESCALATION_TECHNIQUES, TECHNIQUES, apply_technique
 from soclab.llm_client import RobustFakeClient, ScriptedLLMClient, VulnerableFakeClient
 from soclab.scoring import ScoredResult
 
@@ -3153,3 +3158,38 @@ def test_summarize_says_how_consistently_each_technique_worked_across_reruns(fak
     assert "| ollama:gullible-model | dismiss | direct_override | 6 | 3 | 0 |" in md.read_text()
     consistency = json.loads(js.read_text())["technique_consistency"]
     assert len(consistency) == 20  # every technique, both directions
+
+
+def test_show_prompt_prints_exactly_what_a_model_is_sent(capsys):
+    assert main(["show-prompt", "--alert", "A001", "--technique", "language_switch", "--defense", "datamark"]) == 0
+    alert = apply_technique(next(a for a in generate_clean_alerts() if a.id == "A001"), "language_switch")
+    expected = (f"--- system prompt ---\n{get_system_prompt('datamark')}\n"
+                f"--- user message ---\n{build_user_message(alert, 'datamark')}\n")
+    assert capsys.readouterr().out == expected
+
+
+def test_show_prompt_without_a_technique_is_the_clean_alert(capsys):
+    main(["show-prompt", "--alert", "A013"])
+    out = capsys.readouterr().out
+    assert "Alert ID: A013" in out and "verdict" not in out and "SYSTEM NOTE" not in out
+
+
+@pytest.mark.parametrize("argv, error", [
+    (["--alert", "Z9"], "unknown alert Z9 - choose from A001, A002"),
+    (["--alert", "A001", "--technique", "no_such_thing"], "unknown technique no_such_thing"),
+    # the battery only runs dismiss-direction techniques on alerts that shouldn't be dismissed...
+    (["--alert", "A013", "--technique", "direct_override"],
+     ("direct_override belongs to the dismiss direction and the battery never runs it on A013, whose correct "
+      "action is dismiss")),
+    # ...and escalation ones only on alerts that should
+    (["--alert", "A001", "--technique", "false_urgency"],
+     "false_urgency belongs to the escalate direction and the battery never runs it on A001"),
+])
+def test_show_prompt_refuses_what_a_run_never_sends(capsys, argv, error):
+    assert main(["show-prompt", *argv]) == 1
+    assert error in capsys.readouterr().err
+
+
+def test_show_prompt_takes_escalation_techniques_on_alerts_that_should_be_dismissed(capsys):
+    assert main(["show-prompt", "--alert", "A013", "--technique", "false_urgency"]) == 0
+    assert "Alert ID: A013" in capsys.readouterr().out

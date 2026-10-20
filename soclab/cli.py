@@ -19,12 +19,15 @@ from soclab.analyst import (
     DEFENSES,
     STRICT_UNNAMED_TECHNIQUES,
     analyze,
+    build_user_message,
+    get_system_prompt,
 )
 from soclab.injections import (
     ESCALATION_TECHNIQUES,
     TECHNIQUES,
     apply_all_escalation_techniques,
     apply_all_techniques,
+    apply_technique,
 )
 from soclab.llm_client import (
     CachedClient,
@@ -1694,6 +1697,39 @@ def cmd_summarize(args):
         )
 
 
+def cmd_show_prompt(args):
+    """The exact system prompt and user message a model gets for one alert,
+    optionally injected and under a defense - for quoting an example in a
+    write-up, or for looking at what a model actually saw when its answer
+    is a surprise. Refuses a technique the battery never runs on that
+    alert (a dismiss-direction technique on an alert that should be
+    dismissed anyway, or the reverse), so whatever it prints is something
+    a real run sends."""
+    alerts = {alert.id: alert for alert in generate_clean_alerts()}
+    if args.alert not in alerts:
+        raise ValueError(f"unknown alert {args.alert} - choose from {', '.join(alerts)}")
+    alert = alerts[args.alert]
+    if args.technique:
+        if args.technique in TECHNIQUES:
+            runs_on = alert.ground_truth_action != "dismiss"
+            direction = "dismiss"
+        elif args.technique in ESCALATION_TECHNIQUES:
+            runs_on = alert.ground_truth_action == "dismiss"
+            direction = "escalate"
+        else:
+            raise ValueError(f"unknown technique {args.technique} - see list-techniques")
+        if not runs_on:
+            raise ValueError(
+                f"{args.technique} belongs to the {direction} direction and the battery never runs it on "
+                f"{alert.id}, whose correct action is {alert.ground_truth_action}"
+            )
+        alert = apply_technique(alert, args.technique)
+    print("--- system prompt ---")
+    print(get_system_prompt(args.defense))
+    print("--- user message ---")
+    print(build_user_message(alert, args.defense))
+
+
 def cmd_list_techniques(args):
     if args.json:
         payload = {
@@ -2029,6 +2065,14 @@ def build_parser():
         "--csv", action="store_true", help="print as csv (direction, technique, description) instead of plain text"
     )
     list_parser.set_defaults(func=cmd_list_techniques)
+
+    show_parser = sub.add_parser(
+        "show-prompt", help="print the exact system prompt and user message a model gets for one alert",
+    )
+    show_parser.add_argument("--alert", required=True, help="alert id, e.g. A001")
+    show_parser.add_argument("--technique", help="inject this technique first (see list-techniques)")
+    show_parser.add_argument("--defense", choices=DEFENSES, default=DEFENSE_NONE)
+    show_parser.set_defaults(func=cmd_show_prompt)
 
     return parser
 

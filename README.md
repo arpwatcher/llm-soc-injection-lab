@@ -104,6 +104,11 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   in order), since a model that quotes some json out of the log before answering used to be
   scored unparseable on that first object. Only the first object with an action counts - an
   invalid one there isn't rescued by a later one that happens to pass.
+  `soclab show-prompt --alert A001 [--technique ...] [--defense ...]` prints the exact system
+  prompt and user message a model gets - for quoting an example in a write-up, or for seeing
+  what a model actually saw when its answer is a surprise. It refuses a technique the battery
+  never runs on that alert (a dismiss-direction one on an alert that should be dismissed
+  anyway, or the reverse), so whatever it prints is something a real run sends.
 - `llm_client.py` - one small interface (`complete(system_prompt, user_message) -> str`)
   behind everything. `OllamaClient` is the real implementation, talking to a local Ollama
   server - requests it as `format: json` so a compliant model returns valid JSON directly
@@ -586,6 +591,7 @@ python -m soclab.cli leaderboard --models llama3.2:3b --clients fake-robust,fake
 python -m soclab.cli matrix --models llama3.2:3b,mistral:7b --report real-matrix.md  # which technique works on which model
 python -m soclab.cli full-report --client ollama --model llama3.2:3b --temperature 0 --seed 42 --cache llama-cache.json --report llama.json  # repeatable, resumable
 python -m soclab.cli summarize llama.json mistral.json qwen.json --report summary.md  # one table across models
+python -m soclab.cli show-prompt --alert A001 --technique language_switch --defense datamark  # exactly what a model is sent
 ```
 
 ### Example output
@@ -712,7 +718,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-631 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+638 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of
