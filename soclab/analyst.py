@@ -33,6 +33,16 @@ DEFENSE_BOTH = "both"
 DEFENSE_DATAMARK = "datamark"
 DEFENSES = (DEFENSE_NONE, DEFENSE_SANDWICH, DEFENSE_STRICT, DEFENSE_BOTH, DEFENSE_DATAMARK)
 
+# one line each, for the cli help and a full report's method section - kept
+# next to DEFENSES so a new defense can't be added without one (a test checks)
+DEFENSE_DESCRIPTIONS = {
+    DEFENSE_NONE: "no defense beyond the base prompt's own data/instruction split",
+    DEFENSE_SANDWICH: "the \"this is data\" reminder repeated after the untrusted content",
+    DEFENSE_STRICT: "known manipulation patterns named up front in the system prompt",
+    DEFENSE_BOTH: "sandwich and strict together",
+    DEFENSE_DATAMARK: "every space in the untrusted text marked with ^ and the marking explained (spotlighting)",
+}
+
 # the "datamark" defense is spotlighting by datamarking (Hines et al.,
 # 2024, "Defending Against Indirect Prompt Injection Attacks With
 # Spotlighting"): every space in the untrusted text becomes a marker

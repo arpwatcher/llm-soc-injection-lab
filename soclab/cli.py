@@ -14,6 +14,7 @@ import requests
 from soclab.alerts import SEVERITIES, generate_clean_alerts
 from soclab.analyst import (
     DEFENSE_BOTH,
+    DEFENSE_DESCRIPTIONS,
     DEFENSE_NONE,
     DEFENSE_STRICT,
     DEFENSES,
@@ -766,7 +767,7 @@ def cmd_full_report(args):
             }
             for direction, alerts in injected_by_direction.items()
         },
-        "defenses": defenses,
+        "defenses": {defense: DEFENSE_DESCRIPTIONS[defense] for defense in defenses},
         "requests": requests,
     }
 
@@ -1759,10 +1760,8 @@ _CLIENT_HELP = (
     "each one models) for harness validation without a real model, or 'ollama' for a "
     "real local model (requires --model)"
 )
-_DEFENSE_HELP = (
-    "prompt defense to apply: none, sandwich (reinforce after the untrusted content), "
-    "strict (name attack patterns up front in the system prompt), both (sandwich and strict together), "
-    "or datamark (every space in the untrusted text marked with ^, spotlighting)"
+_DEFENSE_HELP = "prompt defense to apply: " + "; ".join(
+    f"{name} ({description})" for name, description in DEFENSE_DESCRIPTIONS.items()
 )
 _TIMEOUT_HELP = "request timeout in seconds for --client ollama, default 120 (ignored by every fake-* client)"
 _SEVERITY_HELP = (

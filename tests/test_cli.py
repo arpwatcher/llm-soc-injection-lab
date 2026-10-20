@@ -10,6 +10,7 @@ import requests
 import soclab.cli as cli_module
 from soclab.alerts import Alert, generate_clean_alerts
 from soclab.analyst import (
+    DEFENSE_DESCRIPTIONS,
     DEFENSES,
     STRICT_UNNAMED_TECHNIQUES,
     AnalystDecision,
@@ -2855,6 +2856,7 @@ def test_full_report_records_its_method(tmp_path, capsys):
     assert "- clean alerts: 18, each answered once under every defense" in content
     assert "- direction=dismiss: 9 alerts x 10 techniques = 90 injected (direct_override, fake_system_tag," in content
     assert "- defenses: none, sandwich, strict, both, datamark" in content
+    assert "  - datamark: every space in the untrusted text marked with ^" in content
     assert "- requests: 990" in content
     assert "exact McNemar test, Holm-adjusted" in content
     method = json.loads(js.read_text())["method"]
@@ -2874,7 +2876,8 @@ def test_full_report_method_follows_the_severity_filter_and_defenses(tmp_path, c
     assert method["clean_alerts"] == 4
     assert method["directions"]["dismiss"]["eligible_alerts"] == 3
     assert method["directions"]["escalate"]["injected_alerts"] == 10
-    assert method["defenses"] == ["none", "both"]
+    assert list(method["defenses"]) == ["none", "both"]
+    assert method["defenses"]["both"] == "sandwich and strict together"
     assert method["requests"] == (4 + 30 + 10) * 2
 
 
@@ -3196,11 +3199,13 @@ def test_show_prompt_takes_escalation_techniques_on_alerts_that_should_be_dismis
     assert "Alert ID: A013" in capsys.readouterr().out
 
 
-def test_defense_help_describes_every_defense(capsys):
-    """the help text is a list written by hand - a defense added to
-    DEFENSES and not to it would be there but unexplained."""
+def test_every_defense_has_a_description_and_the_help_shows_it(capsys):
+    """the descriptions feed the --defense help and a full report's method
+    section - a defense added to DEFENSES without one would be there but
+    unexplained in both."""
+    assert list(DEFENSE_DESCRIPTIONS) == list(DEFENSES)
     with pytest.raises(SystemExit):
         main(["run", "--help"])
     help_text = " ".join(capsys.readouterr().out.split())
-    for defense in DEFENSES:
-        assert f"{defense} (" in help_text or f"{defense}," in help_text, defense
+    for defense, description in DEFENSE_DESCRIPTIONS.items():
+        assert f"{defense} ({description})" in help_text, defense

@@ -407,6 +407,7 @@ def _render_method_section(method: dict) -> list[str]:
             f"{entry['injected_alerts']} injected ({', '.join(entry['techniques'])})"
         )
     lines.append(f"- defenses: {', '.join(method['defenses'])} (none is the baseline every comparison is against)")
+    lines.extend(f"  - {name}: {description}" for name, description in method["defenses"].items())
     lines.append(f"- requests: {method['requests']}")
     lines.extend([
         ("- hijack rates carry 95% Wilson intervals. Each technique's injection lift pairs every injected "

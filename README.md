@@ -669,7 +669,8 @@ python -m soclab.cli full-report --client ollama --model llama3.2:3b \
 # same command with --report llama.md answers every request from the cache - the
 # readable version costs nothing extra. it opens with a "method" section (alert and
 # injected counts per direction, techniques, defenses, requests, which tests back which
-# numbers - all from the actual run, so --severity/--defenses show up there), also saved
+# numbers, with a line on what each defense run does - all from the actual run, so
+# --severity/--defenses show up there), also saved
 # under "method" in the json, so a write-up doesn't have to rebuild it from the code.
 # the json also keeps every item's outcome ("outcomes": "technique|alert_id" ->
 # hijacked/resisted/other per direction and defense, clean alerts by id) - the totals say
