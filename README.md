@@ -287,7 +287,7 @@ Built for a thesis on LLM-based SOC analysts and prompt injection resistance.
   example or spot-checking a surprising result. raw_response matters specifically for a
   parse_error=True entry, where reasoning comes back empty - it's the only place to see
   what the model actually said.
-- `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both --direction
+- `cli.py` - `soclab run --client ... --defense none|sandwich|strict|both|datamark --direction
   dismiss|escalate [--severity critical,high,...] [--report FILE] [--transcript FILE]` runs
   one battery and can optionally save the aggregate report and/or the per-alert transcript.
   Besides the per-technique table, it (and `compare`/`full-report` below) always also prints a
@@ -718,7 +718,7 @@ points at an ollama server on another machine.
 pytest
 ```
 
-638 tests, all deterministic - no real network calls (OllamaClient's own tests mock
+639 tests, all deterministic - no real network calls (OllamaClient's own tests mock
 requests.post), nothing depends on a real model being available. The fake clients are
 exercised the same way a real one eventually will be, so the prompt-building,
 response-parsing, scoring, and report generation are all proven correct independent of

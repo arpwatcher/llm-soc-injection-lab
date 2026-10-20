@@ -527,9 +527,9 @@ def _reject_duplicates(names: list, flag: str) -> None:
 
 
 def _resolve_defenses(defenses_arg: str | None) -> list:
-    """Parses --defenses into a list in canonical none/sandwich/strict/both
-    order, always including none - it's the baseline every significance
-    test compares against. Every defense against a real model is a full
+    """Parses --defenses into a list in canonical DEFENSES order, always
+    including none - it's the baseline every significance test compares
+    against. Every defense against a real model is a full
     pass over the battery (a few hundred requests for full-report), so
     running just the ones a question needs - none and both, say - cuts
     the run roughly in half. All of them if not given."""
@@ -1761,7 +1761,8 @@ _CLIENT_HELP = (
 )
 _DEFENSE_HELP = (
     "prompt defense to apply: none, sandwich (reinforce after the untrusted content), "
-    "strict (name attack patterns up front in the system prompt), or both together"
+    "strict (name attack patterns up front in the system prompt), both (sandwich and strict together), "
+    "or datamark (every space in the untrusted text marked with ^, spotlighting)"
 )
 _TIMEOUT_HELP = "request timeout in seconds for --client ollama, default 120 (ignored by every fake-* client)"
 _SEVERITY_HELP = (
@@ -1859,7 +1860,7 @@ def build_parser():
     compare_parser.add_argument("--severity", help=_SEVERITY_HELP)
     compare_parser.add_argument(
         "--defenses",
-        help="comma-separated subset of defenses to run, e.g. both or sandwich,both (default: all four) - "
+        help="comma-separated subset of defenses to run, e.g. both or sandwich,both (default: all of them) - "
              "none is always included as the baseline the others are tested against. each defense is a "
              "full pass over the battery, so against a real model this is what decides how long a run takes",
     )
@@ -1885,7 +1886,7 @@ def build_parser():
     full_report_parser.add_argument("--severity", help=_SEVERITY_HELP)
     full_report_parser.add_argument(
         "--defenses",
-        help="comma-separated subset of defenses to run, e.g. both or sandwich,both (default: all four) - "
+        help="comma-separated subset of defenses to run, e.g. both or sandwich,both (default: all of them) - "
              "none is always included as the baseline the others are tested against. each defense is a "
              "full pass over the battery, so against a real model this is what decides how long a run takes",
     )

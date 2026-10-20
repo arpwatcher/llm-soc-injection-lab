@@ -10,6 +10,7 @@ import requests
 import soclab.cli as cli_module
 from soclab.alerts import Alert, generate_clean_alerts
 from soclab.analyst import (
+    DEFENSES,
     STRICT_UNNAMED_TECHNIQUES,
     AnalystDecision,
     build_user_message,
@@ -3193,3 +3194,13 @@ def test_show_prompt_refuses_what_a_run_never_sends(capsys, argv, error):
 def test_show_prompt_takes_escalation_techniques_on_alerts_that_should_be_dismissed(capsys):
     assert main(["show-prompt", "--alert", "A013", "--technique", "false_urgency"]) == 0
     assert "Alert ID: A013" in capsys.readouterr().out
+
+
+def test_defense_help_describes_every_defense(capsys):
+    """the help text is a list written by hand - a defense added to
+    DEFENSES and not to it would be there but unexplained."""
+    with pytest.raises(SystemExit):
+        main(["run", "--help"])
+    help_text = " ".join(capsys.readouterr().out.split())
+    for defense in DEFENSES:
+        assert f"{defense} (" in help_text or f"{defense}," in help_text, defense
